@@ -631,9 +631,9 @@ export default function StreamPage() {
                                 </div>
                                 <div className="text-xs mt-2 opacity-90">
                                   <div>1. Go to OBS → Settings → Stream</div>
-                                  <div>2. Set Service to "Custom"</div>
+                                  <div>2. Set Service to &quot;Custom&quot;</div>
                                   <div>3. Paste Server and Stream Key above</div>
-                                  <div>4. Click "Start Streaming"</div>
+                                  <div>4. Click &quot;Start Streaming&quot;</div>
                                 </div>
                               </>
                             ) : (
