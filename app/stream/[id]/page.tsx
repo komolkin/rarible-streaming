@@ -603,15 +603,15 @@ export default function StreamPage() {
                               error: error
                             })
                           }}
-                          onStreamStatusChange={(status) => {
-                            console.log("🎥 Player stream status:", status, {
+                          onStreamStatusChange={(isLive: boolean) => {
+                            console.log("🎥 Player stream status:", isLive, {
                               playbackId: stream.livepeerPlaybackId,
                               isLive: stream.isLive,
-                              status
+                              playerIsLive: isLive
                             })
-                            if (status === "ready" || status === "live") {
-                              console.log("✅ Stream is ready/live in Player!")
-                            } else if (status === "idle" || status === "offline") {
+                            if (isLive) {
+                              console.log("✅ Stream is live in Player!")
+                            } else {
                               console.log("⏳ Player shows offline - OBS may not be connected")
                               console.log("💡 Check OBS is streaming to:", `rtmp://ingest.livepeer.studio/live/${stream.livepeerStreamKey}`)
                             }

@@ -5,7 +5,14 @@ const nextConfig = {
   images: {
     domains: ['gateway.pinata.cloud', 'supabase.co', 'thumbnailer.livepeer.studio', 'playback.livepeer.com'],
   },
-  webpack: (config, { isServer }) => {
+  // Disable SWC minification to use Terser with proper config
+  swcMinify: false,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+  webpack: (config, { isServer, dev }) => {
     // Ignore React Native modules when building for web
     if (!isServer) {
       config.resolve.fallback = {
@@ -19,6 +26,50 @@ const nextConfig = {
         })
       )
     }
+    
+    // Configure Terser to handle unicode issues (if Terser is used)
+    if (!dev && config.optimization && config.optimization.minimizer) {
+      config.optimization.minimizer = config.optimization.minimizer.map((plugin) => {
+        // Check if this is a Terser plugin by looking for terserOptions
+        if (plugin && plugin.options && typeof plugin.options === 'object') {
+          // Try to modify terserOptions if they exist
+          if (plugin.options.terserOptions !== undefined) {
+            return {
+              ...plugin,
+              options: {
+                ...plugin.options,
+                terserOptions: {
+                  ...(plugin.options.terserOptions || {}),
+                  output: {
+                    ...(plugin.options.terserOptions?.output || {}),
+                    ascii_only: true,
+                  },
+                  parse: {
+                    ...(plugin.options.terserOptions?.parse || {}),
+                    ecma: 2020,
+                  },
+                },
+              },
+            }
+          }
+          // Also check for compress/format options directly
+          if (plugin.options.compress !== undefined || plugin.options.format !== undefined) {
+            return {
+              ...plugin,
+              options: {
+                ...plugin.options,
+                format: {
+                  ...(plugin.options.format || {}),
+                  ascii_only: true,
+                },
+              },
+            }
+          }
+        }
+        return plugin
+      })
+    }
+    
     return config
   },
 }
