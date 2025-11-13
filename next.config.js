@@ -1,3 +1,5 @@
+const webpack = require('webpack')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -10,6 +12,12 @@ const nextConfig = {
         ...config.resolve.fallback,
         '@react-native-async-storage/async-storage': false,
       }
+      // Use IgnorePlugin to completely ignore React Native modules
+      config.plugins.push(
+        new webpack.IgnorePlugin({
+          resourceRegExp: /^@react-native-async-storage\/async-storage$/,
+        })
+      )
     }
     return config
   },

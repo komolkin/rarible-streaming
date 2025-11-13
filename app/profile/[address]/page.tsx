@@ -16,6 +16,8 @@ export default function ProfilePage() {
   const params = useParams()
   const router = useRouter()
   const { authenticated, user } = usePrivy()
+  // Normalize address parameter to string (Next.js params can be string | string[])
+  const address = Array.isArray(params.address) ? params.address[0] : params.address || ''
   const [profile, setProfile] = useState<any>(null)
   const [streams, setStreams] = useState<any[]>([])
   const [likedStreams, setLikedStreams] = useState<any[]>([])
@@ -30,15 +32,15 @@ export default function ProfilePage() {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch(`/api/profiles?wallet=${params.address}`)
+      const response = await fetch(`/api/profiles?wallet=${address}`)
       if (response.ok) {
         const data = await response.json()
         setProfile(data)
       } else if (response.status === 404) {
         // User doesn't have a profile yet - create a default one
         const defaultProfile = {
-          walletAddress: params.address,
-          displayName: `${params.address.slice(0, 6)}...${params.address.slice(-4)}`,
+          walletAddress: address,
+          displayName: `${address.slice(0, 6)}...${address.slice(-4)}`,
           username: null,
           bio: null,
           avatarUrl: null,
@@ -56,10 +58,10 @@ export default function ProfilePage() {
     } finally {
       setLoading(false)
     }
-  }, [params.address])
+  }, [address])
 
   const fetchStreams = useCallback(async () => {
-    const response = await fetch(`/api/streams?creator=${params.address}`)
+    const response = await fetch(`/api/streams?creator=${address}`)
     if (response.ok) {
       const streamsData = await response.json()
       
@@ -75,11 +77,11 @@ export default function ProfilePage() {
       
       setStreams(streamsWithCreator)
     }
-  }, [params.address, profile])
+  }, [address, profile])
 
   const fetchReviews = useCallback(async () => {
     try {
-      const response = await fetch(`/api/reviews?reviewee=${params.address}`)
+      const response = await fetch(`/api/reviews?reviewee=${address}`)
       if (response.ok) {
         const data = await response.json()
         setReviews(data)
@@ -87,11 +89,11 @@ export default function ProfilePage() {
     } catch (error) {
       console.error("Error fetching reviews:", error)
     }
-  }, [params.address])
+  }, [address])
 
   const fetchLikedStreams = useCallback(async () => {
     try {
-      const response = await fetch(`/api/streams/liked?userAddress=${params.address}`)
+      const response = await fetch(`/api/streams/liked?userAddress=${address}`)
       if (response.ok) {
         const streamsData = await response.json()
         
@@ -121,13 +123,13 @@ export default function ProfilePage() {
     } catch (error) {
       console.error("Error fetching liked streams:", error)
     }
-  }, [params.address])
+  }, [address])
 
   const checkFollowStatus = useCallback(async () => {
     if (!authenticated || !user?.wallet?.address) return
     try {
       const response = await fetch(
-        `/api/follows?follower=${encodeURIComponent(user.wallet.address.toLowerCase())}&following=${encodeURIComponent(params.address.toLowerCase())}`
+        `/api/follows?follower=${encodeURIComponent(user.wallet.address.toLowerCase())}&following=${encodeURIComponent(address.toLowerCase())}`
       )
       if (response.ok) {
         const data = await response.json()
@@ -136,11 +138,11 @@ export default function ProfilePage() {
     } catch (error) {
       console.error("Error checking follow status:", error)
     }
-  }, [authenticated, user?.wallet?.address, params.address])
+  }, [authenticated, user?.wallet?.address, address])
 
   const fetchFollowCounts = useCallback(async () => {
     try {
-      const normalizedAddress = params.address.toLowerCase()
+      const normalizedAddress = address.toLowerCase()
       const [followersResponse, followingResponse] = await Promise.all([
         fetch(`/api/follows?address=${encodeURIComponent(normalizedAddress)}&type=followers`),
         fetch(`/api/follows?address=${encodeURIComponent(normalizedAddress)}&type=following`),
@@ -158,36 +160,36 @@ export default function ProfilePage() {
     } catch (error) {
       console.error("Error fetching follow counts:", error)
     }
-  }, [params.address])
+  }, [address])
 
   // Initial load - fetch profile and other data
   useEffect(() => {
-    if (params.address) {
+    if (address) {
       fetchProfile()
       fetchReviews()
       checkFollowStatus()
       fetchFollowCounts()
     }
-  }, [params.address, fetchProfile, fetchReviews, checkFollowStatus, fetchFollowCounts])
+  }, [address, fetchProfile, fetchReviews, checkFollowStatus, fetchFollowCounts])
 
   // Fetch streams after profile is loaded
   useEffect(() => {
-    if (params.address && profile) {
+    if (address && profile) {
       fetchStreams()
     }
-  }, [params.address, profile, fetchStreams])
+  }, [address, profile, fetchStreams])
 
   // Refetch profile when page becomes visible (e.g., navigating back from edit)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && params.address) {
+      if (document.visibilityState === 'visible' && address) {
         fetchProfile()
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [params.address, fetchProfile])
+  }, [address, fetchProfile])
 
   const handleFollow = async () => {
     if (!authenticated || !user?.wallet?.address) return
@@ -197,7 +199,7 @@ export default function ProfilePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         followerAddress: user.wallet.address.toLowerCase(),
-        followingAddress: params.address.toLowerCase(),
+        followingAddress: address.toLowerCase(),
       }),
     })
 
@@ -211,7 +213,7 @@ export default function ProfilePage() {
     if (!authenticated || !user?.wallet?.address) return
 
     const response = await fetch(
-      `/api/follows?follower=${encodeURIComponent(user.wallet.address.toLowerCase())}&following=${encodeURIComponent(params.address.toLowerCase())}`,
+      `/api/follows?follower=${encodeURIComponent(user.wallet.address.toLowerCase())}&following=${encodeURIComponent(address.toLowerCase())}`,
       { method: "DELETE" }
     )
 
@@ -263,7 +265,7 @@ export default function ProfilePage() {
                 {profile.avatarUrl ? (
                   <AvatarImage src={profile.avatarUrl} alt={profile.displayName || profile.username || "Profile"} />
                 ) : null}
-                <AvatarFallback seed={(profile.walletAddress || params.address?.toString() || "").toLowerCase()} />
+                <AvatarFallback seed={(profile.walletAddress || address || "").toLowerCase()} />
               </Avatar>
               <div className="flex-1">
                 <div className="flex items-center gap-4 mb-2">
@@ -281,15 +283,15 @@ export default function ProfilePage() {
                       <h1 className="text-3xl font-bold">User</h1>
                     )}
                   </div>
-                  {authenticated && user?.wallet?.address?.toLowerCase() === params.address?.toString().toLowerCase() ? (
+                  {authenticated && user?.wallet?.address?.toLowerCase() === address.toLowerCase() ? (
                     <Button
-                      onClick={() => router.push(`/profile/${params.address}/edit`)}
+                      onClick={() => router.push(`/profile/${address}/edit`)}
                       variant="outline"
                     >
                       <Settings className="h-4 w-4 mr-2" />
                       Edit Profile
                     </Button>
-                  ) : authenticated && user?.wallet?.address !== params.address ? (
+                  ) : authenticated && user?.wallet?.address?.toLowerCase() !== address.toLowerCase() ? (
                     <Button
                       onClick={isFollowing ? handleUnfollow : handleFollow}
                       variant={isFollowing ? "outline" : "default"}
@@ -320,13 +322,13 @@ export default function ProfilePage() {
         </Card>
 
         <Tabs defaultValue="streams" onValueChange={(value) => {
-          if (value === "liked" && authenticated && user?.wallet?.address?.toLowerCase() === params.address?.toString().toLowerCase()) {
+          if (value === "liked" && authenticated && user?.wallet?.address?.toLowerCase() === address.toLowerCase()) {
             fetchLikedStreams()
           }
         }}>
           <TabsList>
             <TabsTrigger value="streams">Streams</TabsTrigger>
-            {authenticated && user?.wallet?.address?.toLowerCase() === params.address?.toString().toLowerCase() && (
+            {authenticated && user?.wallet?.address?.toLowerCase() === address.toLowerCase() && (
               <TabsTrigger value="liked">Liked</TabsTrigger>
             )}
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
@@ -342,7 +344,7 @@ export default function ProfilePage() {
               </div>
             )}
           </TabsContent>
-          {authenticated && user?.wallet?.address?.toLowerCase() === params.address?.toString().toLowerCase() && (
+          {authenticated && user?.wallet?.address?.toLowerCase() === address.toLowerCase() && (
             <TabsContent value="liked" className="mt-6">
               {likedStreams.length === 0 ? (
                 <p className="text-muted-foreground">No liked streams yet</p>
