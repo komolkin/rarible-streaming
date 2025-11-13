@@ -26,25 +26,21 @@ export async function GET(request: NextRequest) {
       conditions.push(isNotNull(streams.endedAt))
     }
 
-    let query = db.select().from(streams)
+    // Build query conditionally to avoid type issues
+    const baseQuery = db.select().from(streams)
     
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions))
-    }
+    const queryWithConditions = conditions.length > 0
+      ? baseQuery.where(and(...conditions))
+      : baseQuery
     
-    // Order by endedAt DESC for ended streams, or createdAt DESC for others
-    if (ended === "true") {
-      query = query.orderBy(desc(streams.endedAt))
-    } else {
-      query = query.orderBy(desc(streams.createdAt))
-    }
+    const queryWithOrder = ended === "true"
+      ? queryWithConditions.orderBy(desc(streams.endedAt))
+      : queryWithConditions.orderBy(desc(streams.createdAt))
     
-    // Apply limit if specified
-    if (limit) {
-      query = query.limit(limit)
-    }
-
-    const allStreams = await query
+    // Apply limit if specified and execute query
+    const allStreams = limit 
+      ? await queryWithOrder.limit(limit)
+      : await queryWithOrder
 
     // Debug: log streams before processing
     console.log(`[Streams API] Fetched ${allStreams.length} streams from database`)
