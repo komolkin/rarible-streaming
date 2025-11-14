@@ -44,6 +44,7 @@ export default function StreamPage() {
   const [assetReady, setAssetReady] = useState<boolean>(false)
   const [playerIsStreaming, setPlayerIsStreaming] = useState<boolean>(false)
   const playerOfflineTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const streamLiveStatusRef = useRef<boolean>(false)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -357,6 +358,10 @@ export default function StreamPage() {
     }
     setPlayerIsStreaming(false)
   }, [stream?.livepeerPlaybackId])
+
+  useEffect(() => {
+    streamLiveStatusRef.current = !!stream?.isLive
+  }, [stream?.isLive])
 
   useEffect(() => {
     fetchStream()
@@ -676,7 +681,8 @@ export default function StreamPage() {
     )
   }
 
-  const shouldShowLivePlayer = !stream?.endedAt && (stream?.isLive || playerIsStreaming)
+  const showLivePlayer = !!stream?.livepeerPlaybackId && !stream?.endedAt
+  const showOfflineOverlay = showLivePlayer && !stream?.isLive && !playerIsStreaming
 
   return (
     <main className="min-h-screen pt-24 pb-8">
@@ -702,10 +708,10 @@ export default function StreamPage() {
                         <>Playback ID: {stream.livepeerPlaybackId}</>
                       )}
                     </div>
-                    {!stream.endedAt && shouldShowLivePlayer ? (
+                    {!stream.endedAt && showLivePlayer ? (
                       <>
                         <Player
-                          key={stream.livepeerPlaybackId} // Force re-render if playbackId changes
+                          key={stream.livepeerPlaybackId}
                           playbackId={stream.livepeerPlaybackId}
                           autoPlay
                           muted
@@ -739,14 +745,15 @@ export default function StreamPage() {
                             } else {
                               console.log("⏳ Player shows offline - OBS may not be connected")
                               console.log("💡 Check OBS is streaming to:", `rtmp://ingest.livepeer.studio/live/${stream.livepeerStreamKey}`)
-                              // Delay clearing the streaming flag to avoid flicker from transient status updates
                               playerOfflineTimeoutRef.current = setTimeout(() => {
-                                setPlayerIsStreaming(false)
-                              }, 5000)
+                                if (!streamLiveStatusRef.current) {
+                                  setPlayerIsStreaming(false)
+                                }
+                              }, 10000)
                             }
                           }}
                         />
-                        {!stream.isLive && !playerIsStreaming && !stream.endedAt && (
+                        {showOfflineOverlay && (
                           <div className="absolute top-4 right-4 bg-yellow-500 text-black px-3 py-1 rounded text-sm font-semibold z-10 max-w-xs">
                             <div className="font-bold mb-1">⚠️ Stream Offline</div>
                             {stream.livepeerStreamKey ? (
