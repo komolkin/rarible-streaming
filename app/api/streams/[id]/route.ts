@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { streams, categories } from "@/lib/db/schema"
+import { streams, categories, chatMessages, streamLikes } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getStreamStatus } from "@/lib/livepeer"
 
@@ -453,8 +453,16 @@ export async function DELETE(
     // If permanent deletion is requested, delete the stream entirely
     // Related chat messages and likes will be deleted automatically via CASCADE
     if (body.permanent === true) {
-      await db.delete(streams).where(eq(streams.id, params.id))
-      return NextResponse.json({ message: "Stream deleted successfully" })
+      try {
+        // Delete dependent data first to satisfy foreign key constraints
+        await db.delete(chatMessages).where(eq(chatMessages.streamId, params.id))
+        await db.delete(streamLikes).where(eq(streamLikes.streamId, params.id))
+        await db.delete(streams).where(eq(streams.id, params.id))
+        return NextResponse.json({ message: "Stream deleted successfully" })
+      } catch (error) {
+        console.error(`[DELETE Stream ${params.id}] Failed to permanently delete stream:`, error)
+        return NextResponse.json({ error: "Failed to delete stream permanently" }, { status: 500 })
+      }
     }
 
     // Otherwise, just mark the stream as ended (existing behavior)
