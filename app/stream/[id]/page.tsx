@@ -105,7 +105,9 @@ export default function StreamPage() {
     try {
       const response = await fetch(`/api/streams/${params.id}`)
       if (!response.ok) {
-        console.error("Failed to fetch stream:", response.status)
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Failed to fetch stream:", response.status, errorData)
+        setPageError(errorData.error || `Failed to load stream (${response.status})`)
         return
       }
       const data = await response.json()
@@ -114,6 +116,7 @@ export default function StreamPage() {
       streamLiveStatusRef.current = !!data.isLive
       
       setStream(data)
+      setPageError(null) // Clear any previous errors
       
       // If stream has ended and API returned asset playbackId, use it immediately
       if (data.endedAt && data.assetPlaybackId && !assetPlaybackId) {
@@ -122,6 +125,15 @@ export default function StreamPage() {
         setAssetReady(true)
         setVodReady(true)
         setPlaybackType("vod")
+      }
+      
+      // For ended streams, immediately try to fetch asset if not already set
+      if (data.endedAt && data.livepeerStreamId && !data.assetPlaybackId && !assetPlaybackId) {
+        console.log(`[Stream Fetch] Stream ended - fetching asset playbackId immediately...`)
+        // Trigger asset fetch immediately
+        setTimeout(() => {
+          fetchStreamRecording()
+        }, 500)
       }
       
       // Fetch creator profile if we have creator address
@@ -374,13 +386,25 @@ export default function StreamPage() {
   // According to Livepeer docs: When a stream ends with recording enabled,
   // Livepeer creates an Asset that can be queried by sourceStreamId
   // The Asset has its own playbackId which is optimal for VOD playback
-  const fetchStreamRecording = useCallback(async () => {
-    if (!stream?.endedAt || !stream?.livepeerStreamId) return
-    // Don't return early if vodReady - we still want to fetch asset playbackId for better VOD support
+  const fetchStreamRecording = useCallback(async (streamId?: string, livepeerStreamId?: string) => {
+    // Allow passing streamId and livepeerStreamId directly for immediate fetching
+    const targetStreamId = streamId || stream?.livepeerStreamId
+    const targetLivepeerStreamId = livepeerStreamId || stream?.livepeerStreamId
+    
+    if (!targetStreamId || !targetLivepeerStreamId) {
+      console.warn(`[VOD] Cannot fetch recording - missing streamId or livepeerStreamId`)
+      return
+    }
+    
+    // Check if stream has ended (either from stream object or we're fetching for an ended stream)
+    if (stream && !stream.endedAt) {
+      console.log(`[VOD] Stream has not ended yet, skipping recording fetch`)
+      return
+    }
 
     setCheckingVod(true)
     try {
-      console.log(`[VOD] Fetching recording for stream ${stream.livepeerStreamId}...`)
+      console.log(`[VOD] Fetching recording for stream ${targetLivepeerStreamId}...`)
       const response = await fetch(`/api/streams/${params.id}/recording`)
 
       if (response.ok) {
@@ -405,7 +429,7 @@ export default function StreamPage() {
             setPlaybackType("vod") // Asset playbackId is always VOD
 
             // Also update stream with recording info if available
-            if (recording.playbackUrl && !stream.vodUrl) {
+            if (recording.playbackUrl && stream && !stream.vodUrl) {
               setHlsPlaybackUrl(recording.playbackUrl)
             }
           }
@@ -418,7 +442,7 @@ export default function StreamPage() {
         }
       } else if (response.status === 404) {
         // Recording not found yet - this is normal, Livepeer needs time to process
-        console.log(`[VOD] ⚠️ Recording not available yet, will retry...`)
+        console.log(`[VOD] ⚠️ Recording not available yet (404), will retry...`)
       } else {
         const errorData = await response.json().catch(() => ({}))
         console.error(`[VOD] Error fetching recording: ${response.status}`, errorData)
@@ -929,12 +953,12 @@ export default function StreamPage() {
                     </div>
                     {stream.endedAt ? (
                       // STREAM ENDED - Show recording playback
-                      // CRITICAL: For ended streams, prefer asset playbackId (always VOD-ready)
-                      // Only use stream playbackId if asset playbackId is not available yet
-                      // The Player will show "offline" if stream playbackId is still marked as "live" type
-                      (assetPlaybackId || stream.livepeerPlaybackId) ? (
+                      // According to Livepeer docs: Player handles VOD automatically with playbackId
+                      // We should use asset playbackId if available (better for VOD), otherwise stream playbackId
+                      // The Player component will automatically detect VOD and handle playback
+                      stream.livepeerPlaybackId || assetPlaybackId ? (
                         <>
-                          {/* Show Player with asset playbackId (preferred) or stream playbackId (fallback) */}
+                          {/* Show Player - it will automatically handle VOD playback */}
                           <Player
                             key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
                             playbackId={assetPlaybackId || stream.livepeerPlaybackId!}
@@ -964,8 +988,8 @@ export default function StreamPage() {
                               }
                             }}
                           />
-                          {/* Show message if we're still using stream playbackId (might show offline) */}
-                          {!assetPlaybackId && stream.livepeerPlaybackId && (
+                          {/* Show message if we're still using stream playbackId and fetching asset */}
+                          {!assetPlaybackId && stream.livepeerPlaybackId && checkingVod && (
                             <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-xs z-20">
                               <div className="flex items-center gap-2">
                                 <div className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>

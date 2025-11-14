@@ -16,8 +16,18 @@ export async function GET(
     const [stream] = await db.select().from(streams).where(eq(streams.id, params.id))
 
     if (!stream) {
+      console.error(`[GET Stream ${params.id}] Stream not found in database`)
       return NextResponse.json({ error: "Stream not found" }, { status: 404 })
     }
+    
+    console.log(`[GET Stream ${params.id}] Found stream:`, {
+      id: stream.id,
+      title: stream.title,
+      endedAt: stream.endedAt,
+      livepeerStreamId: stream.livepeerStreamId,
+      livepeerPlaybackId: stream.livepeerPlaybackId,
+      isLive: stream.isLive
+    })
 
     // Fetch category if categoryId exists
     let category = null
