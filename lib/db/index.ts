@@ -14,6 +14,27 @@ if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is not set")
 }
 
+// Ensure the connection string is properly formatted
+// Handle special characters in password by encoding them
+let encodedConnectionString = connectionString
+try {
+  // Try to parse as URL - if it fails, manually encode the password
+  const url = new URL(connectionString)
+  // If parsing succeeded, reconstruct with properly encoded components
+  if (url.password) {
+    encodedConnectionString = `${url.protocol}//${url.username ? `${encodeURIComponent(url.username)}:${encodeURIComponent(url.password)}@` : ''}${url.host}${url.pathname}${url.search}${url.hash}`
+  }
+} catch (e) {
+  // If URL parsing fails due to special characters, manually encode the password
+  // Match pattern: postgresql://username:password@host:port/database
+  const match = connectionString.match(/^(postgresql?:\/\/)([^:]+):([^@]+)@(.+)$/)
+  if (match) {
+    const [, protocol, username, password, rest] = match
+    encodedConnectionString = `${protocol}${encodeURIComponent(username)}:${encodeURIComponent(password)}@${rest}`
+  }
+  // If regex doesn't match, use original string - postgres library might handle it
+}
+
 // Use singleton pattern to prevent multiple connections in serverless environments
 declare global {
   // eslint-disable-next-line no-var
@@ -22,7 +43,7 @@ declare global {
 
 // For serverless environments (Next.js API routes), reuse the connection
 // For non-serverless (scripts), create a new connection each time
-const client = globalThis.postgresClient ?? postgres(connectionString, {
+const client = globalThis.postgresClient ?? postgres(encodedConnectionString, {
   max: 1, // Limit connections for serverless environments
   idle_timeout: 20,
   connect_timeout: 10,
