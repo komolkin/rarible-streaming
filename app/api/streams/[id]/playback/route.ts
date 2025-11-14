@@ -191,11 +191,20 @@ export async function GET(
       console.log(`Constructed HLS URL from playbackId: ${hlsUrl}`)
     }
 
+    // Extract playback type from playbackInfo
+    // Livepeer playback API returns type as "live" or "vod"
+    // For ended streams with asset playbackId, type should be "vod"
+    // For stream playbackId of ended streams, type might still be "live" (which causes "offline" message)
+    const playbackType = playbackInfo?.type || (isEnded && actualPlaybackId !== playbackId ? "vod" : null)
+    
+    console.log(`[Playback API] Playback type: ${playbackType} (isEnded: ${isEnded}, actualPlaybackId: ${actualPlaybackId}, originalPlaybackId: ${playbackId})`)
+
     return NextResponse.json({
       playbackId: actualPlaybackId, // Return the actual playbackId used (might be asset playbackId)
       originalPlaybackId: playbackId, // Original playbackId that was passed in
       hlsUrl,
       mp4Url, // Also return MP4 URL if available
+      type: playbackType, // Return playback type ("live" or "vod")
       playbackInfo,
     })
   } catch (error: any) {

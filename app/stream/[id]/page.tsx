@@ -333,20 +333,33 @@ export default function StreamPage() {
       if (response.ok) {
         const data = await response.json()
         const type = data.type || data.playbackInfo?.type
-        console.log(`[Playback Type] PlaybackId ${playbackId} type: ${type}`)
+        const actualPlaybackId = data.playbackId || playbackId // Use asset playbackId if returned
+        
+        console.log(`[Playback Type] PlaybackId ${playbackId} type: ${type}, actualPlaybackId: ${actualPlaybackId}`)
         setPlaybackType(type === "vod" ? "vod" : type === "live" ? "live" : null)
+        
+        // If playback API returned an asset playbackId (different from original), use it
+        if (actualPlaybackId && actualPlaybackId !== playbackId && !assetPlaybackId) {
+          console.log(`[Playback Type] ✅ Found asset playbackId from playback API: ${actualPlaybackId}`)
+          setAssetPlaybackId(actualPlaybackId)
+          setAssetReady(true)
+        }
         
         // If it's VOD, mark as ready
         if (type === "vod") {
           setVodReady(true)
         }
+      } else if (response.status === 202) {
+        // Asset is processing (202 Accepted)
+        console.log(`[Playback Type] ⚠️ Asset is still processing (202 Accepted)`)
+        // Don't set playbackType yet - will retry
       }
     } catch (error) {
       console.error("[Playback Type] Error checking playback type:", error)
     } finally {
       setIsCheckingPlaybackType(false)
     }
-  }, [params.id])
+  }, [params.id, assetPlaybackId])
 
   // Fetch recording from Livepeer by stream ID when stream ends
   // According to Livepeer docs: When a stream ends with recording enabled,
@@ -556,9 +569,10 @@ export default function StreamPage() {
   // When stream ends, IMMEDIATELY fetch recording from Livepeer by stream ID
   useEffect(() => {
     if (stream?.endedAt) {
-      // CRITICAL: When stream ends, check playback type first
+      // CRITICAL: When stream ends, check playback type immediately
       // The Player shows "offline" if playback type is still "live"
-      if (stream.livepeerPlaybackId && !playbackType) {
+      // Check playback type even if already set (might have changed from "live" to "vod")
+      if (stream.livepeerPlaybackId && playbackType !== "vod") {
         console.log("📹 Checking playback type for ended stream...")
         checkPlaybackType(stream.livepeerPlaybackId)
       }
@@ -570,17 +584,14 @@ export default function StreamPage() {
         
         // Poll for recording asset every 10 seconds until found
         const vodCheckInterval = setInterval(() => {
-          if (!assetPlaybackId) {
-            fetchStreamRecording()
-          } else {
-            clearInterval(vodCheckInterval)
-          }
+          fetchStreamRecording()
         }, 10000)
         
         return () => clearInterval(vodCheckInterval)
       }
       
       // Also poll playback type until it becomes VOD (if we don't have asset playbackId yet)
+      // This ensures we detect when Livepeer converts the stream playbackId to VOD
       if (stream.livepeerPlaybackId && playbackType !== "vod" && !assetPlaybackId) {
         const typeCheckInterval = setInterval(() => {
           checkPlaybackType(stream.livepeerPlaybackId)
@@ -897,14 +908,15 @@ export default function StreamPage() {
                     </div>
                     {stream.endedAt ? (
                       // STREAM ENDED - Show recording playback
-                      // According to Livepeer docs: Player handles VOD with stream playbackId automatically
-                      // But we need to wait for playback type to be "vod" to avoid "offline" message
-                      playbackType === "vod" || assetPlaybackId ? (
+                      // CRITICAL: For ended streams, we MUST use asset playbackId for VOD playback
+                      // Stream playbackId will show "offline" if playback type is still "live"
+                      // Only show Player if we have asset playbackId OR playbackType is confirmed as "vod"
+                      (assetPlaybackId || (playbackType === "vod" && stream.livepeerPlaybackId)) ? (
                         <>
-                          {/* Show Player when VOD is ready (playback type is "vod" or we have asset playbackId) */}
+                          {/* Show Player when VOD is ready (asset playbackId preferred, or stream playbackId if type is "vod") */}
                           <Player
                             key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
-                            playbackId={assetPlaybackId || stream.livepeerPlaybackId}
+                            playbackId={assetPlaybackId || stream.livepeerPlaybackId!}
                             autoPlay={false}
                             muted={false}
                             showTitle={false}
