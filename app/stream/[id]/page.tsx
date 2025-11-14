@@ -320,42 +320,107 @@ export default function StreamPage() {
     return false
   }, [params.id])
 
-  // Check if VOD is ready for ended streams
-  // According to Livepeer docs: Player automatically handles VOD with stream playbackId
-  // We just need to ensure we have the playbackId - no need to wait for asset or vodUrl
-  const checkVodAvailability = useCallback(async () => {
-    if (!stream?.endedAt || vodReady || !stream) return
-    
-    // According to Livepeer docs: The Player component can handle VOD playback
-    // with the stream playbackId directly. The same playbackId works for both live and VOD.
-    // We don't need to wait for vodUrl or asset - just use the playbackId!
-    if (stream.livepeerPlaybackId) {
-      console.log("✅ Stream ended - using playbackId for VOD playback:", stream.livepeerPlaybackId)
-      setVodReady(true)
-      // No need to set assetPlaybackId - we'll use stream.livepeerPlaybackId directly
-      return
-    }
-    
-    // If we don't have playbackId yet, fetch updated stream data
+  // Fetch recording from Livepeer by stream ID when stream ends
+  // According to Livepeer docs: When a stream ends with recording enabled,
+  // Livepeer creates an Asset that can be queried by sourceStreamId
+  // The Asset has its own playbackId which is optimal for VOD playback
+  const fetchStreamRecording = useCallback(async () => {
+    if (!stream?.endedAt || !stream?.livepeerStreamId || vodReady) return
+
     setCheckingVod(true)
     try {
-      const response = await fetch(`/api/streams/${params.id}`)
+      console.log(`[VOD] Fetching recording for stream ${stream.livepeerStreamId}...`)
+      const response = await fetch(`/api/streams/${params.id}/recording`)
+
       if (response.ok) {
-        const updatedStream = await response.json()
-        setStream(updatedStream)
-        
-        // If we now have playbackId, mark as ready
-        if (updatedStream.livepeerPlaybackId) {
-          console.log("✅ Got playbackId after fetch - ready for VOD:", updatedStream.livepeerPlaybackId)
-          setVodReady(true)
+        const data = await response.json()
+
+        if (data.success && data.recording) {
+          const recording = data.recording
+          console.log(`[VOD] ✅ Recording found via ${data.source}:`, {
+            playbackId: recording.playbackId,
+            status: recording.status,
+            duration: recording.duration,
+            playbackUrl: recording.playbackUrl,
+          })
+
+          // Use the recording's playbackId for VOD playback
+          // This is the asset's playbackId, which is optimal for VOD
+          if (recording.playbackId) {
+            setAssetPlaybackId(recording.playbackId)
+            setAssetReady(true)
+            setVodReady(true)
+
+            // Also update stream with recording info if available
+            if (recording.playbackUrl && !stream.vodUrl) {
+              setHlsPlaybackUrl(recording.playbackUrl)
+            }
+          }
+        } else if (response.status === 202) {
+          // Asset is processing (202 Accepted)
+          console.log(`[VOD] ⚠️ Recording is still processing: ${data.message || data.status}`)
+          // Will retry on next poll
+        } else {
+          console.warn(`[VOD] ⚠️ No recording available yet: ${data.message || "Unknown error"}`)
         }
+      } else if (response.status === 404) {
+        // Recording not found yet - this is normal, Livepeer needs time to process
+        console.log(`[VOD] ⚠️ Recording not available yet, will retry...`)
+      } else {
+        console.error(`[VOD] Error fetching recording: ${response.status}`)
       }
     } catch (error) {
-      console.error("Error checking VOD availability:", error)
+      console.error("[VOD] Error fetching recording:", error)
     } finally {
       setCheckingVod(false)
     }
-  }, [stream?.endedAt, stream?.livepeerPlaybackId, vodReady, params.id])
+  }, [stream?.endedAt, stream?.livepeerStreamId, vodReady, params.id])
+
+  // Check if VOD is ready for ended streams
+  // According to Livepeer docs: Player automatically handles VOD with stream playbackId
+  // But we prefer to use the asset's playbackId if available (more reliable for VOD)
+  const checkVodAvailability = useCallback(async () => {
+    if (!stream?.endedAt || vodReady || !stream) return
+
+    // If we already have a playbackId, we can use it immediately
+    // The Player component handles VOD playback automatically
+    if (stream.livepeerPlaybackId && !assetPlaybackId) {
+      console.log("✅ Stream ended - using playbackId for VOD playback:", stream.livepeerPlaybackId)
+      setVodReady(true)
+      // Also try to fetch the asset recording for better VOD support
+      fetchStreamRecording()
+      return
+    }
+
+    // If we don't have playbackId yet, fetch updated stream data first
+    if (!stream.livepeerPlaybackId) {
+      setCheckingVod(true)
+      try {
+        const response = await fetch(`/api/streams/${params.id}`)
+        if (response.ok) {
+          const updatedStream = await response.json()
+          setStream(updatedStream)
+
+          // If we now have playbackId, mark as ready and fetch recording
+          if (updatedStream.livepeerPlaybackId) {
+            console.log("✅ Got playbackId after fetch - ready for VOD:", updatedStream.livepeerPlaybackId)
+            setVodReady(true)
+            // Fetch the recording asset for optimal VOD playback
+            if (updatedStream.livepeerStreamId) {
+              fetchStreamRecording()
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error checking VOD availability:", error)
+      } finally {
+        setCheckingVod(false)
+      }
+    } else {
+      // We have playbackId but no asset yet - fetch recording asset
+      fetchStreamRecording()
+    }
+  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, vodReady, assetPlaybackId, params.id, fetchStreamRecording])
 
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
@@ -459,14 +524,20 @@ export default function StreamPage() {
   }, [params.id, fetchStream, fetchChatMessages, subscribeToChat])
   
   // Separate effect for VOD checking to avoid circular dependencies
+  // When stream ends, fetch recording from Livepeer by stream ID
   useEffect(() => {
-    if (stream?.endedAt && !stream?.vodUrl && !vodReady) {
+    if (stream?.endedAt && !vodReady) {
+      // Immediately check VOD availability and fetch recording
       checkVodAvailability()
+      
+      // Poll for recording every 10 seconds until found
       const vodCheckInterval = setInterval(() => {
         checkVodAvailability()
       }, 10000)
+      
       return () => clearInterval(vodCheckInterval)
     } else if (stream?.endedAt && stream?.vodUrl) {
+      // If vodUrl already exists, mark as ready
       setVodReady(true)
     }
   }, [stream?.endedAt, stream?.vodUrl, vodReady, checkVodAvailability])
@@ -840,15 +911,15 @@ export default function StreamPage() {
                         </div>
                       </div>
                     ) : stream.endedAt ? (
-                      // For ended streams, use Livepeer Player with playbackId directly
-                      // According to Livepeer docs: Player automatically handles VOD playback with stream playbackId
-                      // The same playbackId works for both live and VOD - Livepeer handles the transition
-                      stream.livepeerPlaybackId ? (
+                      // For ended streams, use Livepeer Player with playbackId
+                      // Priority: 1) Asset playbackId (from recording API - most reliable for VOD)
+                      //          2) Stream playbackId (works but asset playbackId is preferred)
+                      (assetPlaybackId || stream.livepeerPlaybackId) ? (
                         <>
-                          {/* Use Livepeer Player with stream playbackId - it handles VOD automatically */}
+                          {/* Use Livepeer Player with asset playbackId (preferred) or stream playbackId */}
                           <Player
-                            key={`vod-${stream.livepeerPlaybackId}`}
-                            playbackId={stream.livepeerPlaybackId}
+                            key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
+                            playbackId={assetPlaybackId || stream.livepeerPlaybackId!}
                             autoPlay={false}
                             muted={false}
                             showTitle={false}
@@ -866,7 +937,7 @@ export default function StreamPage() {
                             }}
                             onError={(error) => {
                               console.error("Livepeer Player error for VOD:", error)
-                              console.error("PlaybackId:", stream.livepeerPlaybackId)
+                              console.error("PlaybackId:", assetPlaybackId || stream.livepeerPlaybackId)
                               // Player will automatically retry or fallback internally
                             }}
                           />
