@@ -609,7 +609,9 @@ export default function StreamPage() {
         checkPlaybackType(stream.livepeerPlaybackId)
         
         const typeCheckInterval = setInterval(() => {
-          if (!assetPlaybackId && playbackType !== "vod") {
+          // Check if we still need to poll (no asset playbackId and playbackType is not "vod")
+          // Use a type guard to check playbackType properly
+          if (!assetPlaybackId && (playbackType === null || playbackType === "live")) {
             checkPlaybackType(stream.livepeerPlaybackId)
           } else {
             clearInterval(typeCheckInterval)
