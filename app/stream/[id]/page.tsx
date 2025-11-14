@@ -101,6 +101,62 @@ export default function StreamPage() {
     }
   }, [params.id])
 
+  // Find asset by playbackId or assetId
+  const findAssetByPlaybackIdOrAssetId = useCallback(async (playbackIdOrAssetId: string) => {
+    if (!playbackIdOrAssetId) return null
+    
+    try {
+      console.log(`[Asset Finder] Looking for asset by playbackId/assetId: ${playbackIdOrAssetId}`)
+      
+      // Try to get asset by ID first (if it's a UUID format)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playbackIdOrAssetId)
+      
+      if (isUUID) {
+        // It's an asset ID - fetch directly
+        console.log(`[Asset Finder] Detected UUID format, fetching asset by ID...`)
+        const response = await fetch(`/api/streams/${params.id}/recording?assetId=${encodeURIComponent(playbackIdOrAssetId)}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.recording?.playbackId) {
+            console.log(`[Asset Finder] ✅ Found asset by ID: ${data.recording.playbackId}`)
+            return data.recording.playbackId
+          }
+        }
+      }
+      
+      // Try to find asset by playbackId
+      // First check if this playbackId belongs to an asset by checking playback info
+      const playbackResponse = await fetch(`/api/streams/${params.id}/playback?playbackId=${encodeURIComponent(playbackIdOrAssetId)}`)
+      if (playbackResponse.ok) {
+        const playbackData = await playbackResponse.json()
+        // If playback type is "vod", this is likely an asset playbackId
+        if (playbackData.type === "vod" || playbackData.playbackInfo?.type === "vod") {
+          console.log(`[Asset Finder] ✅ PlaybackId ${playbackIdOrAssetId} is VOD (asset playbackId)`)
+          return playbackIdOrAssetId
+        }
+      }
+      
+      // If stream has ended, try to find asset by checking all assets
+      if (stream?.endedAt && stream?.livepeerStreamId) {
+        const recordingResponse = await fetch(`/api/streams/${params.id}/recording`)
+        if (recordingResponse.ok) {
+          const recordingData = await recordingResponse.json()
+          if (recordingData.success && recordingData.recording?.playbackId) {
+            console.log(`[Asset Finder] ✅ Found asset playbackId from recording: ${recordingData.recording.playbackId}`)
+            return recordingData.recording.playbackId
+          }
+        }
+      }
+      
+      // Fallback: assume it's a playbackId and return it
+      console.log(`[Asset Finder] Using ${playbackIdOrAssetId} as playbackId`)
+      return playbackIdOrAssetId
+    } catch (error) {
+      console.error("[Asset Finder] Error finding asset:", error)
+      return null
+    }
+  }, [params.id, stream?.endedAt, stream?.livepeerStreamId])
+
   const fetchStream = useCallback(async () => {
     try {
       const response = await fetch(`/api/streams/${params.id}`)
@@ -411,62 +467,6 @@ export default function StreamPage() {
       setIsCheckingPlaybackType(false)
     }
   }, [params.id, assetPlaybackId])
-
-  // Find asset by playbackId or assetId
-  const findAssetByPlaybackIdOrAssetId = useCallback(async (playbackIdOrAssetId: string) => {
-    if (!playbackIdOrAssetId) return null
-    
-    try {
-      console.log(`[Asset Finder] Looking for asset by playbackId/assetId: ${playbackIdOrAssetId}`)
-      
-      // Try to get asset by ID first (if it's a UUID format)
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playbackIdOrAssetId)
-      
-      if (isUUID) {
-        // It's an asset ID - fetch directly
-        console.log(`[Asset Finder] Detected UUID format, fetching asset by ID...`)
-        const response = await fetch(`/api/streams/${params.id}/recording?assetId=${encodeURIComponent(playbackIdOrAssetId)}`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.recording?.playbackId) {
-            console.log(`[Asset Finder] ✅ Found asset by ID: ${data.recording.playbackId}`)
-            return data.recording.playbackId
-          }
-        }
-      }
-      
-      // Try to find asset by playbackId
-      // First check if this playbackId belongs to an asset by checking playback info
-      const playbackResponse = await fetch(`/api/streams/${params.id}/playback?playbackId=${encodeURIComponent(playbackIdOrAssetId)}`)
-      if (playbackResponse.ok) {
-        const playbackData = await playbackResponse.json()
-        // If playback type is "vod", this is likely an asset playbackId
-        if (playbackData.type === "vod" || playbackData.playbackInfo?.type === "vod") {
-          console.log(`[Asset Finder] ✅ PlaybackId ${playbackIdOrAssetId} is VOD (asset playbackId)`)
-          return playbackIdOrAssetId
-        }
-      }
-      
-      // If stream has ended, try to find asset by checking all assets
-      if (stream?.endedAt && stream?.livepeerStreamId) {
-        const recordingResponse = await fetch(`/api/streams/${params.id}/recording`)
-        if (recordingResponse.ok) {
-          const recordingData = await recordingResponse.json()
-          if (recordingData.success && recordingData.recording?.playbackId) {
-            console.log(`[Asset Finder] ✅ Found asset playbackId from recording: ${recordingData.recording.playbackId}`)
-            return recordingData.recording.playbackId
-          }
-        }
-      }
-      
-      // Fallback: assume it's a playbackId and return it
-      console.log(`[Asset Finder] Using ${playbackIdOrAssetId} as playbackId`)
-      return playbackIdOrAssetId
-    } catch (error) {
-      console.error("[Asset Finder] Error finding asset:", error)
-      return null
-    }
-  }, [params.id, stream?.endedAt, stream?.livepeerStreamId])
 
   // Fetch recording from Livepeer by stream ID when stream ends
   // According to Livepeer docs: When a stream ends with recording enabled,
