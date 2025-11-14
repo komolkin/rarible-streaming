@@ -43,47 +43,62 @@ export async function GET(
         console.log(`[GET Stream ${params.id}] Finding recording for ended stream: ${stream.livepeerStreamId}`)
         
         // METHOD 1: Check stream sessions first (fastest method)
-        try {
-          console.log(`[GET Stream ${params.id}] Method 1: Checking stream sessions...`)
-          const streamData = await getStream(stream.livepeerStreamId)
-          let sessions: any[] = []
-          
-          if (streamData?.sessions && Array.isArray(streamData.sessions) && streamData.sessions.length > 0) {
-            sessions = streamData.sessions
-          }
+          try {
+            console.log(`[GET Stream ${params.id}] Method 1: Checking stream sessions...`)
+            const streamData = await getStream(stream.livepeerStreamId)
+            let sessions: any[] = []
+            
+            if (streamData?.sessions && Array.isArray(streamData.sessions) && streamData.sessions.length > 0) {
+              sessions = streamData.sessions
+            }
 
-          if (sessions.length === 0) {
-            sessions = await getStreamSessions(stream.livepeerStreamId, { limit: 10, recordOnly: true })
-          }
+            if (sessions.length === 0) {
+              sessions = await getStreamSessions(stream.livepeerStreamId, { limit: 10, recordOnly: true })
+            }
 
-          if (sessions.length > 0) {
-            for (const session of sessions) {
-              if (session.record && (session.recordingUrl || session.playbackUrl)) {
-                const recordingUrl = session.recordingUrl || session.playbackUrl
-                console.log(`[GET Stream ${params.id}] ✅ Found recording in session ${session.id}: ${recordingUrl}`)
-                if (!vodUrl) {
-                  vodUrl = recordingUrl
-                  console.log(`[GET Stream ${params.id}] Using session recording URL for VOD`)
+            if (sessions.length > 0) {
+              for (const session of sessions) {
+                if (session.record && (session.recordingUrl || session.playbackUrl)) {
+                  const recordingUrl = session.recordingUrl || session.playbackUrl
+                  console.log(`[GET Stream ${params.id}] ✅ Found recording in session ${session.id}: ${recordingUrl}`)
+                  if (!vodUrl) {
+                    vodUrl = recordingUrl
+                    console.log(`[GET Stream ${params.id}] Using session recording URL for VOD`)
+                  }
+                  break
                 }
-                break
+              }
+            } else {
+              console.log(`[GET Stream ${params.id}] No session recordings available yet`)
+            }
+            
+            // Also check recordings array if it exists
+            if (!vodUrl && streamData?.recordings && Array.isArray(streamData.recordings) && streamData.recordings.length > 0) {
+              const recording = streamData.recordings[0]
+              const recordingUrl = recording.recordingUrl || recording.playbackUrl
+              if (recordingUrl) {
+                console.log(`[GET Stream ${params.id}] ✅ Found recording in stream.recordings: ${recordingUrl}`)
+                vodUrl = recordingUrl
               }
             }
-          } else {
-            console.log(`[GET Stream ${params.id}] No session recordings available yet`)
-          }
-          
-          // Also check recordings array if it exists
-          if (!vodUrl && streamData?.recordings && Array.isArray(streamData.recordings) && streamData.recordings.length > 0) {
-            const recording = streamData.recordings[0]
-            const recordingUrl = recording.recordingUrl || recording.playbackUrl
-            if (recordingUrl) {
-              console.log(`[GET Stream ${params.id}] ✅ Found recording in stream.recordings: ${recordingUrl}`)
-              vodUrl = recordingUrl
+            
+            // Try to get thumbnail from playback info API for ended streams
+            // According to Livepeer docs: playback info API returns thumbnail URL in meta.source
+            if (!previewImageUrl && stream.livepeerPlaybackId) {
+              try {
+                const { getLiveThumbnailUrl } = await import("@/lib/livepeer")
+                const thumbnailUrl = await getLiveThumbnailUrl(stream.livepeerPlaybackId)
+                if (thumbnailUrl) {
+                  previewImageUrl = thumbnailUrl
+                  console.log(`[GET Stream ${params.id}] ✅ Got thumbnail from playback info API: ${thumbnailUrl}`)
+                }
+              } catch (thumbError: any) {
+                console.warn(`[GET Stream ${params.id}] Could not get thumbnail from playback info:`, thumbError?.message)
+              }
             }
+          } catch (sessionError: any) {
+            console.warn(`[GET Stream ${params.id}] Error checking stream sessions:`, sessionError?.message)
           }
-        } catch (sessionError: any) {
-          console.warn(`[GET Stream ${params.id}] Error checking stream sessions:`, sessionError?.message)
-        }
         
         // METHOD 2: Check assets API (if session method didn't work)
         if (!vodUrl) {
@@ -233,16 +248,18 @@ export async function GET(
         const needsStreamKeyUpdate = !stream.livepeerStreamKey && livepeerStreamData?.streamKey
         
         // Generate preview image for live streams if missing (don't overwrite user-uploaded images)
+        // According to Livepeer docs: playback info API returns thumbnail URL in meta.source array
         const needsPreviewImage = !stream.previewImageUrl && livepeerStreamData?.playbackId
         let previewImageUrl = stream.previewImageUrl
         
         if (needsPreviewImage) {
           const { getLiveThumbnailUrl, generateAndVerifyThumbnail } = await import("@/lib/livepeer")
-          // Try Livepeer live thumbnail endpoint first (updates every few seconds)
+          // Try Livepeer playback info API first (returns thumbnail in meta.source)
+          // This works for both live and VOD streams
           previewImageUrl = await getLiveThumbnailUrl(livepeerStreamData.playbackId)
 
           if (!previewImageUrl) {
-            // Fallback to thumbnailer if live endpoint not ready yet
+            // Fallback to thumbnailer service if playback info not ready yet
             previewImageUrl = await generateAndVerifyThumbnail(livepeerStreamData.playbackId, {
               isVod: false,
               maxRetries: 2,
@@ -251,7 +268,9 @@ export async function GET(
           }
 
           if (previewImageUrl) {
-            console.log(`[Stream ${params.id}] Generated preview image for live stream: ${previewImageUrl}`)
+            console.log(`[Stream ${params.id}] ✅ Generated preview image from playback info: ${previewImageUrl}`)
+          } else {
+            console.warn(`[Stream ${params.id}] ⚠️ Could not generate preview image for playbackId: ${livepeerStreamData.playbackId}`)
           }
         } else if (stream.previewImageUrl) {
           console.log(`[Stream ${params.id}] Preserving user-uploaded cover image: ${stream.previewImageUrl}`)

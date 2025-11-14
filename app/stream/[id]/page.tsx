@@ -321,61 +321,32 @@ export default function StreamPage() {
   }, [params.id])
 
   // Check if VOD is ready for ended streams
+  // According to Livepeer docs: Player automatically handles VOD with stream playbackId
+  // We just need to ensure we have the playbackId - no need to wait for asset or vodUrl
   const checkVodAvailability = useCallback(async () => {
     if (!stream?.endedAt || vodReady || !stream) return
     
-      // If we already have vodUrl, no need to check
-      if (stream?.vodUrl) {
-        setVodReady(true)
-        // Check if vodUrl is HLS, extract playbackId and use it
-        if (isHlsUrl(stream.vodUrl)) {
-          setHlsPlaybackUrl(stream.vodUrl)
-          // Extract playbackId from HLS URL for Livepeer Player
-          const extractedId = extractPlaybackIdFromHlsUrl(stream.vodUrl)
-          if (extractedId) {
-            setAssetPlaybackId(extractedId)
-            setAssetReady(true)
-            console.log("✅ Extracted playbackId from vodUrl:", extractedId)
-          }
-        }
-        return
-      }
-    
-    // For ended streams, try to use stream playbackId directly (like lvpr.tv does)
-    // Livepeer Player can handle VOD playback with stream playbackId
-    if (stream?.livepeerPlaybackId && !assetPlaybackId) {
-      console.log("✅ Using stream playbackId directly for VOD:", stream.livepeerPlaybackId)
-      setAssetPlaybackId(stream.livepeerPlaybackId)
-      setAssetReady(true)
+    // According to Livepeer docs: The Player component can handle VOD playback
+    // with the stream playbackId directly. The same playbackId works for both live and VOD.
+    // We don't need to wait for vodUrl or asset - just use the playbackId!
+    if (stream.livepeerPlaybackId) {
+      console.log("✅ Stream ended - using playbackId for VOD playback:", stream.livepeerPlaybackId)
       setVodReady(true)
+      // No need to set assetPlaybackId - we'll use stream.livepeerPlaybackId directly
       return
     }
     
+    // If we don't have playbackId yet, fetch updated stream data
     setCheckingVod(true)
     try {
-      // Fetch updated stream data - the API will check for VOD availability
       const response = await fetch(`/api/streams/${params.id}`)
       if (response.ok) {
         const updatedStream = await response.json()
         setStream(updatedStream)
         
-        // If we got a vodUrl, check if it's HLS
-        if (updatedStream.vodUrl) {
-          if (isHlsUrl(updatedStream.vodUrl)) {
-            setHlsPlaybackUrl(updatedStream.vodUrl)
-            const extractedId = extractPlaybackIdFromHlsUrl(updatedStream.vodUrl)
-            if (extractedId) {
-              setAssetPlaybackId(extractedId)
-              setAssetReady(true)
-              console.log("✅ Extracted playbackId from vodUrl:", extractedId)
-            }
-          }
-          setVodReady(true)
-        } else if (updatedStream.livepeerPlaybackId && !assetPlaybackId) {
-          // Use stream playbackId directly if no vodUrl but we have playbackId
-          console.log("✅ Using stream playbackId directly for VOD:", updatedStream.livepeerPlaybackId)
-          setAssetPlaybackId(updatedStream.livepeerPlaybackId)
-          setAssetReady(true)
+        // If we now have playbackId, mark as ready
+        if (updatedStream.livepeerPlaybackId) {
+          console.log("✅ Got playbackId after fetch - ready for VOD:", updatedStream.livepeerPlaybackId)
           setVodReady(true)
         }
       }
@@ -384,7 +355,7 @@ export default function StreamPage() {
     } finally {
       setCheckingVod(false)
     }
-  }, [stream?.endedAt, stream?.vodUrl, stream?.livepeerPlaybackId, vodReady, assetPlaybackId, params.id])
+  }, [stream?.endedAt, stream?.livepeerPlaybackId, vodReady, params.id])
 
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
@@ -515,45 +486,17 @@ export default function StreamPage() {
         title: stream.title
       })
       
-      // For ended streams, try to use Livepeer Player with playbackId
-      // Livepeer Player can handle VOD playback with stream playbackId (like lvpr.tv does)
-      // Priority: 1) Extract from vodUrl if available, 2) Use stream playbackId directly
-      if (stream.endedAt) {
-        if (stream.vodUrl && isHlsUrl(stream.vodUrl)) {
-          // If we have vodUrl, extract playbackId from it
-          const extractedId = extractPlaybackIdFromHlsUrl(stream.vodUrl)
-          if (extractedId) {
-            console.log("✅ Extracted playbackId from stream vodUrl:", extractedId)
-            setAssetPlaybackId(extractedId)
-            setHlsPlaybackUrl(stream.vodUrl)
-            setAssetReady(true)
-            console.log("✅ Will use Livepeer Player with extracted playbackId")
-          } else {
-            console.warn("⚠️ Could not extract playbackId from vodUrl:", stream.vodUrl)
-            setHlsPlaybackUrl(stream.vodUrl)
-          }
-        } else if (stream.livepeerPlaybackId) {
-          // CRITICAL: Try using stream playbackId directly for VOD
-          // Livepeer Player can handle VOD with stream playbackId (as shown by lvpr.tv)
-          // This is what worked on localhost!
-          console.log("✅ Using stream playbackId directly for VOD:", stream.livepeerPlaybackId)
-          setAssetPlaybackId(stream.livepeerPlaybackId)
-          setAssetReady(true)
-          console.log("✅ Will use Livepeer Player with stream playbackId")
-        } else if (stream.vodUrl) {
-          // If vodUrl exists but is not HLS, use it directly
-          console.log("vodUrl is not HLS format, using direct video player")
-          setHlsPlaybackUrl(stream.vodUrl)
-        } else {
-          console.log("Stream ended but no playbackId or vodUrl available yet")
-        }
+      // For ended streams: According to Livepeer docs, Player handles VOD automatically
+      // with the stream playbackId - no need for complex logic here
+      if (stream.endedAt && stream.livepeerPlaybackId) {
+        console.log("✅ Stream ended - Player will handle VOD playback with playbackId:", stream.livepeerPlaybackId)
       }
       
       if (stream.livepeerStreamId && !stream.livepeerPlaybackId) {
         console.warn("Stream missing playbackId, will be fetched on next poll")
       }
     }
-  }, [stream, hlsPlaybackUrl])
+  }, [stream])
 
   const handleFollow = async () => {
     if (!authenticated || !user?.wallet?.address || !stream?.creatorAddress) return
@@ -897,15 +840,15 @@ export default function StreamPage() {
                         </div>
                       </div>
                     ) : stream.endedAt ? (
-                      // For ended streams, show recording if available
-                      // Priority: 1) Livepeer Player with playbackId (works for VOD!), 2) HLS URL (direct), 3) HTML5 video with vodUrl
-                      // Try Livepeer Player first - it can handle VOD with stream playbackId (like lvpr.tv)
-                      (assetPlaybackId || stream.livepeerPlaybackId) && assetReady ? (
+                      // For ended streams, use Livepeer Player with playbackId directly
+                      // According to Livepeer docs: Player automatically handles VOD playback with stream playbackId
+                      // The same playbackId works for both live and VOD - Livepeer handles the transition
+                      stream.livepeerPlaybackId ? (
                         <>
-                          {/* Use Livepeer Player with playbackId for VOD - Livepeer Player handles VOD correctly */}
+                          {/* Use Livepeer Player with stream playbackId - it handles VOD automatically */}
                           <Player
-                            key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
-                            playbackId={assetPlaybackId || stream.livepeerPlaybackId!}
+                            key={`vod-${stream.livepeerPlaybackId}`}
+                            playbackId={stream.livepeerPlaybackId}
                             autoPlay={false}
                             muted={false}
                             showTitle={false}
@@ -922,12 +865,9 @@ export default function StreamPage() {
                               },
                             }}
                             onError={(error) => {
-                              console.error("Livepeer Player error:", error)
-                              console.error("PlaybackId:", assetPlaybackId || stream.livepeerPlaybackId)
-                              console.error("Stream vodUrl:", stream.vodUrl)
-                              // If player errors, mark as not ready and fall back to HLS player
-                              setAssetReady(false)
-                              console.warn("⚠️ Livepeer Player failed, falling back to HLS player")
+                              console.error("Livepeer Player error for VOD:", error)
+                              console.error("PlaybackId:", stream.livepeerPlaybackId)
+                              // Player will automatically retry or fallback internally
                             }}
                           />
                         </>
