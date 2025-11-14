@@ -125,30 +125,6 @@ export default function StreamSetupPage() {
               </ol>
             </div>
 
-            <div className="space-y-3 border-t pt-6">
-              <h3 className="font-semibold">Low-latency encoder checklist</h3>
-              <p className="text-sm text-muted-foreground">
-                Livepeer&apos;s WebRTC playback needs consistent keyframes and no B-frames. Use these settings in OBS (Settings → Output → Recording/Streaming):
-              </p>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>
-                  <strong>Rate Control:</strong> CBR with 2.5‑3 Mbps (720p) or 3.5‑5 Mbps (1080p)
-                </li>
-                <li>
-                  <strong>Keyframe Interval:</strong> 2 seconds (OBS: set &quot;Keyframe Interval&quot; to <code>2</code>)
-                </li>
-                <li>
-                  <strong>B-frames:</strong> 0 (disable B-frames or use the Livepeer Studio preset)
-                </li>
-                <li>
-                  <strong>Encoder Tune:</strong> <code>zerolatency</code> (x264) or the lowest-latency preset for your encoder
-                </li>
-              </ul>
-              <p className="text-xs text-muted-foreground">
-                These match the low-latency guidance from the Livepeer docs so that viewers can stay in WebRTC/LL-HLS mode without falling back to regular HLS.
-              </p>
-            </div>
-
             <div className="pt-4">
               <Button asChild>
                 <a href={`/stream/${params.id}`}>Go to Stream Page</a>

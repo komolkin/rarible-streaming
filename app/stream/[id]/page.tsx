@@ -774,25 +774,10 @@ export default function StreamPage() {
         return () => clearInterval(vodCheckInterval)
       }
       
-      // Also check playback type for stream playbackId as fallback
-      // This helps detect when Livepeer converts stream playbackId to VOD
-      if (stream.livepeerPlaybackId && playbackType !== "vod" && !assetPlaybackId) {
-        console.log("📹 Checking playback type for stream playbackId...")
-        checkPlaybackType(stream.livepeerPlaybackId)
-        
-        const typeCheckInterval = setInterval(() => {
-          // Check if we still need to poll (no asset playbackId and playbackType is not "vod")
-          // Use a type guard to check playbackType properly
-          if (!assetPlaybackId && (playbackType === null || playbackType === "live")) {
-            checkPlaybackType(stream.livepeerPlaybackId)
-          } else {
-            clearInterval(typeCheckInterval)
-          }
-        }, 10000)
-        return () => clearInterval(typeCheckInterval)
-      }
+      // Note: We don't use stream playbackId for ended streams even if it becomes "vod" type
+      // We MUST use asset playbackId for reliable VOD playback
     }
-  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, stream?.assetId, playbackType, assetPlaybackId, fetchStreamRecording, checkPlaybackType])
+  }, [stream?.endedAt, stream?.livepeerStreamId, stream?.assetId, assetPlaybackId, fetchStreamRecording])
 
 
   // Debug: log stream data when it changes
@@ -1102,13 +1087,13 @@ export default function StreamPage() {
                     </div>
                     {stream.endedAt ? (
                       // STREAM ENDED - Use Player with playRecording for VOD playback
-                      // Priority: 1) Asset playbackId (best for VOD), 2) Stream playbackId (fallback)
-                      (assetPlaybackId || stream.livepeerPlaybackId) ? (
+                      // CRITICAL: Only use asset playbackId for ended streams - stream playbackId causes loading issues
+                      assetPlaybackId ? (
                         <>
                           {/* Use Player component with playRecording prop for ended streams */}
                           <Player
-                            key={`vod-player-${assetPlaybackId || stream.livepeerPlaybackId}`}
-                            playbackId={assetPlaybackId || stream.livepeerPlaybackId}
+                            key={`vod-player-${assetPlaybackId}`}
+                            playbackId={assetPlaybackId}
                             playRecording
                             autoPlay
                             muted={false}
@@ -1117,16 +1102,32 @@ export default function StreamPage() {
                             objectFit="contain"
                             showUploadingIndicator={false}
                           />
-                          {/* Show message that we're fetching the asset if still checking */}
-                          {checkingVod && !assetPlaybackId && (
-                            <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-xs z-20">
-                              <div className="flex items-center gap-2">
-                                <div className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
-                                <span>Fetching recording playback...</span>
-                              </div>
-                            </div>
-                          )}
                         </>
+                      ) : stream.vodUrl ? (
+                        // Fallback: Use HLS player if we have vodUrl but no asset playbackId
+                        isHlsUrl(stream.vodUrl) ? (
+                          <HlsVideoPlayer
+                            key={`hls-vod-${stream.vodUrl}`}
+                            src={stream.vodUrl}
+                            autoPlay={false}
+                            onError={(error) => {
+                              console.error("HLS Video player error:", error)
+                            }}
+                          />
+                        ) : (
+                          <video 
+                            key={`vod-${stream.vodUrl}`}
+                            className="w-full h-full object-contain"
+                            controls
+                            autoPlay={false}
+                            src={stream.vodUrl}
+                            onError={(e) => {
+                              console.error("Video player error:", e)
+                            }}
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                        )
                       ) : (
                         // Show loading state while waiting for playbackId
                         <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
@@ -1223,23 +1224,8 @@ export default function StreamPage() {
                           </video>
                         </>
                       ) : stream.vodUrl ? (
-                        // If vodUrl is HLS and we have a playbackId, use Player with playRecording
-                        (assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl) || stream.livepeerPlaybackId) ? (
-                          <>
-                            {/* Use Player component with playRecording for ended streams */}
-                            <Player
-                              key={`vod-player-from-url-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl) || stream.livepeerPlaybackId}`}
-                              playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl) || stream.livepeerPlaybackId}
-                              playRecording
-                              autoPlay
-                              muted={false}
-                              showTitle={false}
-                              showPipButton={true}
-                              objectFit="contain"
-                              showUploadingIndicator={false}
-                            />
-                          </>
-                        ) : isHlsUrl(stream.vodUrl) ? (
+                        // If vodUrl is HLS, use HLS player directly (more reliable than Player for VOD URLs)
+                        isHlsUrl(stream.vodUrl) ? (
                           <HlsVideoPlayer
                             key={`hls-vod-${stream.vodUrl}`}
                             src={stream.vodUrl}
@@ -1289,13 +1275,13 @@ export default function StreamPage() {
                   </>
                 ) : stream.endedAt ? (
                   // STREAM ENDED - Use Player with playRecording for VOD playback
-                  // Priority: 1) Asset playbackId (best for VOD), 2) Stream playbackId, 3) vodUrl, 4) Loading state
-                  (assetPlaybackId || stream.livepeerPlaybackId) ? (
+                  // CRITICAL: Only use asset playbackId for ended streams - stream playbackId causes loading issues
+                  assetPlaybackId ? (
                     <>
                       {/* Use Player component with playRecording prop for ended streams */}
                       <Player
-                        key={`vod-player-fallback-${assetPlaybackId || stream.livepeerPlaybackId}`}
-                        playbackId={assetPlaybackId || stream.livepeerPlaybackId}
+                        key={`vod-player-fallback-${assetPlaybackId}`}
+                        playbackId={assetPlaybackId}
                         playRecording
                         autoPlay
                         muted={false}
@@ -1304,57 +1290,32 @@ export default function StreamPage() {
                         objectFit="contain"
                         showUploadingIndicator={false}
                       />
-                      {/* Show message that we're fetching the asset if still checking */}
-                      {checkingVod && !assetPlaybackId && (
-                        <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-xs z-20">
-                          <div className="flex items-center gap-2">
-                            <div className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
-                            <span>Fetching recording playback...</span>
-                          </div>
-                        </div>
-                      )}
                     </>
                   ) : stream.vodUrl ? (
-                    // Handle ended streams without playbackId but with vodUrl
-                    // If we can extract playbackId from vodUrl, use Player with playRecording
-                    (assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)) ? (
-                      <>
-                        {/* Use Player component with playRecording for ended streams */}
-                        <Player
-                          key={`vod-player-from-url-fallback-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}`}
-                          playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}
-                          playRecording
-                          autoPlay
-                          muted={false}
-                          showTitle={false}
-                          showPipButton={true}
-                          objectFit="contain"
-                          showUploadingIndicator={false}
-                        />
-                      </>
-                    ) : isHlsUrl(stream.vodUrl) ? (
-                    <HlsVideoPlayer
-                      key={`hls-vod-no-playback-${stream.vodUrl}`}
-                      src={stream.vodUrl}
-                      autoPlay={false}
-                      onError={(error) => {
-                        console.error("HLS Video player error:", error)
-                      }}
-                    />
-                  ) : (
-                    <video 
-                      key={`vod-no-playback-${stream.vodUrl}`}
-                      className="w-full h-full object-contain"
-                      controls
-                      autoPlay={false}
-                      src={stream.vodUrl}
-                      onError={(e) => {
-                        console.error("Video player error:", e)
-                      }}
-                    >
-                      Your browser does not support the video tag.
-                    </video>
-                  )
+                    // Fallback: Use HLS player if we have vodUrl but no asset playbackId
+                    isHlsUrl(stream.vodUrl) ? (
+                      <HlsVideoPlayer
+                        key={`hls-vod-fallback-${stream.vodUrl}`}
+                        src={stream.vodUrl}
+                        autoPlay={false}
+                        onError={(error) => {
+                          console.error("HLS Video player error:", error)
+                        }}
+                      />
+                    ) : (
+                      <video 
+                        key={`vod-fallback-${stream.vodUrl}`}
+                        className="w-full h-full object-contain"
+                        controls
+                        autoPlay={false}
+                        src={stream.vodUrl}
+                        onError={(e) => {
+                          console.error("Video player error:", e)
+                        }}
+                      >
+                        Your browser does not support the video tag.
+                      </video>
+                    )
                   ) : (
                     // Stream ended but no playbackId or vodUrl yet - show loading state while fetching asset
                     <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
@@ -1560,7 +1521,7 @@ export default function StreamPage() {
                                   e.stopPropagation()
                                   handleEndStream()
                                 }}
-                                className="text-destructive focus:text-destructive"
+                                className="text-white"
                               >
                                 End Stream
                               </DropdownMenuItem>
@@ -1573,9 +1534,8 @@ export default function StreamPage() {
                               e.stopPropagation()
                               handleDeleteStream()
                             }}
-                            className="text-destructive focus:text-destructive"
+                            className="text-white"
                           >
-                            <Trash2 className="h-4 w-4 mr-2" />
                             Delete Stream
                           </DropdownMenuItem>
                         </DropdownMenuContent>
