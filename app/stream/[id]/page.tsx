@@ -43,6 +43,7 @@ export default function StreamPage() {
     useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null);
+  const [assetPlaybackUrl, setAssetPlaybackUrl] = useState<string | null>(null);
 
   const fetchChatMessages = useCallback(async () => {
     const response = await fetch(`/api/chat/${params.id}`);
@@ -72,8 +73,13 @@ export default function StreamPage() {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.recording?.playbackId) {
-          setAssetPlaybackId(data.recording.playbackId);
+        if (data.success && data.recording) {
+          if (data.recording.playbackUrl) {
+            setAssetPlaybackUrl(data.recording.playbackUrl);
+          }
+          if (data.recording.playbackId) {
+            setAssetPlaybackId(data.recording.playbackId);
+          }
         }
       }
     } catch (error) {
@@ -791,9 +797,14 @@ export default function StreamPage() {
                       )}
                     </div>
                     {stream.endedAt ? (
-                      assetPlaybackId ? (
+                      assetPlaybackUrl || assetPlaybackId ? (
                         <Player
-                          playbackId={assetPlaybackId}
+                          src={assetPlaybackUrl || undefined}
+                          playbackId={
+                            assetPlaybackUrl
+                              ? undefined
+                              : assetPlaybackId || undefined
+                          }
                           autoPlay
                           muted={false}
                           showTitle={false}
@@ -909,9 +920,14 @@ export default function StreamPage() {
                     )}
                   </>
                 ) : stream.endedAt ? (
-                  assetPlaybackId ? (
+                  assetPlaybackUrl || assetPlaybackId ? (
                     <Player
-                      playbackId={assetPlaybackId}
+                      src={assetPlaybackUrl || undefined}
+                      playbackId={
+                        assetPlaybackUrl
+                          ? undefined
+                          : assetPlaybackId || undefined
+                      }
                       autoPlay
                       muted={false}
                       showTitle={false}
