@@ -48,6 +48,7 @@ export default function StreamPage() {
   const [liveViewerCount, setLiveViewerCount] = useState<number | null>(null)
   const [viewerCountError, setViewerCountError] = useState<string | null>(null)
   const [hasRealtimeViewerData, setHasRealtimeViewerData] = useState<boolean>(false)
+  const [pageError, setPageError] = useState<string | null>(null)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -399,7 +400,7 @@ export default function StreamPage() {
     if (stream && !stream.isLive) {
       setHasRealtimeViewerData(false)
     }
-  }, [stream?.isLive])
+  }, [stream])
 
   useEffect(() => {
     if (!stream?.livepeerPlaybackId) {
@@ -462,37 +463,42 @@ export default function StreamPage() {
   }, [])
 
   useEffect(() => {
-    fetchStream()
-    fetchChatMessages()
+    try {
+      fetchStream()
+      fetchChatMessages()
+    } catch (error: any) {
+      console.error("Error during initial fetch:", error)
+      setPageError(error?.message || "Failed to load stream")
+    }
     
     // Set up real-time subscription for chat
     const cleanup = subscribeToChat()
     
     // Poll for stream status updates every 10 seconds (reduced from 5s to minimize re-renders)
     const interval = setInterval(() => {
-      fetchStream()
+      fetchStream().catch((error) => {
+        console.error("Error during poll:", error)
+      })
     }, 10000)
-    
-    // For ended streams without vodUrl, check VOD availability more aggressively
-    let vodCheckInterval: NodeJS.Timeout | null = null
-    if (stream?.endedAt && !stream?.vodUrl && !vodReady) {
-      // Check immediately, then every 10 seconds (more aggressive polling for VOD)
-      // VOD processing can take time, but we want to show it as soon as it's available
-      checkVodAvailability()
-      vodCheckInterval = setInterval(() => {
-        checkVodAvailability()
-      }, 10000) // Reduced from 15s to 10s for faster updates
-    } else if (stream?.endedAt && stream?.vodUrl) {
-      // If vodUrl exists, mark as ready
-      setVodReady(true)
-    }
     
     return () => {
       cleanup()
       clearInterval(interval)
-      if (vodCheckInterval) clearInterval(vodCheckInterval)
     }
-  }, [params.id, fetchStream, fetchChatMessages, subscribeToChat, stream?.endedAt, stream?.livepeerPlaybackId, stream?.vodUrl, vodReady, checkVodAvailability])
+  }, [params.id, fetchStream, fetchChatMessages, subscribeToChat])
+  
+  // Separate effect for VOD checking to avoid circular dependencies
+  useEffect(() => {
+    if (stream?.endedAt && !stream?.vodUrl && !vodReady) {
+      checkVodAvailability()
+      const vodCheckInterval = setInterval(() => {
+        checkVodAvailability()
+      }, 10000)
+      return () => clearInterval(vodCheckInterval)
+    } else if (stream?.endedAt && stream?.vodUrl) {
+      setVodReady(true)
+    }
+  }, [stream?.endedAt, stream?.vodUrl, vodReady, checkVodAvailability])
 
   // Debug: log stream data when it changes
   useEffect(() => {
@@ -782,6 +788,18 @@ export default function StreamPage() {
   const showLivePlayer = useMemo(() => !!stream?.livepeerPlaybackId && !stream?.endedAt, [stream?.livepeerPlaybackId, stream?.endedAt])
   const showOfflineOverlay = useMemo(() => showLivePlayer && !stream?.isLive && !playerIsStreaming, [showLivePlayer, stream?.isLive, playerIsStreaming])
   const effectiveViewerCount = liveViewerCount ?? stream.viewerCount ?? 0
+
+  if (pageError) {
+    return (
+      <div className="min-h-screen pt-24 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <h2 className="text-xl font-semibold text-red-500 mb-2">Error Loading Stream</h2>
+          <p className="text-muted-foreground mb-4">{pageError}</p>
+          <Button onClick={() => window.location.reload()}>Reload Page</Button>
+        </div>
+      </div>
+    )
+  }
 
   if (!stream) {
     return (
