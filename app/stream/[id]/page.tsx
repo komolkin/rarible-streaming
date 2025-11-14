@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Heart, Share2, MoreVertical, Trash2, Eye } from "lucide-react"
+import { HlsVideoPlayer } from "@/components/hls-video-player"
 
 export default function StreamPage() {
   const params = useParams()
@@ -46,6 +47,7 @@ export default function StreamPage() {
   const [isCheckingPlaybackType, setIsCheckingPlaybackType] = useState<boolean>(false)
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null)
   const [assetReady, setAssetReady] = useState<boolean>(false)
+  const [vodPlaybackUrl, setVodPlaybackUrl] = useState<string | null>(null)
   
   // Helper function to extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = useCallback((url: string): string | null => {
@@ -168,24 +170,19 @@ export default function StreamPage() {
             playbackUrl: recording.playbackUrl,
           })
 
-          // CRITICAL: Use asset playbackId with Player component (best for VOD)
-          // The Player component accepts playbackId directly
-          if (recording.playbackId) {
+          // CRITICAL: Prioritize playbackUrl (direct HLS URL) for VOD playback
+          // This is the most reliable method for ended streams
+          if (recording.playbackUrl) {
+            console.log(`[VOD] ✅ Found playbackUrl (HLS): ${recording.playbackUrl}`)
+            setVodPlaybackUrl(recording.playbackUrl)
+            setAssetReady(true)
+            setPlaybackType("vod")
+          } else if (recording.playbackId) {
+            // Fallback to playbackId if playbackUrl is not available
             console.log(`[VOD] ✅ Found asset playbackId: ${recording.playbackId}`)
             setAssetPlaybackId(recording.playbackId)
             setAssetReady(true)
             setPlaybackType("vod")
-          } else if (recording.playbackUrl) {
-            // Try to extract playbackId from playbackUrl if it's an HLS URL
-            const extractedPlaybackId = extractPlaybackIdFromHlsUrl(recording.playbackUrl)
-            if (extractedPlaybackId) {
-              console.log(`[VOD] ✅ Extracted playbackId from playbackUrl: ${extractedPlaybackId}`)
-              setAssetPlaybackId(extractedPlaybackId)
-              setAssetReady(true)
-              setPlaybackType("vod")
-            } else {
-              console.warn(`[VOD] ⚠️ No playbackId found and cannot extract from playbackUrl: ${recording.playbackUrl}`)
-            }
           }
         } else if (response.status === 202) {
           // Asset is processing (202 Accepted)
@@ -894,7 +891,7 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {(stream.livepeerPlaybackId || (stream.endedAt && (assetPlaybackId || stream.assetId || stream.livepeerStreamId))) ? (
+                {(stream.livepeerPlaybackId || (stream.endedAt && (vodPlaybackUrl || assetPlaybackId || stream.livepeerPlaybackId || stream.assetId || stream.livepeerStreamId))) ? (
                   <>
                     <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs z-20">
                       {stream.isLive ? (
@@ -910,19 +907,38 @@ export default function StreamPage() {
                         <>Playback ID: {stream.livepeerPlaybackId}</>
                       )}
                     </div>
-                    {stream.endedAt && stream.livepeerPlaybackId ? (
-                      // STREAM ENDED - Use Player with playRecording for VOD playback
-                      <Player
-                        key={`vod-player-${stream.livepeerPlaybackId}`}
-                        playbackId={stream.livepeerPlaybackId}
-                        playRecording
-                        autoPlay
-                        muted={false}
-                        showTitle={false}
-                        showPipButton={true}
-                        objectFit="contain"
-                        showUploadingIndicator={false}
-                      />
+                    {stream.endedAt ? (
+                      // STREAM ENDED - Use direct HLS URL for VOD playback (preferred) or Player component as fallback
+                      vodPlaybackUrl ? (
+                        <HlsVideoPlayer
+                          src={vodPlaybackUrl}
+                          autoPlay={true}
+                          className="w-full h-full"
+                        />
+                      ) : stream.livepeerPlaybackId ? (
+                        <Player
+                          key={`vod-player-${stream.livepeerPlaybackId}`}
+                          playbackId={stream.livepeerPlaybackId}
+                          playRecording
+                          autoPlay
+                          muted={false}
+                          showTitle={false}
+                          showPipButton={true}
+                          objectFit="contain"
+                          showUploadingIndicator={false}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-white">
+                          <div className="text-center">
+                            <p className="text-lg mb-2">Recording Processing</p>
+                            <p className="text-sm text-muted-foreground">
+                              {checkingVod 
+                                ? "Fetching recording from Livepeer..." 
+                                : "Waiting for recording to be available. Please refresh in a few moments."}
+                            </p>
+                          </div>
+                        </div>
+                      )
                     ) : showLivePlayer ? (
                       // LIVE STREAM - Show live player
                       <>
@@ -1002,19 +1018,38 @@ export default function StreamPage() {
                       )
                     }
                   </>
-                ) : stream.endedAt && stream.livepeerPlaybackId ? (
-                  // STREAM ENDED - Use Player with playRecording for VOD playback
-                  <Player
-                    key={`vod-player-fallback-${stream.livepeerPlaybackId}`}
-                    playbackId={stream.livepeerPlaybackId}
-                    playRecording
-                    autoPlay
-                    muted={false}
-                    showTitle={false}
-                    showPipButton={true}
-                    objectFit="contain"
-                    showUploadingIndicator={false}
-                  />
+                ) : stream.endedAt ? (
+                  // STREAM ENDED - Use direct HLS URL for VOD playback (preferred) or Player component as fallback
+                  vodPlaybackUrl ? (
+                    <HlsVideoPlayer
+                      src={vodPlaybackUrl}
+                      autoPlay={true}
+                      className="w-full h-full"
+                    />
+                  ) : stream.livepeerPlaybackId ? (
+                    <Player
+                      key={`vod-player-fallback-${stream.livepeerPlaybackId}`}
+                      playbackId={stream.livepeerPlaybackId}
+                      playRecording
+                      autoPlay
+                      muted={false}
+                      showTitle={false}
+                      showPipButton={true}
+                      objectFit="contain"
+                      showUploadingIndicator={false}
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-white">
+                      <div className="text-center">
+                        <p className="text-lg mb-2">Recording Processing</p>
+                        <p className="text-sm text-muted-foreground">
+                          {checkingVod 
+                            ? "Fetching recording from Livepeer..." 
+                            : "Waiting for recording to be available. Please refresh in a few moments."}
+                        </p>
+                      </div>
+                    </div>
+                  )
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
                     <div className="text-center">
