@@ -544,7 +544,7 @@ export default function StreamPage() {
         console.warn("Stream missing playbackId, will be fetched on next poll")
       }
     }
-  }, [stream, hlsPlaybackUrl, fetchHlsPlaybackUrl])
+  }, [stream, hlsPlaybackUrl])
 
   const handleFollow = async () => {
     if (!authenticated || !user?.wallet?.address || !stream?.creatorAddress) return
