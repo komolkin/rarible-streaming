@@ -812,16 +812,7 @@ export default function StreamPage() {
                           objectFit="contain"
                           showUploadingIndicator={false}
                         />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-white">
-                          <div className="text-center">
-                            <p className="text-lg mb-2">Recording Processing</p>
-                            <p className="text-sm text-muted-foreground">
-                              Waiting for recording asset to be available...
-                            </p>
-                          </div>
-                        </div>
-                      )
+                      ) : null
                     ) : showLivePlayer ? (
                       // LIVE STREAM - Show live player
                       <>
@@ -935,16 +926,7 @@ export default function StreamPage() {
                       objectFit="contain"
                       showUploadingIndicator={false}
                     />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-white">
-                      <div className="text-center">
-                        <p className="text-lg mb-2">Recording Processing</p>
-                        <p className="text-sm text-muted-foreground">
-                          Waiting for recording asset to be available...
-                        </p>
-                      </div>
-                    </div>
-                  )
+                  ) : null
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
                     <div className="text-center">
