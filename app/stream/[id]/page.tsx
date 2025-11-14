@@ -718,7 +718,6 @@ export default function StreamPage() {
                           showTitle={false}
                           showPipButton={false}
                           objectFit="contain"
-                          lowLatency={false}
                           showUploadingIndicator={false}
                           onError={(error) => {
                             console.error("Player error:", error)
