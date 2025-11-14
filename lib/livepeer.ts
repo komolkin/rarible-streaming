@@ -916,7 +916,17 @@ export async function getStreamAsset(streamId: string) {
       
       // CRITICAL: For VOD playback, we MUST only use assets with status "ready"
       // Unready assets will cause format errors in the player (MEDIA_ELEMENT_ERROR: Format error)
-      // Prioritize assets that are ready and have playbackId (from most recent)
+      // Prioritize assets that are ready and have playbackUrl (direct HLS URL) - this is what we need for VOD
+      const readyAssetWithUrl = sortedAssets.find((asset: any) => 
+        asset.status === "ready" && asset.playbackUrl && verifyAsset(asset)
+      )
+      
+      if (readyAssetWithUrl) {
+        console.log(`✅ Found ready asset with playbackUrl (most recent) for stream ${streamId}: ${readyAssetWithUrl.playbackUrl}`)
+        return readyAssetWithUrl
+      }
+      
+      // Fallback: Find asset with playbackId if no playbackUrl available
       const readyAsset = sortedAssets.find((asset: any) => 
         asset.status === "ready" && asset.playbackId && verifyAsset(asset)
       )

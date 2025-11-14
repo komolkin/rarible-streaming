@@ -419,19 +419,28 @@ export default function StreamPage() {
             playbackUrl: recording.playbackUrl,
           })
 
-          // Use the recording's playbackId for VOD playback
-          // This is the asset's playbackId, which is optimal for VOD
-          if (recording.playbackId) {
-            console.log(`[VOD] Setting asset playbackId: ${recording.playbackId}`)
+          // CRITICAL: Use the recording's playbackUrl directly for VOD playback
+          // The playbackUrl is the actual HLS URL (e.g., https://vod-cdn.lp-playback.studio/...)
+          // This is what we need to play the VOD recording
+          if (recording.playbackUrl) {
+            console.log(`[VOD] ✅ Found playback URL: ${recording.playbackUrl}`)
+            setHlsPlaybackUrl(recording.playbackUrl)
+            setVodReady(true)
+            setPlaybackType("vod")
+            
+            // Also store playbackId if available (for Player component fallback)
+            if (recording.playbackId) {
+              console.log(`[VOD] Setting asset playbackId: ${recording.playbackId}`)
+              setAssetPlaybackId(recording.playbackId)
+              setAssetReady(true)
+            }
+          } else if (recording.playbackId) {
+            // Fallback: Use playbackId if playbackUrl is not available
+            console.log(`[VOD] No playbackUrl, using playbackId: ${recording.playbackId}`)
             setAssetPlaybackId(recording.playbackId)
             setAssetReady(true)
             setVodReady(true)
-            setPlaybackType("vod") // Asset playbackId is always VOD
-
-            // Also update stream with recording info if available
-            if (recording.playbackUrl && stream && !stream.vodUrl) {
-              setHlsPlaybackUrl(recording.playbackUrl)
-            }
+            setPlaybackType("vod")
           }
         } else if (response.status === 202) {
           // Asset is processing (202 Accepted)
@@ -953,15 +962,32 @@ export default function StreamPage() {
                     </div>
                     {stream.endedAt ? (
                       // STREAM ENDED - Show recording playback
-                      // According to Livepeer docs: Player handles VOD automatically with playbackId
-                      // We should use asset playbackId if available (better for VOD), otherwise stream playbackId
-                      // The Player component will automatically detect VOD and handle playback
-                      stream.livepeerPlaybackId || assetPlaybackId ? (
+                      // CRITICAL: For ended streams, use the asset's playbackUrl (HLS URL) directly
+                      // The playbackUrl from the asset is the actual VOD recording URL
+                      hlsPlaybackUrl ? (
                         <>
-                          {/* Show Player - it will automatically handle VOD playback */}
+                          {/* Use HLS player with the asset playbackUrl */}
+                          <HlsVideoPlayer
+                            key={`vod-hls-${hlsPlaybackUrl}`}
+                            src={hlsPlaybackUrl}
+                            autoPlay={false}
+                            onError={(error) => {
+                              console.error("HLS Video player error for VOD:", error)
+                              console.error("HLS URL:", hlsPlaybackUrl)
+                              // Try fetching asset again if error
+                              if (stream.livepeerStreamId) {
+                                console.log("HLS error - attempting to refetch asset...")
+                                fetchStreamRecording()
+                              }
+                            }}
+                          />
+                        </>
+                      ) : assetPlaybackId ? (
+                        <>
+                          {/* Fallback: Use Player with asset playbackId if we have it but no playbackUrl */}
                           <Player
-                            key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
-                            playbackId={assetPlaybackId || stream.livepeerPlaybackId!}
+                            key={`vod-asset-${assetPlaybackId}`}
+                            playbackId={assetPlaybackId}
                             autoPlay={false}
                             muted={false}
                             showTitle={false}
@@ -979,17 +1005,48 @@ export default function StreamPage() {
                             }}
                             onError={(error) => {
                               console.error("Livepeer Player error for VOD:", error)
-                              console.error("PlaybackId used:", assetPlaybackId || stream.livepeerPlaybackId)
-                              console.error("Has asset playbackId:", !!assetPlaybackId)
-                              // If player errors and we don't have asset playbackId, try fetching it
-                              if (!assetPlaybackId && stream.livepeerStreamId) {
-                                console.log("Player error - attempting to fetch asset playbackId...")
+                              console.error("Asset playbackId:", assetPlaybackId)
+                              // Try fetching asset again if error
+                              if (stream.livepeerStreamId) {
+                                console.log("Player error - attempting to refetch asset...")
                                 fetchStreamRecording()
                               }
                             }}
                           />
-                          {/* Show message if we're still using stream playbackId and fetching asset */}
-                          {!assetPlaybackId && stream.livepeerPlaybackId && checkingVod && (
+                        </>
+                      ) : stream.livepeerPlaybackId ? (
+                        <>
+                          {/* Last resort: Use stream playbackId (might show offline) */}
+                          <Player
+                            key={`vod-stream-${stream.livepeerPlaybackId}`}
+                            playbackId={stream.livepeerPlaybackId}
+                            autoPlay={false}
+                            muted={false}
+                            showTitle={false}
+                            showPipButton={true}
+                            showUploadingIndicator={false}
+                            objectFit="contain"
+                            lowLatency={false}
+                            theme={{
+                              borderStyles: {
+                                containerBorderStyle: "solid",
+                              },
+                              colors: {
+                                accent: "#00a55f",
+                              },
+                            }}
+                            onError={(error) => {
+                              console.error("Livepeer Player error for VOD:", error)
+                              console.error("Stream playbackId:", stream.livepeerPlaybackId)
+                              // Try fetching asset if error
+                              if (stream.livepeerStreamId) {
+                                console.log("Player error - attempting to fetch asset...")
+                                fetchStreamRecording()
+                              }
+                            }}
+                          />
+                          {/* Show message that we're fetching the asset */}
+                          {checkingVod && (
                             <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-xs z-20">
                               <div className="flex items-center gap-2">
                                 <div className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
@@ -999,7 +1056,7 @@ export default function StreamPage() {
                           )}
                         </>
                       ) : (
-                        // Show loading state while waiting for playbackId
+                        // Show loading state while waiting for playbackId/playbackUrl
                         <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                           <div className="text-center max-w-md px-6">
                             <div className="mb-4">

@@ -50,28 +50,38 @@ export async function GET(
       console.log(`[Recording API] Method 1: Checking Assets API...`)
       const asset = await getStreamAsset(stream.livepeerStreamId)
 
-      if (asset && asset.status === "ready" && asset.playbackId) {
+      if (asset && asset.status === "ready") {
         console.log(`[Recording API] ✅ Found ready asset:`, {
           assetId: asset.id,
           playbackId: asset.playbackId,
+          playbackUrl: asset.playbackUrl,
           status: asset.status,
           duration: asset.duration,
-          playbackUrl: asset.playbackUrl,
         })
 
-        return NextResponse.json({
-          success: true,
-          source: "asset",
-          recording: {
-            id: asset.id,
-            playbackId: asset.playbackId,
-            playbackUrl: asset.playbackUrl || `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`,
-            status: asset.status,
-            duration: asset.duration,
-            createdAt: asset.createdAt,
-            sourceStreamId: asset.sourceStreamId || stream.livepeerStreamId,
-          },
-        })
+        // CRITICAL: Prioritize playbackUrl (direct HLS URL) over playbackId
+        // The playbackUrl is the actual VOD recording URL we need
+        const playbackUrl = asset.playbackUrl || 
+          (asset.playbackId ? `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8` : null)
+
+        if (!playbackUrl) {
+          console.warn(`[Recording API] Asset ${asset.id} has no playbackUrl or playbackId`)
+          // Continue to try other methods
+        } else {
+          return NextResponse.json({
+            success: true,
+            source: "asset",
+            recording: {
+              id: asset.id,
+              playbackId: asset.playbackId,
+              playbackUrl: playbackUrl,
+              status: asset.status,
+              duration: asset.duration,
+              createdAt: asset.createdAt,
+              sourceStreamId: asset.sourceStreamId || stream.livepeerStreamId,
+            },
+          })
+        }
       } else if (asset && asset.status !== "ready") {
         console.log(`[Recording API] ⚠️ Asset found but not ready (status: ${asset.status})`)
         return NextResponse.json({
