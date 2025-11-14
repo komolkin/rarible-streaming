@@ -4,6 +4,9 @@ import { streams, categories } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getStreamStatus } from "@/lib/livepeer"
 
+// Increase timeout for Vercel functions (max 60s on Pro, 10s on Hobby)
+export const maxDuration = 30
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -28,13 +31,23 @@ export async function GET(
 
     // For ended streams without vodUrl, try to fetch asset from Livepeer
     // Also check if vodUrl exists but asset might need updating (e.g., asset became ready)
+    // Use Promise.race to timeout after 8 seconds to avoid Vercel function timeout
     if (isManuallyEnded && stream.livepeerStreamId) {
       try {
         const { getStreamAsset, getThumbnailUrl } = await import("@/lib/livepeer")
         
         console.log(`[GET Stream ${params.id}] Fetching asset for ended stream: ${stream.livepeerStreamId}`)
         
-        const asset = await getStreamAsset(stream.livepeerStreamId)
+        // Add timeout to prevent Vercel function timeout (8 seconds max for asset fetch)
+        const assetFetchPromise = getStreamAsset(stream.livepeerStreamId)
+        const timeoutPromise = new Promise<null>((resolve) => 
+          setTimeout(() => {
+            console.warn(`[GET Stream ${params.id}] Asset fetch timeout after 8 seconds`)
+            resolve(null)
+          }, 8000)
+        )
+        
+        const asset = await Promise.race([assetFetchPromise, timeoutPromise])
         
         if (asset) {
           let vodUrl = stream.vodUrl || null // Preserve existing vodUrl if set
@@ -83,25 +96,34 @@ export async function GET(
           }
           
           // Only generate thumbnail if user hasn't uploaded a cover image
-          // This preserves user-uploaded cover images
+          // Skip thumbnail generation if we're running low on time (non-blocking)
+          // Thumbnails can be generated later via a background job or on next request
           if (!previewImageUrl && asset.playbackId) {
-            const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
-            previewImageUrl = await generateAndVerifyThumbnail(asset.playbackId, {
-              isVod: true,
-              duration: asset.duration,
-              maxRetries: 3,
-              retryDelay: 2000, // 2 seconds between retries
-            })
-            console.log(`Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
-          } else if (!previewImageUrl && stream.livepeerPlaybackId) {
-            // Fallback to stream playbackId if asset doesn't have playbackId and no user image
-            const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
-            previewImageUrl = await generateAndVerifyThumbnail(stream.livepeerPlaybackId, {
-              isVod: false,
-              maxRetries: 2, // Fewer retries for fallback
-              retryDelay: 2000,
-            })
-            console.log(`Generated preview image URL from stream playbackId (fallback): ${previewImageUrl}`)
+            // Try to generate thumbnail, but don't block if it takes too long
+            try {
+              const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
+              const thumbnailPromise = generateAndVerifyThumbnail(asset.playbackId, {
+                isVod: true,
+                duration: asset.duration,
+                maxRetries: 2, // Reduced retries for faster response
+                retryDelay: 1500, // Reduced delay
+              })
+              
+              // Don't wait more than 3 seconds for thumbnail
+              const thumbnailTimeout = new Promise<null>((resolve) => 
+                setTimeout(() => resolve(null), 3000)
+              )
+              
+              previewImageUrl = await Promise.race([thumbnailPromise, thumbnailTimeout])
+              if (previewImageUrl) {
+                console.log(`Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
+              } else {
+                console.log(`[GET Stream ${params.id}] Thumbnail generation timed out, will retry later`)
+              }
+            } catch (thumbError: any) {
+              console.warn(`[GET Stream ${params.id}] Thumbnail generation error:`, thumbError?.message)
+              // Continue without thumbnail - it can be generated later
+            }
           } else if (previewImageUrl) {
             console.log(`Preserving user-uploaded cover image: ${previewImageUrl}`)
           }
@@ -142,12 +164,22 @@ export async function GET(
           }
         } else {
           console.warn(`[GET Stream ${params.id}] No asset found for stream ${stream.livepeerStreamId}`)
+          // If no asset found and no vodUrl, log for debugging
+          if (!stream.vodUrl) {
+            console.warn(`[GET Stream ${params.id}] ⚠️ Stream ended but no asset found and no vodUrl set. Stream may need more time to process.`)
+            console.warn(`[GET Stream ${params.id}] Livepeer Stream ID: ${stream.livepeerStreamId}`)
+            console.warn(`[GET Stream ${params.id}] This is normal - assets can take a few minutes to appear after stream ends.`)
+          }
         }
       } catch (error: any) {
         console.error(`[GET Stream ${params.id}] Error fetching asset for ended stream:`, error?.message || error)
         // Log full error for debugging
         if (error?.stack) {
           console.error(`[GET Stream ${params.id}] Error stack:`, error.stack)
+        }
+        // Check if it's a timeout error
+        if (error?.name === 'AbortError' || error?.message?.includes('timeout') || error?.message?.includes('aborted')) {
+          console.warn(`[GET Stream ${params.id}] Asset fetch timed out - this is normal on Vercel. Will retry on next request.`)
         }
         // Continue to return stream even if asset fetch fails
       }

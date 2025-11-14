@@ -586,11 +586,18 @@ export async function listAssets(sourceStreamId?: string) {
       url += `?sourceStreamId=${sourceStreamId}`
     }
 
+    // Add timeout to prevent hanging requests (5 seconds max)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${LIVEPEER_API_KEY}`,
       },
+      signal: controller.signal,
     })
+    
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
