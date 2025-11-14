@@ -288,7 +288,9 @@ export default function StreamPage() {
           const extractedId = extractPlaybackIdFromHlsUrl(stream.vodUrl)
           if (extractedId) {
             setAssetPlaybackId(extractedId)
-            console.log("Extracted asset playbackId from vodUrl:", extractedId)
+            // If vodUrl exists, asset is ready (API already verified)
+            setAssetReady(true)
+            console.log("✅ Extracted asset playbackId from vodUrl:", extractedId)
           }
         }
         return
@@ -314,7 +316,9 @@ export default function StreamPage() {
             const extractedId = extractPlaybackIdFromHlsUrl(updatedStream.vodUrl)
             if (extractedId) {
               setAssetPlaybackId(extractedId)
-              console.log("Extracted asset playbackId from vodUrl:", extractedId)
+              // If vodUrl exists, asset is ready (API already verified)
+              setAssetReady(true)
+              console.log("✅ Extracted asset playbackId from vodUrl:", extractedId)
             }
           }
           setVodReady(true)
@@ -390,25 +394,24 @@ export default function StreamPage() {
             // Also set hlsPlaybackUrl as fallback
             setHlsPlaybackUrl(stream.vodUrl)
             
-            // Verify the playbackId is ready before marking as ready
-            // Retry verification a few times if not ready initially
-            let retries = 0
-            const maxRetries = 3
-            const checkReady = async () => {
-              const ready = await verifyPlaybackIdReady(extractedId)
-              if (ready) {
-                setAssetReady(true)
-                console.log("✅ Asset playbackId verified ready, will use Livepeer Player")
-              } else if (retries < maxRetries) {
-                retries++
-                console.log(`⚠️ Asset playbackId not ready yet, retrying (${retries}/${maxRetries})...`)
-                setTimeout(checkReady, 2000) // Wait 2 seconds before retry
+            // CRITICAL: If vodUrl exists, it means the API already verified the asset is ready
+            // So we can trust it and use Livepeer Player immediately
+            // Verification is just a nice-to-have check, not a blocker
+            setAssetReady(true)
+            console.log("✅ Asset playbackId ready (vodUrl exists), will use Livepeer Player")
+            
+            // Optionally verify in background (non-blocking)
+            verifyPlaybackIdReady(extractedId).then((ready) => {
+              if (!ready) {
+                console.warn("⚠️ Background verification failed, but will still try Livepeer Player")
+                // Don't set assetReady to false - vodUrl exists so we should try it
               } else {
-                console.warn("⚠️ Asset playbackId not ready after retries, will use HLS player as fallback")
-                setAssetReady(false)
+                console.log("✅ Background verification confirmed asset is ready")
               }
-            }
-            checkReady()
+            }).catch((error) => {
+              console.warn("⚠️ Background verification error:", error)
+              // Don't block playback - vodUrl exists so we should try it
+            })
           } else {
             console.warn("⚠️ Could not extract asset playbackId from vodUrl:", stream.vodUrl)
             // Still try to use HLS player as fallback
@@ -716,14 +719,14 @@ export default function StreamPage() {
                       </>
                     ) : stream.endedAt ? (
                       // For ended streams, show recording if available
-                      // Priority: 1) Livepeer Player with asset playbackId (only if verified ready), 2) HLS URL (direct), 3) HTML5 video with vodUrl
-                      // CRITICAL: Only use Livepeer Player if asset is verified ready to prevent format errors
-                      (assetPlaybackId || (stream.vodUrl && isHlsUrl(stream.vodUrl) && extractPlaybackIdFromHlsUrl(stream.vodUrl))) && assetReady ? (
+                      // Priority: 1) Livepeer Player with asset playbackId, 2) HLS URL (direct), 3) HTML5 video with vodUrl
+                      // If we have assetPlaybackId and assetReady, use Livepeer Player (best experience)
+                      assetPlaybackId && assetReady ? (
                         <>
                           {/* Use Livepeer Player with asset playbackId for VOD - this handles VOD correctly */}
                           <Player
-                            key={`vod-asset-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl!)}`}
-                            playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl!)!}
+                            key={`vod-asset-${assetPlaybackId}`}
+                            playbackId={assetPlaybackId}
                             autoPlay={false}
                             muted={false}
                             showTitle={false}
@@ -741,10 +744,11 @@ export default function StreamPage() {
                             }}
                             onError={(error) => {
                               console.error("Livepeer Player error with asset playbackId:", error)
-                              console.error("Asset playbackId:", assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl!))
+                              console.error("Asset playbackId:", assetPlaybackId)
                               console.error("Stream vodUrl:", stream.vodUrl)
                               // If player errors, mark as not ready and fall back to HLS player
                               setAssetReady(false)
+                              console.warn("⚠️ Livepeer Player failed, falling back to HLS player")
                             }}
                           />
                         </>
