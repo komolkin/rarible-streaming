@@ -894,7 +894,7 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {(stream.livepeerPlaybackId || (stream.endedAt && (assetPlaybackId || stream.assetId || stream.livepeerStreamId))) ? (
+                {(stream.livepeerPlaybackId || (stream.endedAt && (assetPlaybackId || stream.livepeerPlaybackId || stream.assetId || stream.livepeerStreamId))) ? (
                   <>
                     <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs z-20">
                       {stream.isLive ? (
@@ -910,19 +910,41 @@ export default function StreamPage() {
                         <>Playback ID: {stream.livepeerPlaybackId}</>
                       )}
                     </div>
-                    {stream.endedAt && stream.livepeerPlaybackId ? (
-                      // STREAM ENDED - Use Player with playRecording for VOD playback
-                      <Player
-                        key={`vod-player-${stream.livepeerPlaybackId}`}
-                        playbackId={stream.livepeerPlaybackId}
-                        playRecording
-                        autoPlay
-                        muted={false}
-                        showTitle={false}
-                        showPipButton={true}
-                        objectFit="contain"
-                        showUploadingIndicator={false}
-                      />
+                    {stream.endedAt ? (
+                      // STREAM ENDED - Use Player with asset playbackId for VOD playback (preferred) or stream playbackId as fallback
+                      (() => {
+                        // Use asset playbackId if available (most reliable for VOD), otherwise use stream playbackId
+                        const vodPlaybackId = assetPlaybackId || stream.livepeerPlaybackId
+                        
+                        if (!vodPlaybackId) {
+                          return (
+                            <div className="absolute inset-0 flex items-center justify-center text-white">
+                              <div className="text-center">
+                                <p className="text-lg mb-2">Recording Processing</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {checkingVod 
+                                    ? "Fetching recording from Livepeer..." 
+                                    : "Waiting for recording to be available. Please refresh in a few moments."}
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        }
+                        
+                        return (
+                          <Player
+                            key={`vod-player-${vodPlaybackId}`}
+                            playbackId={vodPlaybackId}
+                            playRecording={!assetPlaybackId} // Only use playRecording if using stream playbackId
+                            autoPlay
+                            muted={false}
+                            showTitle={false}
+                            showPipButton={true}
+                            objectFit="contain"
+                            showUploadingIndicator={false}
+                          />
+                        )
+                      })()
                     ) : showLivePlayer ? (
                       // LIVE STREAM - Show live player
                       <>
@@ -1002,19 +1024,41 @@ export default function StreamPage() {
                       )
                     }
                   </>
-                ) : stream.endedAt && stream.livepeerPlaybackId ? (
-                  // STREAM ENDED - Use Player with playRecording for VOD playback
-                  <Player
-                    key={`vod-player-fallback-${stream.livepeerPlaybackId}`}
-                    playbackId={stream.livepeerPlaybackId}
-                    playRecording
-                    autoPlay
-                    muted={false}
-                    showTitle={false}
-                    showPipButton={true}
-                    objectFit="contain"
-                    showUploadingIndicator={false}
-                  />
+                ) : stream.endedAt ? (
+                  // STREAM ENDED - Use Player with asset playbackId for VOD playback (preferred) or stream playbackId as fallback
+                  (() => {
+                    // Use asset playbackId if available (most reliable for VOD), otherwise use stream playbackId
+                    const vodPlaybackId = assetPlaybackId || stream.livepeerPlaybackId
+                    
+                    if (!vodPlaybackId) {
+                      return (
+                        <div className="absolute inset-0 flex items-center justify-center text-white">
+                          <div className="text-center">
+                            <p className="text-lg mb-2">Recording Processing</p>
+                            <p className="text-sm text-muted-foreground">
+                              {checkingVod 
+                                ? "Fetching recording from Livepeer..." 
+                                : "Waiting for recording to be available. Please refresh in a few moments."}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    }
+                    
+                    return (
+                      <Player
+                        key={`vod-player-fallback-${vodPlaybackId}`}
+                        playbackId={vodPlaybackId}
+                        playRecording={!assetPlaybackId} // Only use playRecording if using stream playbackId
+                        autoPlay
+                        muted={false}
+                        showTitle={false}
+                        showPipButton={true}
+                        objectFit="contain"
+                        showUploadingIndicator={false}
+                      />
+                    )
+                  })()
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
                     <div className="text-center">
