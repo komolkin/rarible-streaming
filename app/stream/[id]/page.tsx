@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase/client"
 import Link from "next/link"
 import { HlsVideoPlayer, isHlsUrl } from "@/components/hls-video-player"
 import { ShareModal } from "@/components/share-modal"
-import { Heart, Share2, Eye } from "lucide-react"
+import { Heart, Share2 } from "lucide-react"
 
 export default function StreamPage() {
   const params = useParams()
@@ -895,7 +895,6 @@ export default function StreamPage() {
                   <div className="flex flex-col items-end gap-3 ml-4">
                     {/* Viewers counter */}
                     <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md">
-                      <Eye className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm font-medium">
                         {stream.viewerCount ?? 0} {stream.viewerCount === 1 ? 'viewer' : 'viewers'}
                       </span>
