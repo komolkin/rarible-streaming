@@ -419,26 +419,25 @@ export default function StreamPage() {
             playbackUrl: recording.playbackUrl,
           })
 
-          // CRITICAL: Use the recording's playbackUrl directly for VOD playback
-          // The playbackUrl is the actual HLS URL (e.g., https://vod-cdn.lp-playback.studio/...)
-          // This is what we need to play the VOD recording
-          if (recording.playbackUrl) {
-            console.log(`[VOD] ✅ Found playback URL: ${recording.playbackUrl}`)
-            setHlsPlaybackUrl(recording.playbackUrl)
+          // CRITICAL: According to Livepeer docs, Player component handles VOD automatically with playbackId
+          // Priority: Use asset playbackId with Player component (best for VOD)
+          // The Player component will automatically detect VOD and handle playback
+          if (recording.playbackId) {
+            console.log(`[VOD] ✅ Found asset playbackId: ${recording.playbackId}`)
+            setAssetPlaybackId(recording.playbackId)
+            setAssetReady(true)
             setVodReady(true)
             setPlaybackType("vod")
             
-            // Also store playbackId if available (for Player component fallback)
-            if (recording.playbackId) {
-              console.log(`[VOD] Setting asset playbackId: ${recording.playbackId}`)
-              setAssetPlaybackId(recording.playbackId)
-              setAssetReady(true)
+            // Also store playbackUrl as fallback (for HLS player if needed)
+            if (recording.playbackUrl) {
+              console.log(`[VOD] Also storing playbackUrl as fallback: ${recording.playbackUrl}`)
+              setHlsPlaybackUrl(recording.playbackUrl)
             }
-          } else if (recording.playbackId) {
-            // Fallback: Use playbackId if playbackUrl is not available
-            console.log(`[VOD] No playbackUrl, using playbackId: ${recording.playbackId}`)
-            setAssetPlaybackId(recording.playbackId)
-            setAssetReady(true)
+          } else if (recording.playbackUrl) {
+            // Fallback: If no playbackId, use playbackUrl with HLS player
+            console.log(`[VOD] ⚠️ No playbackId, using playbackUrl: ${recording.playbackUrl}`)
+            setHlsPlaybackUrl(recording.playbackUrl)
             setVodReady(true)
             setPlaybackType("vod")
           }
@@ -516,6 +515,14 @@ export default function StreamPage() {
       playerOfflineTimeoutRef.current = null
     }
     setPlayerIsStreaming(false)
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (playerOfflineTimeoutRef.current) {
+        clearTimeout(playerOfflineTimeoutRef.current)
+        playerOfflineTimeoutRef.current = null
+      }
+    }
   }, [stream?.livepeerPlaybackId])
 
   useEffect(() => {
