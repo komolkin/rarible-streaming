@@ -57,6 +57,88 @@ export async function getStream(streamId: string) {
   }
 }
 
+/**
+ * Fetch recent sessions for a Livepeer stream.
+ * Sessions include recording metadata that becomes available immediately after a stream ends.
+ */
+export async function getStreamSessions(
+  streamId: string,
+  options?: {
+    limit?: number
+    recordOnly?: boolean
+  }
+) {
+  if (!LIVEPEER_API_KEY) {
+    throw new Error("LIVEPEER_API_KEY is not set")
+  }
+
+  const limit = options?.limit ?? 20
+  const recordOnly = options?.recordOnly ?? true
+
+  try {
+    const url = new URL(`https://livepeer.studio/api/stream/${streamId}/sessions`)
+    url.searchParams.set("limit", limit.toString())
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`[getStreamSessions] No sessions found for stream ${streamId} (404)`)
+        return []
+      }
+
+      const errorText = await response.text().catch(() => "")
+      console.error(`[getStreamSessions] API error ${response.status}:`, errorText)
+      return []
+    }
+
+    const data = await response.json()
+    let sessions: any[] = []
+
+    if (Array.isArray(data)) {
+      sessions = data
+    } else if (Array.isArray(data?.data)) {
+      sessions = data.data
+    } else if (Array.isArray(data?.sessions)) {
+      sessions = data.sessions
+    } else {
+      console.warn(`[getStreamSessions] Unexpected response format for stream ${streamId}`)
+      sessions = []
+    }
+
+    const filteredSessions = sessions.filter((session: any) => {
+      if (!recordOnly) {
+        return true
+      }
+      return (
+        session?.record === true ||
+        !!session?.recordingUrl ||
+        !!session?.playbackUrl ||
+        !!session?.playback?.hls
+      )
+    })
+
+    filteredSessions.sort((a: any, b: any) => {
+      const aTime = a?.createdAt || a?.createdAtTimestamp || a?.created || 0
+      const bTime = b?.createdAt || b?.createdAtTimestamp || b?.created || 0
+
+      const aDate = typeof aTime === "string" ? Date.parse(aTime) : Number(aTime) || 0
+      const bDate = typeof bTime === "string" ? Date.parse(bTime) : Number(bTime) || 0
+
+      return bDate - aDate
+    })
+
+    return filteredSessions
+  } catch (error) {
+    console.error(`[getStreamSessions] Error fetching sessions for stream ${streamId}:`, error)
+    return []
+  }
+}
+
 export async function getStreamStatus(streamId: string) {
   try {
     const stream = await getStream(streamId)
@@ -214,6 +296,31 @@ export async function getStreamRecording(streamId: string) {
   }
 
   try {
+    // Sessions endpoint surfaces recordings almost immediately after the stream ends
+    const sessions = await getStreamSessions(streamId, { limit: 10, recordOnly: true })
+
+    if (sessions && sessions.length > 0) {
+      for (const session of sessions) {
+        const recordingUrl =
+          session.recordingUrl ||
+          session.playbackUrl ||
+          session?.playback?.hls ||
+          session?.playback?.url ||
+          session?.mp4Url
+
+        if (recordingUrl) {
+          return {
+            id: session.id,
+            recordingUrl,
+            playbackUrl: recordingUrl,
+            playbackId: session.playbackId || session?.playback?.id,
+            duration: session.duration || session?.recordingDuration,
+            createdAt: session.createdAt,
+          }
+        }
+      }
+    }
+
     const stream = await getStream(streamId)
     
     // Check for recordings in the stream response
@@ -814,12 +921,37 @@ export async function getStreamAsset(streamId: string) {
     // If no assets found by source stream ID, try alternative methods
     console.log(`[getStreamAsset] No assets found via sourceStreamId filter, trying alternative methods...`)
     
-    // Method 1: Check the stream's sessions for recording info
+    // Method 1: Use sessions endpoint for immediate recordings
+    const sessionRecording = await getStreamRecording(streamId)
+    if (sessionRecording?.recordingUrl || sessionRecording?.playbackUrl) {
+      console.log(`[getStreamAsset] Using session recording for stream ${streamId}`)
+      return {
+        id: sessionRecording.id || streamId,
+        playbackUrl: sessionRecording.recordingUrl || sessionRecording.playbackUrl,
+        playbackId: sessionRecording.playbackId,
+        status: "ready",
+        sourceStreamId: streamId,
+      }
+    }
+    
+    // Method 2: Check the stream's metadata for recordings as fallback
     try {
       const stream = await getStream(streamId)
       
+      if (stream?.recordings && Array.isArray(stream.recordings) && stream.recordings.length > 0) {
+        const recording = stream.recordings[0]
+        console.log(`[getStreamAsset] Found recording in stream.recordings`)
+        return {
+          id: recording.id || streamId,
+          playbackUrl: recording.recordingUrl || recording.playbackUrl,
+          playbackId: recording.playbackId || stream.playbackId,
+          status: "ready",
+          sourceStreamId: streamId,
+        }
+      }
+      
       if (stream?.sessions && Array.isArray(stream.sessions)) {
-        console.log(`[getStreamAsset] Checking ${stream.sessions.length} sessions for recording info`)
+        console.log(`[getStreamAsset] Checking ${stream.sessions.length} sessions for recording info from stream payload`)
         for (const session of stream.sessions) {
           if (session.record && (session.recordingUrl || session.playbackUrl)) {
             console.log(`[getStreamAsset] Found recording in session ${session.id}`)
@@ -833,21 +965,8 @@ export async function getStreamAsset(streamId: string) {
           }
         }
       }
-      
-      // Method 2: Check if stream has recordings array
-      if (stream?.recordings && Array.isArray(stream.recordings) && stream.recordings.length > 0) {
-        const recording = stream.recordings[0]
-        console.log(`[getStreamAsset] Found recording in stream.recordings`)
-        return {
-          id: recording.id || streamId,
-          playbackUrl: recording.recordingUrl || recording.playbackUrl,
-          playbackId: recording.playbackId || stream.playbackId,
-          status: "ready",
-          sourceStreamId: streamId,
-        }
-      }
     } catch (streamError: any) {
-      console.warn(`[getStreamAsset] Error checking stream sessions:`, streamError?.message)
+      console.warn(`[getStreamAsset] Error checking stream metadata:`, streamError?.message)
     }
     
     // Method 3: If we listed all assets earlier, check if any match by checking all possible fields

@@ -29,147 +29,183 @@ export async function GET(
     // If stream has been manually ended (endedAt is set), don't check/update Livepeer status
     const isManuallyEnded = !!stream.endedAt
 
-    // For ended streams without vodUrl, try to fetch asset from Livepeer
-    // Also check if vodUrl exists but asset might need updating (e.g., asset became ready)
-    // Use Promise.race to timeout after 8 seconds to avoid Vercel function timeout
+    // For ended streams without vodUrl, try multiple methods to find recordings
+    // Method 1: Check stream sessions (fastest, most reliable)
+    // Method 2: Check assets API
+    // Method 3: Use stream playbackId as fallback (may not work for VOD but worth trying)
     if (isManuallyEnded && stream.livepeerStreamId) {
+      let vodUrl = stream.vodUrl || null
+      let previewImageUrl = stream.previewImageUrl || null
+      
       try {
-        const { getStreamAsset, getThumbnailUrl } = await import("@/lib/livepeer")
+        const { getStream, getStreamAsset, getStreamRecording, getStreamSessions } = await import("@/lib/livepeer")
         
-        console.log(`[GET Stream ${params.id}] Fetching asset for ended stream: ${stream.livepeerStreamId}`)
+        console.log(`[GET Stream ${params.id}] Finding recording for ended stream: ${stream.livepeerStreamId}`)
         
-        // Add timeout to prevent Vercel function timeout (8 seconds max for asset fetch)
-        const assetFetchPromise = getStreamAsset(stream.livepeerStreamId)
-        const timeoutPromise = new Promise<null>((resolve) => 
-          setTimeout(() => {
-            console.warn(`[GET Stream ${params.id}] Asset fetch timeout after 8 seconds`)
-            resolve(null)
-          }, 8000)
-        )
-        
-        const asset = await Promise.race([assetFetchPromise, timeoutPromise])
-        
-        if (asset) {
-          let vodUrl = stream.vodUrl || null // Preserve existing vodUrl if set
-          // Preserve user-uploaded cover image - only generate thumbnail if none exists
-          let previewImageUrl = stream.previewImageUrl || null
+        // METHOD 1: Check stream sessions first (fastest method)
+        try {
+          console.log(`[GET Stream ${params.id}] Method 1: Checking stream sessions...`)
+          const streamData = await getStream(stream.livepeerStreamId)
+          let sessions: any[] = []
           
-          console.log(`[GET Stream ${params.id}] Asset details:`, {
-            id: asset.id,
-            status: asset.status,
-            playbackId: asset.playbackId,
-            playbackUrl: asset.playbackUrl,
-            sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
-            hasExistingVodUrl: !!stream.vodUrl
-          })
-          
-          // CRITICAL: Only use asset if it's ready - unready assets will cause format errors
-          if (asset.status !== "ready") {
-            console.warn(`[GET Stream ${params.id}] Asset ${asset.id} is not ready yet. Status: ${asset.status}. Will not set vodUrl yet.`)
-            // Don't set vodUrl if asset is not ready - this prevents format errors
-            // The stream will be checked again on next request
-            // But still try to update preview image if we don't have one
-          } else if (asset.playbackId) {
-            // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
-            // This is the correct playbackId for VOD assets
-            // Only update if we don't have a vodUrl or if the current one doesn't match
-            const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
-            if (!vodUrl || vodUrl !== newVodUrl) {
-              vodUrl = newVodUrl
-              console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
-            } else {
-              console.log(`[GET Stream ${params.id}] ✅ Asset is ready, vodUrl already set correctly`)
-            }
-          } else if (asset.playbackUrl) {
-            // Use asset playback URL if available (could be HLS or MP4)
-            // Only if asset is ready
-            // Only update if we don't have a vodUrl or if the current one doesn't match
-            if (!vodUrl || vodUrl !== asset.playbackUrl) {
-              vodUrl = asset.playbackUrl
-              console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackUrl: ${vodUrl}`)
-            } else {
-              console.log(`[GET Stream ${params.id}] ✅ Asset is ready, vodUrl already set correctly`)
-            }
-          } else {
-            console.warn(`[GET Stream ${params.id}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
-            // Don't use stream playbackId for VOD - it won't work
+          if (streamData?.sessions && Array.isArray(streamData.sessions) && streamData.sessions.length > 0) {
+            sessions = streamData.sessions
           }
-          
-          // Only generate thumbnail if user hasn't uploaded a cover image
-          // Skip thumbnail generation if we're running low on time (non-blocking)
-          // Thumbnails can be generated later via a background job or on next request
-          if (!previewImageUrl && asset.playbackId) {
-            // Try to generate thumbnail, but don't block if it takes too long
-            try {
-              const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
-              const thumbnailPromise = generateAndVerifyThumbnail(asset.playbackId, {
-                isVod: true,
-                duration: asset.duration,
-                maxRetries: 2, // Reduced retries for faster response
-                retryDelay: 1500, // Reduced delay
-              })
-              
-              // Don't wait more than 3 seconds for thumbnail
-              const thumbnailTimeout = new Promise<null>((resolve) => 
-                setTimeout(() => resolve(null), 3000)
-              )
-              
-              previewImageUrl = await Promise.race([thumbnailPromise, thumbnailTimeout])
-              if (previewImageUrl) {
-                console.log(`Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
-              } else {
-                console.log(`[GET Stream ${params.id}] Thumbnail generation timed out, will retry later`)
+
+          if (sessions.length === 0) {
+            sessions = await getStreamSessions(stream.livepeerStreamId, { limit: 10, recordOnly: true })
+          }
+
+          if (sessions.length > 0) {
+            for (const session of sessions) {
+              if (session.record && (session.recordingUrl || session.playbackUrl)) {
+                const recordingUrl = session.recordingUrl || session.playbackUrl
+                console.log(`[GET Stream ${params.id}] ✅ Found recording in session ${session.id}: ${recordingUrl}`)
+                if (!vodUrl) {
+                  vodUrl = recordingUrl
+                  console.log(`[GET Stream ${params.id}] Using session recording URL for VOD`)
+                }
+                break
               }
-            } catch (thumbError: any) {
-              console.warn(`[GET Stream ${params.id}] Thumbnail generation error:`, thumbError?.message)
-              // Continue without thumbnail - it can be generated later
             }
-          } else if (previewImageUrl) {
-            console.log(`Preserving user-uploaded cover image: ${previewImageUrl}`)
-          }
-          
-          // Update stream with asset information
-          // Update if we have new vodUrl or previewImageUrl, or if asset status changed
-          const needsUpdate = (vodUrl && vodUrl !== stream.vodUrl) || 
-                              (previewImageUrl && previewImageUrl !== stream.previewImageUrl) ||
-                              (!stream.vodUrl && asset.status === "ready")
-          
-          if (needsUpdate) {
-            console.log(`[GET Stream ${params.id}] Updating stream with asset information...`)
-            const [updated] = await db
-              .update(streams)
-              .set({
-                vodUrl: vodUrl || stream.vodUrl,
-                previewImageUrl: previewImageUrl || stream.previewImageUrl,
-                updatedAt: new Date(),
-              })
-              .where(eq(streams.id, params.id))
-              .returning()
-            
-            // Fetch category for updated stream
-            let updatedCategory = null
-            if (updated.categoryId) {
-              const [categoryData] = await db.select().from(categories).where(eq(categories.id, updated.categoryId))
-              updatedCategory = categoryData || null
-            }
-            
-            console.log(`[GET Stream ${params.id}] ✅ Stream updated with vodUrl: ${updated.vodUrl ? 'set' : 'null'}, previewImageUrl: ${updated.previewImageUrl ? 'set' : 'null'}`)
-            
-            return NextResponse.json({
-              ...updated,
-              category: updatedCategory,
-            })
           } else {
-            console.log(`[GET Stream ${params.id}] No update needed - asset status: ${asset.status}, vodUrl: ${stream.vodUrl ? 'exists' : 'missing'}`)
+            console.log(`[GET Stream ${params.id}] No session recordings available yet`)
           }
-        } else {
-          console.warn(`[GET Stream ${params.id}] No asset found for stream ${stream.livepeerStreamId}`)
-          // If no asset found and no vodUrl, log for debugging
-          if (!stream.vodUrl) {
-            console.warn(`[GET Stream ${params.id}] ⚠️ Stream ended but no asset found and no vodUrl set. Stream may need more time to process.`)
-            console.warn(`[GET Stream ${params.id}] Livepeer Stream ID: ${stream.livepeerStreamId}`)
-            console.warn(`[GET Stream ${params.id}] This is normal - assets can take a few minutes to appear after stream ends.`)
+          
+          // Also check recordings array if it exists
+          if (!vodUrl && streamData?.recordings && Array.isArray(streamData.recordings) && streamData.recordings.length > 0) {
+            const recording = streamData.recordings[0]
+            const recordingUrl = recording.recordingUrl || recording.playbackUrl
+            if (recordingUrl) {
+              console.log(`[GET Stream ${params.id}] ✅ Found recording in stream.recordings: ${recordingUrl}`)
+              vodUrl = recordingUrl
+            }
           }
+        } catch (sessionError: any) {
+          console.warn(`[GET Stream ${params.id}] Error checking stream sessions:`, sessionError?.message)
+        }
+        
+        // METHOD 2: Check assets API (if session method didn't work)
+        if (!vodUrl) {
+          try {
+            console.log(`[GET Stream ${params.id}] Method 2: Checking assets API...`)
+            // Add timeout to prevent Vercel function timeout (8 seconds max for asset fetch)
+            const assetFetchPromise = getStreamAsset(stream.livepeerStreamId)
+            const timeoutPromise = new Promise<null>((resolve) => 
+              setTimeout(() => {
+                console.warn(`[GET Stream ${params.id}] Asset fetch timeout after 8 seconds`)
+                resolve(null)
+              }, 8000)
+            )
+            
+            const asset = await Promise.race([assetFetchPromise, timeoutPromise])
+            
+            if (asset) {
+              console.log(`[GET Stream ${params.id}] Asset details:`, {
+                id: asset.id,
+                status: asset.status,
+                playbackId: asset.playbackId,
+                playbackUrl: asset.playbackUrl,
+                sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
+                hasExistingVodUrl: !!vodUrl
+              })
+              
+              // CRITICAL: Only use asset if it's ready - unready assets will cause format errors
+              if (asset.status !== "ready") {
+                console.warn(`[GET Stream ${params.id}] Asset ${asset.id} is not ready yet. Status: ${asset.status}. Will not set vodUrl yet.`)
+                // Don't set vodUrl if asset is not ready - this prevents format errors
+                // The stream will be checked again on next request
+              } else if (asset.playbackId) {
+                // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
+                // This is the correct playbackId for VOD assets
+                const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
+                if (!vodUrl || vodUrl !== newVodUrl) {
+                  vodUrl = newVodUrl
+                  console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
+                }
+              } else if (asset.playbackUrl) {
+                // Use asset playback URL if available (could be HLS or MP4)
+                // Only if asset is ready
+                if (!vodUrl || vodUrl !== asset.playbackUrl) {
+                  vodUrl = asset.playbackUrl
+                  console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackUrl: ${vodUrl}`)
+                }
+              } else {
+                console.warn(`[GET Stream ${params.id}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
+              }
+              
+              // Only generate thumbnail if user hasn't uploaded a cover image
+              // Skip thumbnail generation if we're running low on time (non-blocking)
+              if (!previewImageUrl && asset.playbackId) {
+                try {
+                  const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
+                  const thumbnailPromise = generateAndVerifyThumbnail(asset.playbackId, {
+                    isVod: true,
+                    duration: asset.duration,
+                    maxRetries: 2,
+                    retryDelay: 1500,
+                  })
+                  
+                  const thumbnailTimeout = new Promise<null>((resolve) => 
+                    setTimeout(() => resolve(null), 3000)
+                  )
+                  
+                  previewImageUrl = await Promise.race([thumbnailPromise, thumbnailTimeout])
+                  if (previewImageUrl) {
+                    console.log(`Generated preview image URL from asset playbackId: ${previewImageUrl}`)
+                  }
+                } catch (thumbError: any) {
+                  console.warn(`[GET Stream ${params.id}] Thumbnail generation error:`, thumbError?.message)
+                }
+              }
+            } else {
+              console.warn(`[GET Stream ${params.id}] No asset found via assets API`)
+            }
+          } catch (assetError: any) {
+            console.warn(`[GET Stream ${params.id}] Error fetching asset:`, assetError?.message)
+          }
+        }
+        
+        // METHOD 3: Fallback to stream playbackId (may not work for VOD but worth trying)
+        if (!vodUrl && stream.livepeerPlaybackId) {
+          console.log(`[GET Stream ${params.id}] Method 3: Trying stream playbackId as fallback...`)
+          // Try constructing HLS URL from stream playbackId
+          // Note: This may not work for VOD, but some streams might have it available
+          const fallbackUrl = `https://playback.livepeer.com/hls/${stream.livepeerPlaybackId}/index.m3u8`
+          console.log(`[GET Stream ${params.id}] ⚠️ Using stream playbackId as fallback (may not work for VOD): ${fallbackUrl}`)
+          vodUrl = fallbackUrl
+        }
+        
+        // Update stream with recording information if we found something
+        if (vodUrl && vodUrl !== stream.vodUrl) {
+          console.log(`[GET Stream ${params.id}] Updating stream with vodUrl: ${vodUrl}`)
+          const [updated] = await db
+            .update(streams)
+            .set({
+              vodUrl: vodUrl,
+              previewImageUrl: previewImageUrl || stream.previewImageUrl,
+              updatedAt: new Date(),
+            })
+            .where(eq(streams.id, params.id))
+            .returning()
+          
+          // Fetch category for updated stream
+          let updatedCategory = null
+          if (updated.categoryId) {
+            const [categoryData] = await db.select().from(categories).where(eq(categories.id, updated.categoryId))
+            updatedCategory = categoryData || null
+          }
+          
+          console.log(`[GET Stream ${params.id}] ✅ Stream updated with vodUrl`)
+          
+          return NextResponse.json({
+            ...updated,
+            category: updatedCategory,
+          })
+        } else if (!vodUrl) {
+          console.warn(`[GET Stream ${params.id}] ⚠️ No recording found via any method. Stream may need more time to process.`)
+          console.warn(`[GET Stream ${params.id}] Livepeer Stream ID: ${stream.livepeerStreamId}`)
+          console.warn(`[GET Stream ${params.id}] This is normal - recordings can take a few minutes to appear after stream ends.`)
         }
       } catch (error: any) {
         console.error(`[GET Stream ${params.id}] Error fetching asset for ended stream:`, error?.message || error)
