@@ -47,6 +47,7 @@ export default function StreamPage() {
   const streamLiveStatusRef = useRef<boolean>(false)
   const [liveViewerCount, setLiveViewerCount] = useState<number | null>(null)
   const [viewerCountError, setViewerCountError] = useState<string | null>(null)
+  const [lowLatencyMode, setLowLatencyMode] = useState<"force" | boolean>(true)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -378,6 +379,7 @@ export default function StreamPage() {
       playerOfflineTimeoutRef.current = null
     }
     setPlayerIsStreaming(false)
+    setLowLatencyMode(true)
   }, [stream?.livepeerPlaybackId])
 
   useEffect(() => {
@@ -665,11 +667,17 @@ export default function StreamPage() {
 
       const updatedStream = await response.json()
       setStream(updatedStream)
+      if (updatedStream.livepeerPlaybackId) {
+        setAssetPlaybackId(updatedStream.livepeerPlaybackId)
+        setAssetReady(true)
+      }
+      setVodReady(Boolean(updatedStream.vodUrl))
       
       // Refresh stream data after a short delay to ensure VOD is available
       // The stream page will automatically show the VOD player when endedAt is set
       setTimeout(() => {
         fetchStream()
+        checkVodAvailability()
       }, 3000)
     } catch (error: any) {
       console.error("Error ending stream:", error)
@@ -761,7 +769,7 @@ export default function StreamPage() {
                           showPipButton={false}
                           objectFit="contain"
                           priority
-                          lowLatency="force"
+                          lowLatency={lowLatencyMode}
                           webrtcConfig={{ sdpTimeout: 15000 }}
                           hlsConfig={{ lowLatencyMode: true, backBufferLength: 30 }}
                           showUploadingIndicator={false}
@@ -772,6 +780,11 @@ export default function StreamPage() {
                               streamId: stream.livepeerStreamId,
                               isLive: stream.isLive,
                               error: error
+                            })
+                            setLowLatencyMode((prev) => {
+                              if (prev === "force") return true
+                              if (prev === true) return false
+                              return prev
                             })
                           }}
                           onStreamStatusChange={(isLive: boolean) => {
