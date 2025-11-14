@@ -36,6 +36,7 @@ export async function GET(
     if (isManuallyEnded && stream.livepeerStreamId) {
       let vodUrl = stream.vodUrl || null
       let previewImageUrl = stream.previewImageUrl || null
+      let assetPlaybackId = null // Track asset playbackId separately for Player component
       
       try {
         const { getStream, getStreamAsset, getStreamRecording, getStreamSessions } = await import("@/lib/livepeer")
@@ -131,7 +132,9 @@ export async function GET(
                 // Don't set vodUrl if asset is not ready - this prevents format errors
                 // The stream will be checked again on next request
               } else if (asset.playbackId) {
-                // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
+                // Asset is ready - store the asset playbackId for Player component
+                assetPlaybackId = asset.playbackId
+                // Use the asset's playbackId to construct HLS URL for VOD
                 // This is the correct playbackId for VOD assets
                 const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
                 if (!vodUrl || vodUrl !== newVodUrl) {
@@ -216,6 +219,15 @@ export async function GET(
           return NextResponse.json({
             ...updated,
             category: updatedCategory,
+            assetPlaybackId: assetPlaybackId, // Include asset playbackId for Player component
+          })
+        } else if (assetPlaybackId) {
+          // Even if vodUrl didn't change, return asset playbackId if we found it
+          // This helps the frontend use the correct playbackId for VOD
+          return NextResponse.json({
+            ...stream,
+            category: category,
+            assetPlaybackId: assetPlaybackId,
           })
         } else if (!vodUrl) {
           console.warn(`[GET Stream ${params.id}] ⚠️ No recording found via any method. Stream may need more time to process.`)
@@ -429,9 +441,24 @@ export async function GET(
     }
 
     // Return stream with category
+    // For ended streams, try to include asset playbackId if available
+    let responseAssetPlaybackId = null
+    if (isManuallyEnded && stream.livepeerStreamId) {
+      try {
+        const { getStreamAsset } = await import("@/lib/livepeer")
+        const asset = await getStreamAsset(stream.livepeerStreamId)
+        if (asset?.playbackId && asset.status === "ready") {
+          responseAssetPlaybackId = asset.playbackId
+        }
+      } catch (error) {
+        // Silently fail - asset will be fetched by frontend
+      }
+    }
+    
     return NextResponse.json({
       ...stream,
       category: category,
+      ...(responseAssetPlaybackId && { assetPlaybackId: responseAssetPlaybackId }),
     })
   } catch (error) {
     console.error("Error fetching stream:", error)
