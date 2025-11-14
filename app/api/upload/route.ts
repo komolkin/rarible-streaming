@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("Error uploading file to bucket:", bucket, error)
       // Return more detailed error message
-      const errorMessage = error.message || error.error || "Failed to upload file"
-      const errorString = typeof error === 'string' ? error : JSON.stringify(error)
+      const errorMessage = error.message || "Failed to upload file"
+      const errorString = JSON.stringify(error)
       
       // Check if bucket doesn't exist
       if (errorMessage?.includes("Bucket not found") || 
