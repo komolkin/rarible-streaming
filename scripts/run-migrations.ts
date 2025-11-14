@@ -11,8 +11,10 @@ import postgres from "postgres"
 import * as fs from "fs"
 import * as path from "path"
 
-// Load environment variables
-dotenv.config()
+// Load environment variables from .env.local (or .env if .env.local doesn't exist)
+if (!process.env.DATABASE_URL) {
+  dotenv.config({ path: ".env.local" })
+}
 
 const connectionString = process.env.DATABASE_URL
 

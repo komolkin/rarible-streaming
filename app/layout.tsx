@@ -5,7 +5,6 @@ import { PrivyProvider } from "@/components/providers/privy-provider"
 import { WagmiProvider } from "@/components/providers/wagmi-provider"
 import { LivepeerProvider } from "@/components/providers/livepeer-provider"
 import { Navbar } from "@/components/navbar"
-import { Footer } from "@/components/footer"
 import { SuppressExtensionErrors } from "@/components/suppress-extension-errors"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -28,13 +27,8 @@ export default function RootLayout({
         <PrivyProvider>
           <WagmiProvider>
             <LivepeerProvider>
-              <div className="flex flex-col min-h-screen">
-                <Navbar />
-                <main className="flex-1">
-                  {children}
-                </main>
-                <Footer />
-              </div>
+              <Navbar />
+              {children}
               <Toaster />
             </LivepeerProvider>
           </WagmiProvider>
