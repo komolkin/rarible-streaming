@@ -351,6 +351,7 @@ export async function getStreamRecording(streamId: string) {
 /**
  * Get thumbnail URL from Livepeer playback info API
  * This is the preferred method as it gets the actual thumbnail URL from Livepeer
+ * Works for both live streams and VOD assets
  */
 export async function getThumbnailUrlFromPlaybackInfo(playbackId: string): Promise<string | null> {
   if (!playbackId) {
@@ -360,23 +361,67 @@ export async function getThumbnailUrlFromPlaybackInfo(playbackId: string): Promi
   try {
     const playbackInfo = await getPlaybackInfo(playbackId)
     
-    // Livepeer playback info includes thumbnail information in the source array
-    // Look for thumbnail URLs in the playback info
+    // Check multiple possible locations for thumbnail URL in playback info
+    
+    // 1. Check meta.thumbnail (direct thumbnail URL)
     if (playbackInfo?.meta?.thumbnail) {
+      console.log(`[Thumbnail] Found thumbnail in meta.thumbnail: ${playbackInfo.meta.thumbnail}`)
       return playbackInfo.meta.thumbnail
     }
     
-    // Alternative: check for thumbnail in source array (VTT file for VOD)
-    if (playbackInfo?.source) {
-      const thumbnailSource = playbackInfo.source.find((s: any) => 
-        s.type === "text/vtt" && s.url?.includes("thumbnails")
+    // 2. Check meta.source array for PNG thumbnail (live streams)
+    if (playbackInfo?.meta?.source && Array.isArray(playbackInfo.meta.source)) {
+      const pngSource = playbackInfo.meta.source.find(
+        (s: any) => s?.type === "image/png" || s?.hrn === "Thumbnail (PNG)"
       )
-      if (thumbnailSource?.url) {
-        // For VOD, the VTT file contains thumbnail URLs, but we can construct from it
-        // For now, fall back to thumbnailer service
-        console.log(`[Thumbnail] Found VTT thumbnail source in playback info: ${thumbnailSource.url}`)
+      if (pngSource?.url) {
+        console.log(`[Thumbnail] Found PNG thumbnail in meta.source: ${pngSource.url}`)
+        return pngSource.url
       }
     }
+    
+    // 3. Check top-level source array for PNG thumbnail
+    if (playbackInfo?.source && Array.isArray(playbackInfo.source)) {
+      const pngSource = playbackInfo.source.find(
+        (s: any) => s?.type === "image/png" || s?.hrn === "Thumbnail (PNG)"
+      )
+      if (pngSource?.url) {
+        console.log(`[Thumbnail] Found PNG thumbnail in source: ${pngSource.url}`)
+        return pngSource.url
+      }
+    }
+    
+    // 4. For VOD assets, check for thumbnail in VTT file or other sources
+    // VOD thumbnails might be in different formats
+    if (playbackInfo?.source && Array.isArray(playbackInfo.source)) {
+      // Look for any image source
+      const imageSource = playbackInfo.source.find(
+        (s: any) => s?.type?.startsWith("image/") || s?.url?.includes("thumbnail")
+      )
+      if (imageSource?.url) {
+        console.log(`[Thumbnail] Found image source in playback info: ${imageSource.url}`)
+        return imageSource.url
+      }
+    }
+    
+    // 5. Check for thumbnail in recordings array (for VOD)
+    if (playbackInfo?.recordings && Array.isArray(playbackInfo.recordings)) {
+      for (const recording of playbackInfo.recordings) {
+        if (recording?.thumbnail) {
+          console.log(`[Thumbnail] Found thumbnail in recording: ${recording.thumbnail}`)
+          return recording.thumbnail
+        }
+      }
+    }
+    
+    // Log the structure for debugging if no thumbnail found
+    console.log(`[Thumbnail] No thumbnail found in playback info. Structure:`, {
+      hasMeta: !!playbackInfo?.meta,
+      hasSource: !!playbackInfo?.source,
+      sourceLength: Array.isArray(playbackInfo?.source) ? playbackInfo.source.length : 0,
+      metaSourceLength: Array.isArray(playbackInfo?.meta?.source) ? playbackInfo.meta.source.length : 0,
+      type: playbackInfo?.type,
+    })
     
     return null
   } catch (error) {
@@ -419,14 +464,16 @@ export async function getLiveThumbnailUrl(playbackId: string): Promise<string | 
 
 /**
  * Generate thumbnail/preview image URL for a Livepeer playbackId
- * Livepeer provides thumbnail URLs via thumbnailer service
+ * 
+ * @deprecated This function uses the thumbnailer.livepeer.studio endpoint which doesn't work reliably.
+ * Use getThumbnailUrlFromPlaybackInfo() or getLiveThumbnailUrl() instead, which use the playback info API.
  * 
  * @param playbackId - The playbackId (stream or asset) to generate thumbnail for
  * @param options - Optional parameters for thumbnail customization
  * @param options.time - Time position in seconds (default: 10 seconds for better frame, or middle of video for VOD)
  * @param options.width - Thumbnail width in pixels (default: 1280 for high quality)
  * @param options.height - Thumbnail height in pixels (default: 720 for 16:9 aspect ratio)
- * @returns Thumbnail URL string
+ * @returns Thumbnail URL string (may not work - endpoint is unreliable)
  */
 export function getThumbnailUrl(
   playbackId: string,
@@ -516,11 +563,13 @@ export async function verifyThumbnailAvailability(thumbnailUrl: string): Promise
 
 /**
  * Generate thumbnail URL for VOD assets with optimized settings
- * Uses a time position that's likely to have good content (not black screen)
+ * 
+ * @deprecated This function uses the thumbnailer.livepeer.studio endpoint which doesn't work reliably.
+ * Use getThumbnailUrlFromPlaybackInfo() instead, which uses the playback info API.
  * 
  * @param playbackId - The asset playbackId
  * @param duration - Optional duration in seconds to calculate middle point
- * @returns Thumbnail URL string
+ * @returns Thumbnail URL string (may not work - endpoint is unreliable)
  */
 export function getVodThumbnailUrl(playbackId: string, duration?: number): string {
   if (!playbackId) {
@@ -571,29 +620,29 @@ export async function generateAndVerifyThumbnail(
   const maxRetries = options?.maxRetries ?? 3
   const retryDelay = options?.retryDelay ?? 2000
   
-  // First, try to get thumbnail URL from playback info API (preferred method)
+  // Always use playback info API - this is the only reliable method
+  // The thumbnailer.livepeer.studio endpoint doesn't work reliably
   let thumbnailUrl: string | null = null
   try {
     thumbnailUrl = await getThumbnailUrlFromPlaybackInfo(playbackId)
     if (thumbnailUrl) {
-      console.log(`[Thumbnail] Got thumbnail URL from playback info API: ${thumbnailUrl}`)
-    }
-  } catch (error) {
-    console.warn(`[Thumbnail] Could not get thumbnail from playback info, will use thumbnailer service:`, error)
-  }
-  
-  // Fallback: Generate thumbnail URL using thumbnailer service
-  if (!thumbnailUrl) {
-    thumbnailUrl = options?.isVod
-      ? getVodThumbnailUrl(playbackId, options.duration)
-      : getThumbnailUrl(playbackId)
-    
-    if (!thumbnailUrl) {
-      console.warn(`[Thumbnail] Failed to generate thumbnail URL for playbackId ${playbackId}`)
+      console.log(`[Thumbnail] ✅ Got thumbnail URL from playback info API: ${thumbnailUrl}`)
+    } else {
+      console.log(`[Thumbnail] ⏳ No thumbnail available in playback info for playbackId ${playbackId} (stream may not have started or asset not ready)`)
+      // Return null - placeholder will be shown instead of broken image
       return null
     }
-    
-    console.log(`[Thumbnail] Generated thumbnail URL using thumbnailer service: ${thumbnailUrl}`)
+  } catch (error: any) {
+    console.warn(`[Thumbnail] Could not get thumbnail from playback info for ${playbackId}:`, error?.message || error)
+    // Return null instead of using broken thumbnailer service
+    return null
+  }
+  
+  // If we don't have a thumbnail URL, return null
+  // The frontend will show placeholder instead of broken image
+  if (!thumbnailUrl) {
+    console.log(`[Thumbnail] No thumbnail URL available for playbackId ${playbackId}`)
+    return null
   }
 
   // Try to verify thumbnail availability with retries
