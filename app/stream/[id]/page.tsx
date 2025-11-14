@@ -1091,8 +1091,8 @@ export default function StreamPage() {
                             key={`vod-player-${assetPlaybackId || stream.livepeerPlaybackId}`}
                             playbackId={assetPlaybackId || stream.livepeerPlaybackId}
                             playRecording
-                            autoPlay={false}
-                            muted={false}
+                            autoPlay
+                            muted={true}
                             showTitle={false}
                             showPipButton={true}
                             objectFit="contain"
@@ -1212,8 +1212,8 @@ export default function StreamPage() {
                               key={`vod-player-from-url-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl) || stream.livepeerPlaybackId}`}
                               playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl) || stream.livepeerPlaybackId}
                               playRecording
-                              autoPlay={false}
-                              muted={false}
+                              autoPlay
+                              muted={true}
                               showTitle={false}
                               showPipButton={true}
                               objectFit="contain"
@@ -1278,8 +1278,8 @@ export default function StreamPage() {
                         key={`vod-player-fallback-${assetPlaybackId || stream.livepeerPlaybackId}`}
                         playbackId={assetPlaybackId || stream.livepeerPlaybackId}
                         playRecording
-                        autoPlay={false}
-                        muted={false}
+                        autoPlay
+                        muted={true}
                         showTitle={false}
                         showPipButton={true}
                         objectFit="contain"
@@ -1305,8 +1305,8 @@ export default function StreamPage() {
                           key={`vod-player-from-url-fallback-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}`}
                           playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}
                           playRecording
-                          autoPlay={false}
-                          muted={false}
+                          autoPlay
+                          muted={true}
                           showTitle={false}
                           showPipButton={true}
                           objectFit="contain"
