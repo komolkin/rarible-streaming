@@ -5,7 +5,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { usePrivy } from "@privy-io/react-auth"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -14,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Bell, Plus, User, Settings, LogOut, Search } from "lucide-react"
+import { Bell, Plus, User, Settings, LogOut } from "lucide-react"
 
 export function Navbar() {
   const { authenticated, ready, user, login, logout } = usePrivy()
@@ -63,17 +62,6 @@ export function Navbar() {
               <Link href="/browse" className="text-sm font-medium hover:opacity-80 transition-opacity">
                 Browse
               </Link>
-            </div>
-          </div>
-          <div className="flex-1 max-w-md mx-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search streams..."
-                disabled
-                className="pl-10 w-full"
-              />
             </div>
           </div>
           <div className="flex items-center">
