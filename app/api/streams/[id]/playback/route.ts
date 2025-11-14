@@ -197,6 +197,20 @@ export async function GET(
     // For stream playbackId of ended streams, type might still be "live" (which causes "offline" message)
     const playbackType = playbackInfo?.type || (isEnded && actualPlaybackId !== playbackId ? "vod" : null)
     
+    // Extract thumbnail URL from playback info
+    // Livepeer returns thumbnail in meta.source array with type "image/png" and hrn "Thumbnail (PNG)"
+    let thumbnailUrl: string | null = null
+    const sources = playbackInfo?.meta?.source || playbackInfo?.source || []
+    if (Array.isArray(sources)) {
+      const thumbnailSource = sources.find(
+        (s: any) => s.type === "image/png" || s.hrn === "Thumbnail (PNG)"
+      )
+      if (thumbnailSource?.url) {
+        thumbnailUrl = thumbnailSource.url
+        console.log(`[Playback API] Found thumbnail URL: ${thumbnailUrl}`)
+      }
+    }
+    
     console.log(`[Playback API] Playback type: ${playbackType} (isEnded: ${isEnded}, actualPlaybackId: ${actualPlaybackId}, originalPlaybackId: ${playbackId})`)
 
     return NextResponse.json({
@@ -205,6 +219,7 @@ export async function GET(
       hlsUrl,
       mp4Url, // Also return MP4 URL if available
       type: playbackType, // Return playback type ("live" or "vod")
+      thumbnailUrl, // Return thumbnail URL for live streams (auto-updates)
       playbackInfo, // Full playbackInfo object for UI Kit Player
       // Also return playbackInfo in the format expected by UI Kit Player
       // The UI Kit Player expects playbackInfo.playbackInfo to contain the sources

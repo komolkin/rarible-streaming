@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -9,6 +12,8 @@ interface StreamPreviewCardProps {
     title: string
     description?: string | null
     previewImageUrl?: string | null
+    thumbnailUrl?: string | null // Live thumbnail URL from playback info (auto-updates)
+    livepeerPlaybackId?: string | null
     creatorAddress: string
     creator?: {
       displayName?: string | null
@@ -32,23 +37,87 @@ export function StreamPreviewCard({
   showCreator = true,
   showDate = true 
 }: StreamPreviewCardProps) {
-  // Debug logging
-  if (stream.endedAt) {
-    if (stream.previewImageUrl) {
-      console.log(`[StreamPreviewCard] Stream ${stream.id} "${stream.title}" has previewImageUrl:`, stream.previewImageUrl)
-    } else {
-      console.warn(`[StreamPreviewCard] Stream ${stream.id} "${stream.title}" is ended but has NO previewImageUrl`)
+  const [liveThumbnailUrl, setLiveThumbnailUrl] = useState<string | null>(stream.thumbnailUrl || null)
+  const [thumbnailRefreshKey, setThumbnailRefreshKey] = useState(Date.now())
+
+  // For live streams without previewImageUrl, use thumbnailUrl from stream or fetch from playback info
+  // and refresh it every 5 seconds to get the latest frame
+  useEffect(() => {
+    if (!stream.isLive || stream.previewImageUrl || !stream.livepeerPlaybackId) {
+      return
     }
-  }
+
+    // If thumbnailUrl is already provided in stream object, use it
+    if (stream.thumbnailUrl) {
+      setLiveThumbnailUrl(stream.thumbnailUrl)
+      // Still refresh the image every 5 seconds to get latest frame
+      const interval = setInterval(() => {
+        setThumbnailRefreshKey(Date.now()) // Force image refresh
+      }, 5000)
+      return () => clearInterval(interval)
+    }
+
+    // Otherwise, fetch thumbnail from playback info API
+    const fetchLiveThumbnail = async () => {
+      try {
+        const response = await fetch(`/api/streams/${stream.id}/playback?playbackId=${stream.livepeerPlaybackId}`)
+        if (response.ok) {
+          const data = await response.json()
+          // Use thumbnailUrl from API response if available
+          if (data.thumbnailUrl) {
+            setLiveThumbnailUrl(data.thumbnailUrl)
+            return
+          }
+          // Fallback: Extract thumbnail URL from playback info
+          // Livepeer returns thumbnail in meta.source array with type "image/png"
+          if (data.playbackInfo?.meta?.source) {
+            const thumbnailSource = data.playbackInfo.meta.source.find(
+              (s: any) => s.type === "image/png" || s.hrn === "Thumbnail (PNG)"
+            )
+            if (thumbnailSource?.url) {
+              setLiveThumbnailUrl(thumbnailSource.url)
+              return
+            }
+          }
+          // Fallback: check direct source array
+          if (data.playbackInfo?.source) {
+            const thumbnailSource = data.playbackInfo.source.find(
+              (s: any) => s.type === "image/png" || s.hrn === "Thumbnail (PNG)"
+            )
+            if (thumbnailSource?.url) {
+              setLiveThumbnailUrl(thumbnailSource.url)
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`[StreamPreviewCard] Failed to fetch live thumbnail for stream ${stream.id}:`, error)
+      }
+    }
+
+    // Fetch immediately
+    fetchLiveThumbnail()
+
+    // Refresh every 5 seconds for live streams (as per Livepeer docs)
+    const interval = setInterval(() => {
+      fetchLiveThumbnail()
+      setThumbnailRefreshKey(Date.now()) // Force image refresh
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [stream.id, stream.isLive, stream.livepeerPlaybackId, stream.previewImageUrl, stream.thumbnailUrl])
+
+  // Use previewImageUrl if available, otherwise use live thumbnail URL
+  const imageUrl = stream.previewImageUrl || liveThumbnailUrl
 
   return (
     <Link href={`/stream/${stream.id}`}>
       <Card className="cursor-pointer hover:shadow-lg transition-shadow h-full">
         <div className="aspect-video w-full overflow-hidden rounded-t-lg bg-black relative">
-          {stream.previewImageUrl ? (
+          {imageUrl ? (
             <>
               <img
-                src={stream.previewImageUrl}
+                key={thumbnailRefreshKey} // Force refresh by changing key
+                src={`${imageUrl}${stream.isLive ? `?refresh=${thumbnailRefreshKey}` : ''}`}
                 alt={stream.title}
                 className="w-full h-full object-cover"
                 loading="lazy"
@@ -57,7 +126,7 @@ export function StreamPreviewCard({
                 }}
                 onError={(e) => {
                   // If image fails to load, hide it and show placeholder instead
-                  console.error(`[StreamPreviewCard] Image failed to load for stream ${stream.id}:`, stream.previewImageUrl)
+                  console.error(`[StreamPreviewCard] Image failed to load for stream ${stream.id}:`, imageUrl)
                   const target = e.target as HTMLImageElement
                   target.style.display = 'none'
                   const placeholder = target.parentElement?.querySelector('.placeholder-fallback') as HTMLElement

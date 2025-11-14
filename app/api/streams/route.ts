@@ -120,46 +120,71 @@ export async function GET(request: NextRequest) {
               console.log(`[Streams API] ✅ Generated thumbnail from stream playbackId (fallback): ${thumbnailUrl}`)
             }
           } else if (stream.livepeerPlaybackId) {
-            // For all streams with playbackId (live, scheduled, or any state), generate thumbnail
-            // This ensures thumbnails are available for preview components
-            const isVod = !!stream.endedAt
-            console.log(`[Streams API] 📡 Generating thumbnail for ${stream.isLive ? 'live' : 'scheduled'} stream using playbackId: ${stream.livepeerPlaybackId}`)
-            thumbnailUrl = await generateAndVerifyThumbnail(stream.livepeerPlaybackId, {
-              isVod: isVod,
-              maxRetries: stream.isLive ? 1 : 2, // Quick check for live streams, more retries for others
-              retryDelay: stream.isLive ? 1000 : 1500,
-            })
-            console.log(`[Streams API] ✅ Generated thumbnail for stream ${stream.id}: ${thumbnailUrl}`)
+            // For live streams, use the auto-updating thumbnail from playback info API
+            // This provides the latest frame from the stream (updates every few seconds)
+            if (stream.isLive) {
+              console.log(`[Streams API] 📡 Fetching live thumbnail from playback info for stream ${stream.id}`)
+              const { getLiveThumbnailUrl } = await import("@/lib/livepeer")
+              thumbnailUrl = await getLiveThumbnailUrl(stream.livepeerPlaybackId)
+              if (thumbnailUrl) {
+                console.log(`[Streams API] ✅ Got live thumbnail URL for stream ${stream.id}: ${thumbnailUrl}`)
+              } else {
+                console.log(`[Streams API] ⚠️ Live thumbnail not available yet for stream ${stream.id}`)
+              }
+            } else {
+              // For scheduled/non-live streams, use thumbnailer service
+              const isVod = !!stream.endedAt
+              console.log(`[Streams API] 📡 Generating thumbnail for scheduled stream using playbackId: ${stream.livepeerPlaybackId}`)
+              thumbnailUrl = await generateAndVerifyThumbnail(stream.livepeerPlaybackId, {
+                isVod: isVod,
+                maxRetries: 2,
+                retryDelay: 1500,
+              })
+              console.log(`[Streams API] ✅ Generated thumbnail for stream ${stream.id}: ${thumbnailUrl}`)
+            }
           } else {
             console.log(`[Streams API] ⏭️ Skipping thumbnail generation - missing playbackId`)
           }
           
-          // Save thumbnail URL if we got one (even if verification failed, it might become available later)
+          // For live streams, don't save thumbnail URL to DB (it's auto-updating from playback info)
+          // For ended streams, save the thumbnail URL to DB for persistence
           if (thumbnailUrl) {
-            console.log(`[Streams API] 💾 Saving thumbnail URL to database: ${thumbnailUrl}`)
-            try {
-              const [updated] = await db
-                .update(streams)
-                .set({
-                  previewImageUrl: thumbnailUrl,
-                  updatedAt: new Date(),
-                })
-                .where(eq(streams.id, stream.id))
-                .returning()
-              
-              console.log(`[Streams API] Successfully saved thumbnail for stream ${stream.id}`)
-              
-              // Return stream with thumbnail URL
+            if (stream.isLive) {
+              // For live streams, return thumbnail URL in response but don't save to DB
+              // The thumbnail URL updates automatically from playback info
+              console.log(`[Streams API] ✅ Returning live thumbnail URL for stream ${stream.id} (not saving to DB)`)
               return {
                 ...stream,
-                previewImageUrl: thumbnailUrl,
+                thumbnailUrl: thumbnailUrl, // Add as separate field for live streams
+                previewImageUrl: thumbnailUrl, // Also include in previewImageUrl for compatibility
               }
-            } catch (dbError) {
-              console.error(`[Streams API] Failed to save thumbnail for stream ${stream.id}:`, dbError)
-              // Still return the thumbnail URL in response even if DB save failed
-              return {
-                ...stream,
-                previewImageUrl: thumbnailUrl,
+            } else {
+              // For ended/scheduled streams, save thumbnail URL to database
+              console.log(`[Streams API] 💾 Saving thumbnail URL to database: ${thumbnailUrl}`)
+              try {
+                const [updated] = await db
+                  .update(streams)
+                  .set({
+                    previewImageUrl: thumbnailUrl,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(streams.id, stream.id))
+                  .returning()
+                
+                console.log(`[Streams API] Successfully saved thumbnail for stream ${stream.id}`)
+                
+                // Return stream with thumbnail URL
+                return {
+                  ...stream,
+                  previewImageUrl: thumbnailUrl,
+                }
+              } catch (dbError) {
+                console.error(`[Streams API] Failed to save thumbnail for stream ${stream.id}:`, dbError)
+                // Still return the thumbnail URL in response even if DB save failed
+                return {
+                  ...stream,
+                  previewImageUrl: thumbnailUrl,
+                }
               }
             }
           } else {
