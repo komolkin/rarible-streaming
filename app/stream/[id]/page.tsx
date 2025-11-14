@@ -248,7 +248,16 @@ export default function StreamPage() {
 
   const fetchStream = useCallback(async () => {
     try {
-      const response = await fetch(`/api/streams/${params.id}`)
+      // Add timeout to prevent hanging (15 seconds max)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      
+      const response = await fetch(`/api/streams/${params.id}`, {
+        signal: controller.signal,
+      }).finally(() => {
+        clearTimeout(timeoutId)
+      })
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         console.error("Failed to fetch stream:", response.status, errorData)
@@ -384,8 +393,18 @@ export default function StreamPage() {
         console.log("Stream playback ID:", data.livepeerPlaybackId)
         console.log("Stream is live:", data.isLive)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching stream:", error)
+      // Handle timeout/abort errors gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        console.warn("Stream fetch timeout - this may be due to slow API response")
+        setPageError("Request timed out. The stream may be loading slowly. Please try refreshing.")
+      } else {
+        // Set page error so user sees what went wrong
+        const errorMessage = error?.message || "Failed to fetch stream"
+        setPageError(errorMessage)
+      }
+      // Don't throw - allow component to render error state
     }
   }, [params.id, authenticated, user?.wallet?.address, findAssetByPlaybackIdOrAssetId, fetchStreamRecording])
 

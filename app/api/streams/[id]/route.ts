@@ -55,17 +55,36 @@ export async function GET(
         console.log(`[GET Stream ${params.id}] Finding recording for ended stream: ${stream.livepeerStreamId}`)
         
         // METHOD 1: Check stream sessions first (fastest method)
+        // Add timeout to prevent hanging
           try {
             console.log(`[GET Stream ${params.id}] Method 1: Checking stream sessions...`)
-            const streamData = await getStream(stream.livepeerStreamId)
+            
+            // Add timeout for getStream call (5 seconds max)
+            const streamDataPromise = getStream(stream.livepeerStreamId)
+            const streamDataTimeout = new Promise<null>((resolve) => 
+              setTimeout(() => {
+                console.warn(`[GET Stream ${params.id}] getStream timeout after 5 seconds`)
+                resolve(null)
+              }, 5000)
+            )
+            const streamData = await Promise.race([streamDataPromise, streamDataTimeout])
+            
             let sessions: any[] = []
             
             if (streamData?.sessions && Array.isArray(streamData.sessions) && streamData.sessions.length > 0) {
               sessions = streamData.sessions
             }
 
-            if (sessions.length === 0) {
-              sessions = await getStreamSessions(stream.livepeerStreamId, { limit: 10, recordOnly: true })
+            if (sessions.length === 0 && streamData) {
+              // Add timeout for getStreamSessions call (5 seconds max)
+              const sessionsPromise = getStreamSessions(stream.livepeerStreamId, { limit: 10, recordOnly: true })
+              const sessionsTimeout = new Promise<any[]>((resolve) => 
+                setTimeout(() => {
+                  console.warn(`[GET Stream ${params.id}] getStreamSessions timeout after 5 seconds`)
+                  resolve([])
+                }, 5000)
+              )
+              sessions = await Promise.race([sessionsPromise, sessionsTimeout])
             }
 
             if (sessions.length > 0) {
@@ -96,10 +115,18 @@ export async function GET(
             
             // Try to get thumbnail from playback info API for ended streams
             // According to Livepeer docs: playback info API returns thumbnail URL in meta.source
+            // Add timeout to prevent hanging (3 seconds max)
             if (!previewImageUrl && stream.livepeerPlaybackId) {
               try {
                 const { getLiveThumbnailUrl } = await import("@/lib/livepeer")
-                const thumbnailUrl = await getLiveThumbnailUrl(stream.livepeerPlaybackId)
+                const thumbnailPromise = getLiveThumbnailUrl(stream.livepeerPlaybackId)
+                const thumbnailTimeout = new Promise<null>((resolve) => 
+                  setTimeout(() => {
+                    console.warn(`[GET Stream ${params.id}] Thumbnail fetch timeout after 3 seconds`)
+                    resolve(null)
+                  }, 3000)
+                )
+                const thumbnailUrl = await Promise.race([thumbnailPromise, thumbnailTimeout])
                 if (thumbnailUrl) {
                   previewImageUrl = thumbnailUrl
                   console.log(`[GET Stream ${params.id}] ✅ Got thumbnail from playback info API: ${thumbnailUrl}`)
@@ -209,6 +236,7 @@ export async function GET(
         // Update stream with recording information if we found something
         if (vodUrl && vodUrl !== stream.vodUrl) {
           console.log(`[GET Stream ${params.id}] Updating stream with vodUrl: ${vodUrl}`)
+          try {
           const [updated] = await db
             .update(streams)
             .set({
@@ -234,23 +262,29 @@ export async function GET(
             assetPlaybackId: assetPlaybackId, // Include asset playbackId for Player component
             assetId: assetId, // Include asset ID for direct asset fetching
           })
-        } else if (assetPlaybackId) {
-          // Even if vodUrl didn't change, return asset playbackId if we found it
-          // This helps the frontend use the correct playbackId for VOD
-          console.log(`[GET Stream ${params.id}] ✅ Returning asset playbackId even though vodUrl didn't change: ${assetPlaybackId}`)
+          } catch (dbError: any) {
+            console.error(`[GET Stream ${params.id}] Database update error:`, dbError?.message)
+            // Continue to return stream with assetPlaybackId even if DB update fails
+          }
+        }
+        
+        // If we found assetPlaybackId, return it immediately (even if vodUrl didn't change)
+        // This ensures frontend gets the correct playbackId
+        if (assetPlaybackId) {
+          console.log(`[GET Stream ${params.id}] ✅ Returning with asset playbackId: ${assetPlaybackId}`)
           return NextResponse.json({
             ...stream,
             category: category,
             assetPlaybackId: assetPlaybackId,
-            assetId: assetId, // Include asset ID for direct asset fetching
+            assetId: assetId,
           })
-        } else if (!vodUrl) {
+        }
+        
+        // If no vodUrl found, log warning but continue
+        if (!vodUrl) {
           console.warn(`[GET Stream ${params.id}] ⚠️ No recording found via any method. Stream may need more time to process.`)
           console.warn(`[GET Stream ${params.id}] Livepeer Stream ID: ${stream.livepeerStreamId}`)
           console.warn(`[GET Stream ${params.id}] This is normal - recordings can take a few minutes to appear after stream ends.`)
-        } else {
-          // vodUrl exists but no assetPlaybackId was found - try to fetch it
-          console.log(`[GET Stream ${params.id}] vodUrl exists but assetPlaybackId not found. Will try to fetch asset playbackId at end of function.`)
         }
       } catch (error: any) {
         console.error(`[GET Stream ${params.id}] Error fetching asset for ended stream:`, error?.message || error)
@@ -267,9 +301,27 @@ export async function GET(
     }
 
     // Check Livepeer stream status if we have a stream ID and stream hasn't been manually ended
+    // Add timeout to prevent hanging (10 seconds max for status check)
     if (stream.livepeerStreamId && !isManuallyEnded) {
       try {
-        const { isActive, stream: livepeerStreamData, viewerCount: livepeerViewerCount } = await getStreamStatus(stream.livepeerStreamId)
+        const statusPromise = getStreamStatus(stream.livepeerStreamId)
+        const statusTimeout = new Promise<{ isActive: boolean; stream: null; viewerCount: undefined }>((resolve) => 
+          setTimeout(() => {
+            console.warn(`[Stream ${params.id}] getStreamStatus timeout after 10 seconds`)
+            resolve({ isActive: false, stream: null, viewerCount: undefined })
+          }, 10000)
+        )
+        const { isActive, stream: livepeerStreamData, viewerCount: livepeerViewerCount } = await Promise.race([statusPromise, statusTimeout])
+        
+        // If timeout occurred, skip status check
+        if (!livepeerStreamData) {
+          console.warn(`[Stream ${params.id}] Skipping status check due to timeout`)
+          // Return stream as-is without status update
+          return NextResponse.json({
+            ...stream,
+            category: category,
+          })
+        }
         
         // Always update playbackId if it's available from Livepeer (in case it was missing during creation)
         const needsPlaybackIdUpdate = !stream.livepeerPlaybackId && livepeerStreamData?.playbackId
@@ -283,24 +335,45 @@ export async function GET(
         let previewImageUrl = stream.previewImageUrl
         
         if (needsPreviewImage) {
+          try {
           const { getLiveThumbnailUrl, generateAndVerifyThumbnail } = await import("@/lib/livepeer")
           // Try Livepeer playback info API first (returns thumbnail in meta.source)
           // This works for both live and VOD streams
-          previewImageUrl = await getLiveThumbnailUrl(livepeerStreamData.playbackId)
+            // Add timeout to prevent hanging (3 seconds max)
+            const thumbnailPromise = getLiveThumbnailUrl(livepeerStreamData.playbackId)
+            const thumbnailTimeout = new Promise<null>((resolve) => 
+              setTimeout(() => {
+                console.warn(`[Stream ${params.id}] Thumbnail fetch timeout after 3 seconds`)
+                resolve(null)
+              }, 3000)
+            )
+            previewImageUrl = await Promise.race([thumbnailPromise, thumbnailTimeout])
 
           if (!previewImageUrl) {
             // Fallback to thumbnailer service if playback info not ready yet
-            previewImageUrl = await generateAndVerifyThumbnail(livepeerStreamData.playbackId, {
+              // Add timeout for this too (5 seconds max)
+              const generateThumbnailPromise = generateAndVerifyThumbnail(livepeerStreamData.playbackId, {
               isVod: false,
-              maxRetries: 2,
-              retryDelay: 1500,
+                maxRetries: 1, // Reduce retries for speed
+                retryDelay: 1000,
             })
+              const generateThumbnailTimeout = new Promise<null>((resolve) => 
+                setTimeout(() => {
+                  console.warn(`[Stream ${params.id}] Thumbnail generation timeout after 5 seconds`)
+                  resolve(null)
+                }, 5000)
+              )
+              previewImageUrl = await Promise.race([generateThumbnailPromise, generateThumbnailTimeout])
           }
 
           if (previewImageUrl) {
             console.log(`[Stream ${params.id}] ✅ Generated preview image from playback info: ${previewImageUrl}`)
           } else {
             console.warn(`[Stream ${params.id}] ⚠️ Could not generate preview image for playbackId: ${livepeerStreamData.playbackId}`)
+            }
+          } catch (thumbError: any) {
+            console.warn(`[Stream ${params.id}] Error generating preview image:`, thumbError?.message)
+            // Continue without preview image
           }
         } else if (stream.previewImageUrl) {
           console.log(`[Stream ${params.id}] Preserving user-uploaded cover image: ${stream.previewImageUrl}`)
@@ -459,54 +532,11 @@ export async function GET(
     }
 
     // Return stream with category
-    // For ended streams, try to include asset playbackId if available
-    // CRITICAL: Always try to fetch asset playbackId for ended streams, even if vodUrl already exists
-    // This ensures the frontend gets the correct asset playbackId for VOD playback
-    let responseAssetPlaybackId = null
-    if (isManuallyEnded && stream.livepeerStreamId) {
-      try {
-        const { getStreamAsset } = await import("@/lib/livepeer")
-        console.log(`[GET Stream ${params.id}] Fetching asset playbackId for ended stream: ${stream.livepeerStreamId}`)
-        const asset = await getStreamAsset(stream.livepeerStreamId)
-        if (asset?.playbackId) {
-          if (asset.status === "ready") {
-            responseAssetPlaybackId = asset.playbackId
-            console.log(`[GET Stream ${params.id}] ✅ Found ready asset playbackId: ${asset.playbackId}`)
-          } else {
-            console.warn(`[GET Stream ${params.id}] ⚠️ Asset found but not ready (status: ${asset.status}). PlaybackId: ${asset.playbackId}`)
-            // Still return the playbackId even if not ready - frontend can check status
-            responseAssetPlaybackId = asset.playbackId
-          }
-        } else {
-          console.warn(`[GET Stream ${params.id}] ⚠️ Asset found but has no playbackId. Asset ID: ${asset?.id}, Status: ${asset?.status}`)
-        }
-      } catch (error: any) {
-        console.error(`[GET Stream ${params.id}] ❌ Error fetching asset playbackId:`, error?.message || error)
-        // Don't silently fail - log the error so we can debug
-        // Frontend will try to fetch it, but we should still try
-      }
-    }
-    
-    // Also check if assetPlaybackId was already set earlier in the function (from lines 115-197)
-    // This happens when vodUrl is updated, but we should return it even if vodUrl didn't change
-    if (!responseAssetPlaybackId && isManuallyEnded && stream.livepeerStreamId) {
-      // Try one more time with a quick lookup
-      try {
-        const { getStreamAsset } = await import("@/lib/livepeer")
-        const asset = await getStreamAsset(stream.livepeerStreamId)
-        if (asset?.playbackId) {
-          responseAssetPlaybackId = asset.playbackId
-          console.log(`[GET Stream ${params.id}] ✅ Found asset playbackId on second attempt: ${asset.playbackId}`)
-        }
-      } catch (error) {
-        // Ignore - we've already tried
-      }
-    }
-    
+    // Note: For ended streams, assetPlaybackId should already be returned earlier if found
+    // This is the fallback return for all other cases
     return NextResponse.json({
       ...stream,
       category: category,
-      ...(responseAssetPlaybackId && { assetPlaybackId: responseAssetPlaybackId }),
     })
   } catch (error) {
     console.error("Error fetching stream:", error)

@@ -133,14 +133,14 @@ export async function GET(request: NextRequest) {
               }
             } else {
               // For scheduled/non-live streams, use thumbnailer service
-              const isVod = !!stream.endedAt
+            const isVod = !!stream.endedAt
               console.log(`[Streams API] 📡 Generating thumbnail for scheduled stream using playbackId: ${stream.livepeerPlaybackId}`)
-              thumbnailUrl = await generateAndVerifyThumbnail(stream.livepeerPlaybackId, {
-                isVod: isVod,
+            thumbnailUrl = await generateAndVerifyThumbnail(stream.livepeerPlaybackId, {
+              isVod: isVod,
                 maxRetries: 2,
                 retryDelay: 1500,
-              })
-              console.log(`[Streams API] ✅ Generated thumbnail for stream ${stream.id}: ${thumbnailUrl}`)
+            })
+            console.log(`[Streams API] ✅ Generated thumbnail for stream ${stream.id}: ${thumbnailUrl}`)
             }
           } else {
             console.log(`[Streams API] ⏭️ Skipping thumbnail generation - missing playbackId`)
@@ -160,30 +160,30 @@ export async function GET(request: NextRequest) {
               }
             } else {
               // For ended/scheduled streams, save thumbnail URL to database
-              console.log(`[Streams API] 💾 Saving thumbnail URL to database: ${thumbnailUrl}`)
-              try {
-                const [updated] = await db
-                  .update(streams)
-                  .set({
-                    previewImageUrl: thumbnailUrl,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(streams.id, stream.id))
-                  .returning()
-                
-                console.log(`[Streams API] Successfully saved thumbnail for stream ${stream.id}`)
-                
-                // Return stream with thumbnail URL
-                return {
-                  ...stream,
+            console.log(`[Streams API] 💾 Saving thumbnail URL to database: ${thumbnailUrl}`)
+            try {
+              const [updated] = await db
+                .update(streams)
+                .set({
                   previewImageUrl: thumbnailUrl,
-                }
-              } catch (dbError) {
-                console.error(`[Streams API] Failed to save thumbnail for stream ${stream.id}:`, dbError)
-                // Still return the thumbnail URL in response even if DB save failed
-                return {
-                  ...stream,
-                  previewImageUrl: thumbnailUrl,
+                  updatedAt: new Date(),
+                })
+                .where(eq(streams.id, stream.id))
+                .returning()
+              
+              console.log(`[Streams API] Successfully saved thumbnail for stream ${stream.id}`)
+              
+              // Return stream with thumbnail URL
+              return {
+                ...stream,
+                previewImageUrl: thumbnailUrl,
+              }
+            } catch (dbError) {
+              console.error(`[Streams API] Failed to save thumbnail for stream ${stream.id}:`, dbError)
+              // Still return the thumbnail URL in response even if DB save failed
+              return {
+                ...stream,
+                previewImageUrl: thumbnailUrl,
                 }
               }
             }
@@ -347,6 +347,79 @@ export async function POST(request: NextRequest) {
       hasMinting: hasMinting || false,
       previewImageUrl: previewImageUrl || null,
     }).returning()
+
+    // Generate thumbnail for streams without uploaded cover image
+    // According to Livepeer docs: Use playback info API for live streams, thumbnailer service for VOD
+    if (!previewImageUrl && playbackId) {
+      try {
+        console.log(`[POST Stream] Generating thumbnail for newly created stream ${stream.id} with playbackId: ${playbackId}`)
+        
+        const { getLiveThumbnailUrl, generateAndVerifyThumbnail } = await import("@/lib/livepeer")
+        
+        // Try to get live thumbnail from playback info API first (for streams that have started)
+        // This returns the auto-updating thumbnail URL for live streams
+        let thumbnailUrl: string | null = null
+        
+        try {
+          thumbnailUrl = await getLiveThumbnailUrl(playbackId)
+          if (thumbnailUrl) {
+            console.log(`[POST Stream] ✅ Got live thumbnail from playback info API: ${thumbnailUrl}`)
+          }
+        } catch (playbackInfoError: any) {
+          console.log(`[POST Stream] Playback info API not ready yet (stream may not have started): ${playbackInfoError?.message}`)
+        }
+        
+        // If playback info didn't work, try thumbnailer service
+        // This works for both live and VOD streams, but may not be available immediately
+        if (!thumbnailUrl) {
+          try {
+            // Use shorter timeout and fewer retries for newly created streams
+            // The stream might not have started streaming yet, so thumbnail may not be available
+            thumbnailUrl = await generateAndVerifyThumbnail(playbackId, {
+              isVod: false, // Newly created streams are not VOD yet
+              maxRetries: 1, // Only try once - if not available, GET endpoints will handle it later
+              retryDelay: 1000,
+            })
+            
+            if (thumbnailUrl) {
+              console.log(`[POST Stream] ✅ Generated thumbnail using thumbnailer service: ${thumbnailUrl}`)
+            } else {
+              console.log(`[POST Stream] ⏳ Thumbnail not available yet - stream may not have started. Will be generated when stream is fetched.`)
+            }
+          } catch (thumbError: any) {
+            console.log(`[POST Stream] ⏳ Thumbnail generation failed (stream may not have started): ${thumbError?.message}`)
+            // This is expected for newly created streams that haven't started yet
+            // The GET endpoints will handle thumbnail generation when the stream is fetched
+          }
+        }
+        
+        // Update stream with thumbnail URL if we got one
+        if (thumbnailUrl) {
+          try {
+            const [updated] = await db
+              .update(streams)
+              .set({
+                previewImageUrl: thumbnailUrl,
+                updatedAt: new Date(),
+              })
+              .where(eq(streams.id, stream.id))
+              .returning()
+            
+            console.log(`[POST Stream] ✅ Successfully saved thumbnail for stream ${stream.id}`)
+            
+            // Return updated stream with thumbnail
+            return NextResponse.json(updated)
+          } catch (dbError) {
+            console.error(`[POST Stream] Failed to save thumbnail for stream ${stream.id}:`, dbError)
+            // Continue to return stream without thumbnail - GET endpoints will handle it later
+          }
+        }
+      } catch (error: any) {
+        console.warn(`[POST Stream] Error generating thumbnail for stream ${stream.id}:`, error?.message || error)
+        // Don't fail stream creation if thumbnail generation fails
+        // The GET endpoints will handle thumbnail generation when the stream is fetched
+      }
+    }
 
     return NextResponse.json(stream)
   } catch (error: any) {
