@@ -774,6 +774,12 @@ export default function StreamPage() {
     }
   }
 
+  // Show live player if we have a playbackId and stream hasn't ended
+  // Use useMemo to prevent unnecessary recalculations (must be before early returns)
+  const showLivePlayer = useMemo(() => !!stream?.livepeerPlaybackId && !stream?.endedAt, [stream?.livepeerPlaybackId, stream?.endedAt])
+  const showOfflineOverlay = useMemo(() => showLivePlayer && !stream?.isLive && !playerIsStreaming, [showLivePlayer, stream?.isLive, playerIsStreaming])
+  const effectiveViewerCount = liveViewerCount ?? stream.viewerCount ?? 0
+
   if (!stream) {
     return (
       <div className="min-h-screen pt-24 flex items-center justify-center">
@@ -781,12 +787,6 @@ export default function StreamPage() {
       </div>
     )
   }
-
-  // Show live player if we have a playbackId and stream hasn't ended
-  // Use useMemo to prevent unnecessary recalculations
-  const showLivePlayer = useMemo(() => !!stream?.livepeerPlaybackId && !stream?.endedAt, [stream?.livepeerPlaybackId, stream?.endedAt])
-  const showOfflineOverlay = useMemo(() => showLivePlayer && !stream?.isLive && !playerIsStreaming, [showLivePlayer, stream?.isLive, playerIsStreaming])
-  const effectiveViewerCount = liveViewerCount ?? stream.viewerCount ?? 0
 
   return (
     <main className="min-h-screen pt-24 pb-8">
