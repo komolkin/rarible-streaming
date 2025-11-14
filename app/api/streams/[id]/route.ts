@@ -344,6 +344,22 @@ export async function DELETE(
       return NextResponse.json({ error: "Stream not found" }, { status: 404 })
     }
 
+    // Check if this is a permanent deletion request
+    let body: { permanent?: boolean } = {}
+    try {
+      body = await request.json()
+    } catch {
+      // If no body, treat as regular end stream request
+    }
+
+    // If permanent deletion is requested, delete the stream entirely
+    // Related chat messages and likes will be deleted automatically via CASCADE
+    if (body.permanent === true) {
+      await db.delete(streams).where(eq(streams.id, params.id))
+      return NextResponse.json({ message: "Stream deleted successfully" })
+    }
+
+    // Otherwise, just mark the stream as ended (existing behavior)
     // First, mark the stream as ended in the database
     // This prevents Livepeer status checks from reactivating it
     const [updated] = await db

@@ -13,7 +13,14 @@ import { supabase } from "@/lib/supabase/client"
 import Link from "next/link"
 import { HlsVideoPlayer, isHlsUrl } from "@/components/hls-video-player"
 import { ShareModal } from "@/components/share-modal"
-import { Heart, Share2 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Heart, Share2, MoreVertical, Trash2 } from "lucide-react"
 
 export default function StreamPage() {
   const params = useParams()
@@ -623,6 +630,43 @@ export default function StreamPage() {
     }
   }
 
+  const handleDeleteStream = async () => {
+    if (!authenticated || !user?.wallet?.address) {
+      alert("Please connect your wallet")
+      return
+    }
+
+    if (user.wallet.address.toLowerCase() !== stream?.creatorAddress?.toLowerCase()) {
+      alert("Only the stream creator can delete the stream")
+      return
+    }
+
+    if (!confirm("Are you sure you want to permanently delete this stream? This action cannot be undone. All chat messages and likes will also be deleted.")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/streams/${params.id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ permanent: true }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to delete stream")
+      }
+
+      // Redirect to home page after successful deletion
+      window.location.href = "/"
+    } catch (error: any) {
+      console.error("Error deleting stream:", error)
+      alert(error?.message || "Failed to delete stream")
+    }
+  }
+
   if (!stream) {
     return (
       <div className="min-h-screen pt-24 flex items-center justify-center">
@@ -1027,19 +1071,50 @@ export default function StreamPage() {
                       <span>Share</span>
                     </Button>
                     {authenticated && 
-                     user?.wallet?.address?.toLowerCase() === stream.creatorAddress?.toLowerCase() &&
-                     stream.isLive && !stream.endedAt && (
-                      <Button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          handleEndStream()
-                        }}
-                        variant="destructive"
-                        size="sm"
-                      >
-                        End Stream
-                      </Button>
+                     user?.wallet?.address?.toLowerCase() === stream.creatorAddress?.toLowerCase() && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {stream.isLive && !stream.endedAt && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleEndStream()
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                End Stream
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDeleteStream()
+                            }}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Stream
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                     </div>
                   </div>
