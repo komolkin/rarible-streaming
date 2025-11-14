@@ -34,7 +34,6 @@ export default function StreamPage() {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [mintAmount, setMintAmount] = useState("1");
-  const [checkingVod, setCheckingVod] = useState(false);
   const [playerIsStreaming, setPlayerIsStreaming] = useState<boolean>(false);
   const playerOfflineTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const streamLiveStatusRef = useRef<boolean>(false);
@@ -43,25 +42,7 @@ export default function StreamPage() {
   const [hasRealtimeViewerData, setHasRealtimeViewerData] =
     useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [playbackType, setPlaybackType] = useState<"live" | "vod" | null>(null);
-  const [isCheckingPlaybackType, setIsCheckingPlaybackType] =
-    useState<boolean>(false);
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null);
-  const [assetReady, setAssetReady] = useState<boolean>(false);
-  const [vodPlaybackUrl, setVodPlaybackUrl] = useState<string | null>(null);
-
-  // Helper function to extract playbackId from HLS URL
-  const extractPlaybackIdFromHlsUrl = useCallback(
-    (url: string): string | null => {
-      if (!url) return null;
-      // HLS URLs from Livepeer typically look like:
-      // https://livepeercdn.studio/hls/{playbackId}/index.m3u8
-      // or https://livepeercdn.com/hls/{playbackId}/index.m3u8
-      const match = url.match(/\/hls\/([^\/]+)\//);
-      return match ? match[1] : null;
-    },
-    []
-  );
 
   const fetchChatMessages = useCallback(async () => {
     const response = await fetch(`/api/chat/${params.id}`);
@@ -71,213 +52,40 @@ export default function StreamPage() {
     }
   }, [params.id]);
 
-  // Find asset by playbackId or assetId
-  const findAssetByPlaybackIdOrAssetId = useCallback(
-    async (playbackIdOrAssetId: string) => {
-      if (!playbackIdOrAssetId) return null;
+  // Fetch asset playback ID when stream ends
+  const fetchAssetPlaybackId = useCallback(async () => {
+    if (!stream?.endedAt || assetPlaybackId) return;
 
-      try {
-        console.log(
-          `[Asset Finder] Looking for asset by playbackId/assetId: ${playbackIdOrAssetId}`
-        );
+    const assetId = stream?.assetId;
+    const livepeerStreamId = stream?.livepeerStreamId;
 
-        // Try to get asset by ID first (if it's a UUID format)
-        const isUUID =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-            playbackIdOrAssetId
-          );
+    if (!assetId && !livepeerStreamId) return;
 
-        if (isUUID) {
-          // It's an asset ID - fetch directly
-          console.log(
-            `[Asset Finder] Detected UUID format, fetching asset by ID...`
-          );
-          const response = await fetch(
-            `/api/streams/${params.id}/recording?assetId=${encodeURIComponent(
-              playbackIdOrAssetId
-            )}`
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.recording?.playbackId) {
-              console.log(
-                `[Asset Finder] ✅ Found asset by ID: ${data.recording.playbackId}`
-              );
-              return data.recording.playbackId;
-            }
-          }
-        }
-
-        // Try to find asset by playbackId
-        // First check if this playbackId belongs to an asset by checking playback info
-        const playbackResponse = await fetch(
-          `/api/streams/${params.id}/playback?playbackId=${encodeURIComponent(
-            playbackIdOrAssetId
+    try {
+      const url = assetId
+        ? `/api/streams/${params.id}/recording?assetId=${encodeURIComponent(
+            assetId
           )}`
-        );
-        if (playbackResponse.ok) {
-          const playbackData = await playbackResponse.json();
-          // If playback type is "vod", this is likely an asset playbackId
-          if (
-            playbackData.type === "vod" ||
-            playbackData.playbackInfo?.type === "vod"
-          ) {
-            console.log(
-              `[Asset Finder] ✅ PlaybackId ${playbackIdOrAssetId} is VOD (asset playbackId)`
-            );
-            return playbackIdOrAssetId;
-          }
+        : `/api/streams/${params.id}/recording`;
+
+      const response = await fetch(url);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.recording?.playbackId) {
+          setAssetPlaybackId(data.recording.playbackId);
         }
-
-        // If stream has ended, try to find asset by checking all assets
-        if (stream?.endedAt && stream?.livepeerStreamId) {
-          const recordingResponse = await fetch(
-            `/api/streams/${params.id}/recording`
-          );
-          if (recordingResponse.ok) {
-            const recordingData = await recordingResponse.json();
-            if (recordingData.success && recordingData.recording?.playbackId) {
-              console.log(
-                `[Asset Finder] ✅ Found asset playbackId from recording: ${recordingData.recording.playbackId}`
-              );
-              return recordingData.recording.playbackId;
-            }
-          }
-        }
-
-        // Fallback: assume it's a playbackId and return it
-        console.log(
-          `[Asset Finder] Using ${playbackIdOrAssetId} as playbackId`
-        );
-        return playbackIdOrAssetId;
-      } catch (error) {
-        console.error("[Asset Finder] Error finding asset:", error);
-        return null;
       }
-    },
-    [params.id, stream?.endedAt, stream?.livepeerStreamId]
-  );
-
-  // Fetch recording from Livepeer by stream ID when stream ends
-  // According to Livepeer docs: When a stream ends with recording enabled,
-  // Livepeer creates an Asset that can be queried by sourceStreamId
-  // The Asset has its own playbackId which is optimal for VOD playback
-  // If assetId is available, we can fetch the asset directly by ID (faster and more reliable)
-  const fetchStreamRecording = useCallback(
-    async (
-      streamId?: string,
-      livepeerStreamId?: string,
-      assetIdParam?: string
-    ) => {
-      // Allow passing streamId and livepeerStreamId directly for immediate fetching
-      const targetStreamId = streamId || stream?.livepeerStreamId;
-      const targetLivepeerStreamId =
-        livepeerStreamId || stream?.livepeerStreamId;
-      const targetAssetId = assetIdParam || stream?.assetId;
-
-      // If we have assetId, use it directly (most reliable method)
-      if (targetAssetId) {
-        console.log(
-          `[VOD] Using assetId to fetch recording directly: ${targetAssetId}`
-        );
-      } else if (!targetStreamId || !targetLivepeerStreamId) {
-        console.warn(
-          `[VOD] Cannot fetch recording - missing streamId, livepeerStreamId, or assetId`
-        );
-        return;
-      }
-
-      // Check if stream has ended (either from stream object or we're fetching for an ended stream)
-      if (stream && !stream.endedAt) {
-        console.log(`[VOD] Stream has not ended yet, skipping recording fetch`);
-        return;
-      }
-
-      setCheckingVod(true);
-      try {
-        // Build recording API URL - use assetId if available, otherwise use stream ID
-        const recordingUrl = targetAssetId
-          ? `/api/streams/${params.id}/recording?assetId=${encodeURIComponent(
-              targetAssetId
-            )}`
-          : `/api/streams/${params.id}/recording`;
-
-        console.log(
-          `[VOD] Fetching recording ${
-            targetAssetId
-              ? `by assetId ${targetAssetId}`
-              : `for stream ${targetLivepeerStreamId}`
-          }...`
-        );
-        const response = await fetch(recordingUrl);
-
-        if (response.ok) {
-          const data = await response.json();
-
-          if (data.success && data.recording) {
-            const recording = data.recording;
-            console.log(`[VOD] ✅ Recording found via ${data.source}:`, {
-              playbackId: recording.playbackId,
-              status: recording.status,
-              duration: recording.duration,
-              playbackUrl: recording.playbackUrl,
-            });
-
-            // CRITICAL: Use Asset playbackId for VOD playback (from Livepeer Assets API)
-            // Asset playbackId is required for reliable VOD playback with Livepeer Player
-            if (recording.playbackId) {
-              console.log(
-                `[VOD] ✅ Found asset playbackId: ${recording.playbackId}`
-              );
-              setAssetPlaybackId(recording.playbackId);
-              setAssetReady(true);
-              setPlaybackType("vod");
-              // Also store playbackUrl if available (for reference, but we use playbackId with Player)
-              if (recording.playbackUrl) {
-                setVodPlaybackUrl(recording.playbackUrl);
-              }
-            }
-          } else if (response.status === 202) {
-            // Asset is processing (202 Accepted)
-            console.log(
-              `[VOD] ⚠️ Recording is still processing: ${
-                data.message || data.status
-              }`
-            );
-            // Will retry on next poll
-          } else {
-            console.warn(
-              `[VOD] ⚠️ No recording available yet: ${
-                data.message || "Unknown error"
-              }`
-            );
-          }
-        } else if (response.status === 404) {
-          // Recording not found yet - this is normal, Livepeer needs time to process
-          console.log(
-            `[VOD] ⚠️ Recording not available yet (404), will retry...`
-          );
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          console.error(
-            `[VOD] Error fetching recording: ${response.status}`,
-            errorData
-          );
-        }
-      } catch (error) {
-        console.error("[VOD] Error fetching recording:", error);
-      } finally {
-        setCheckingVod(false);
-      }
-    },
-    [
-      stream?.endedAt,
-      stream?.livepeerStreamId,
-      stream?.vodUrl,
-      stream?.assetId,
-      params.id,
-    ]
-  );
+    } catch (error) {
+      console.error("Error fetching asset playback ID:", error);
+    }
+  }, [
+    stream?.endedAt,
+    stream?.assetId,
+    stream?.livepeerStreamId,
+    params.id,
+    assetPlaybackId,
+  ]);
 
   const fetchStream = useCallback(async () => {
     try {
@@ -521,59 +329,6 @@ export default function StreamPage() {
     };
   }, [params.id]);
 
-  // Check playback type to determine if VOD is ready
-  // The Player shows "offline" if playback type is still "live" after stream ends
-  const checkPlaybackType = useCallback(
-    async (playbackId: string) => {
-      if (!playbackId) return;
-
-      setIsCheckingPlaybackType(true);
-      try {
-        const response = await fetch(
-          `/api/streams/${params.id}/playback?playbackId=${playbackId}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const type = data.type || data.playbackInfo?.type;
-          const actualPlaybackId = data.playbackId || playbackId; // Use asset playbackId if returned
-
-          console.log(
-            `[Playback Type] PlaybackId ${playbackId} type: ${type}, actualPlaybackId: ${actualPlaybackId}`
-          );
-          setPlaybackType(
-            type === "vod" ? "vod" : type === "live" ? "live" : null
-          );
-
-          // If playback API returned an asset playbackId (different from original), use it
-          if (
-            actualPlaybackId &&
-            actualPlaybackId !== playbackId &&
-            !assetPlaybackId
-          ) {
-            console.log(
-              `[Playback Type] ✅ Found asset playbackId from playback API: ${actualPlaybackId}`
-            );
-            setAssetPlaybackId(actualPlaybackId);
-            setAssetReady(true);
-          }
-
-          // Playback type is set above
-        } else if (response.status === 202) {
-          // Asset is processing (202 Accepted)
-          console.log(
-            `[Playback Type] ⚠️ Asset is still processing (202 Accepted)`
-          );
-          // Don't set playbackType yet - will retry
-        }
-      } catch (error) {
-        console.error("[Playback Type] Error checking playback type:", error);
-      } finally {
-        setIsCheckingPlaybackType(false);
-      }
-    },
-    [params.id, assetPlaybackId]
-  );
-
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
     if (playerOfflineTimeoutRef.current) {
@@ -685,65 +440,12 @@ export default function StreamPage() {
     };
   }, [params.id, fetchStream, fetchChatMessages, subscribeToChat]);
 
-  // Separate effect for VOD checking to avoid circular dependencies
-  // When stream ends, IMMEDIATELY fetch recording from Livepeer by assetId (if available) or stream ID
+  // Fetch asset playback ID when stream ends
   useEffect(() => {
-    if (stream?.endedAt) {
-      // CRITICAL: Always try to fetch asset playbackId for ended streams
-      // Asset playbackId is guaranteed to be VOD-ready, while stream playbackId might still be "live" type
-      // Priority: Use assetId if available (most reliable), otherwise use stream ID
-      if (stream.assetId) {
-        console.log(
-          `📹 Stream ended - fetching recording asset by assetId: ${stream.assetId}...`
-        );
-        // Fetch immediately using assetId
-        fetchStreamRecording(undefined, undefined, stream.assetId);
-
-        // Poll for recording asset every 10 seconds until found
-        const vodCheckInterval = setInterval(() => {
-          if (!assetPlaybackId) {
-            console.log(
-              `📹 Polling for recording asset by assetId: ${stream.assetId}...`
-            );
-            fetchStreamRecording(undefined, undefined, stream.assetId);
-          } else {
-            console.log("📹 Asset playbackId found, stopping poll");
-            clearInterval(vodCheckInterval);
-          }
-        }, 10000);
-
-        return () => clearInterval(vodCheckInterval);
-      } else if (stream.livepeerStreamId) {
-        console.log(
-          "📹 Stream ended - fetching recording asset by stream ID..."
-        );
-        // Fetch immediately
-        fetchStreamRecording();
-
-        // Poll for recording asset every 10 seconds until found
-        const vodCheckInterval = setInterval(() => {
-          if (!assetPlaybackId) {
-            console.log("📹 Polling for recording asset...");
-            fetchStreamRecording();
-          } else {
-            console.log("📹 Asset playbackId found, stopping poll");
-            clearInterval(vodCheckInterval);
-          }
-        }, 10000);
-
-        return () => clearInterval(vodCheckInterval);
-      }
-
-      // Note: We don't use stream playbackId for ended streams even if it becomes "vod" type
-      // We MUST use asset playbackId for reliable VOD playback
+    if (stream?.endedAt && !assetPlaybackId) {
+      fetchAssetPlaybackId();
     }
-  }, [
-    stream?.endedAt,
-    stream?.livepeerStreamId,
-    stream?.assetId,
-    assetPlaybackId,
-    fetchStreamRecording,
-  ]);
+  }, [stream?.endedAt, assetPlaybackId, fetchAssetPlaybackId]);
 
   // Debug: log stream data when it changes
   useEffect(() => {
@@ -969,15 +671,6 @@ export default function StreamPage() {
 
       const updatedStream = await response.json();
       setStream(updatedStream);
-      if (updatedStream.livepeerPlaybackId) {
-        setAssetPlaybackId(updatedStream.livepeerPlaybackId);
-        setAssetReady(true);
-      }
-      // Refresh stream data after a short delay to ensure VOD is available
-      // The stream page will automatically show the VOD player when endedAt is set
-      setTimeout(() => {
-        fetchStream();
-      }, 3000);
     } catch (error: any) {
       console.error("Error ending stream:", error);
       alert(error?.message || "Failed to end stream");
@@ -1098,11 +791,8 @@ export default function StreamPage() {
                       )}
                     </div>
                     {stream.endedAt ? (
-                      // STREAM ENDED - Use Asset playbackId ONLY (never use stream playbackId)
-                      // Asset playbackId comes from Livepeer Assets API, not Streams API
                       assetPlaybackId ? (
                         <Player
-                          key={`vod-player-asset-${assetPlaybackId}`}
                           playbackId={assetPlaybackId}
                           autoPlay
                           muted={false}
@@ -1116,9 +806,7 @@ export default function StreamPage() {
                           <div className="text-center">
                             <p className="text-lg mb-2">Recording Processing</p>
                             <p className="text-sm text-muted-foreground">
-                              {checkingVod
-                                ? "Fetching recording asset from Livepeer..."
-                                : "Waiting for recording asset to be available. Please refresh in a few moments."}
+                              Waiting for recording asset to be available...
                             </p>
                           </div>
                         </div>
@@ -1221,11 +909,8 @@ export default function StreamPage() {
                     )}
                   </>
                 ) : stream.endedAt ? (
-                  // STREAM ENDED - Use Asset playbackId ONLY (never use stream playbackId)
-                  // Asset playbackId comes from Livepeer Assets API, not Streams API
                   assetPlaybackId ? (
                     <Player
-                      key={`vod-player-asset-fallback-${assetPlaybackId}`}
                       playbackId={assetPlaybackId}
                       autoPlay
                       muted={false}
@@ -1239,9 +924,7 @@ export default function StreamPage() {
                       <div className="text-center">
                         <p className="text-lg mb-2">Recording Processing</p>
                         <p className="text-sm text-muted-foreground">
-                          {checkingVod
-                            ? "Fetching recording asset from Livepeer..."
-                            : "Waiting for recording asset to be available. Please refresh in a few moments."}
+                          Waiting for recording asset to be available...
                         </p>
                       </div>
                     </div>
