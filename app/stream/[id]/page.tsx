@@ -908,12 +908,12 @@ export default function StreamPage() {
                     </div>
                     {stream.endedAt ? (
                       // STREAM ENDED - Show recording playback
-                      // CRITICAL: For ended streams, we MUST use asset playbackId for VOD playback
-                      // Stream playbackId will show "offline" if playback type is still "live"
-                      // Only show Player if we have asset playbackId OR playbackType is confirmed as "vod"
-                      (assetPlaybackId || (playbackType === "vod" && stream.livepeerPlaybackId)) ? (
+                      // According to Livepeer docs: Player handles VOD automatically with playbackId
+                      // We should use asset playbackId if available (better for VOD), otherwise stream playbackId
+                      // The Player component will automatically detect VOD and handle playback
+                      stream.livepeerPlaybackId || assetPlaybackId ? (
                         <>
-                          {/* Show Player when VOD is ready (asset playbackId preferred, or stream playbackId if type is "vod") */}
+                          {/* Show Player - it will automatically handle VOD playback */}
                           <Player
                             key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
                             playbackId={assetPlaybackId || stream.livepeerPlaybackId!}
@@ -935,12 +935,16 @@ export default function StreamPage() {
                             onError={(error) => {
                               console.error("Livepeer Player error for VOD:", error)
                               console.error("PlaybackId:", assetPlaybackId || stream.livepeerPlaybackId)
-                              // Player will automatically retry or fallback internally
+                              // If player errors, try fetching asset playbackId if we haven't already
+                              if (!assetPlaybackId && stream.livepeerStreamId) {
+                                console.log("Player error - attempting to fetch asset playbackId...")
+                                fetchStreamRecording()
+                              }
                             }}
                           />
                         </>
                       ) : (
-                        // Show loading state while VOD is processing
+                        // Show loading state while waiting for playbackId
                         <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                           <div className="text-center max-w-md px-6">
                             <div className="mb-4">

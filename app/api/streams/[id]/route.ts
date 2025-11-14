@@ -302,10 +302,14 @@ export async function GET(
         // Ensure isActive is a boolean
         const isActiveBool = Boolean(isActive)
         
+        // Detect if stream has ended naturally (was live, now inactive, and not already marked as ended)
+        const streamEndedNaturally = stream.isLive && !isActiveBool && !stream.endedAt
+        
         // Update stream if status changed or playbackId/streamKey/previewImage/viewerCount needs update
-        if (isActiveBool !== stream.isLive || needsPlaybackIdUpdate || needsStreamKeyUpdate || needsPreviewImage || needsViewerCountUpdate) {
+        if (isActiveBool !== stream.isLive || needsPlaybackIdUpdate || needsStreamKeyUpdate || needsPreviewImage || needsViewerCountUpdate || streamEndedNaturally) {
           console.log(`[Stream ${params.id}] Updating stream:`, {
             isLive: `${stream.isLive} -> ${isActiveBool}`,
+            endedNaturally: streamEndedNaturally,
             playbackId: needsPlaybackIdUpdate ? `missing -> ${livepeerStreamData?.playbackId}` : 'ok',
             streamKey: needsStreamKeyUpdate ? `missing -> ${livepeerStreamData?.streamKey}` : 'ok',
             previewImage: needsPreviewImage ? `missing -> ${previewImageUrl}` : 'ok',
@@ -318,6 +322,7 @@ export async function GET(
             .update(streams)
             .set({
               isLive: isActiveBool,
+              endedAt: streamEndedNaturally ? new Date() : stream.endedAt, // Mark as ended if stream ended naturally
               livepeerPlaybackId: needsPlaybackIdUpdate ? livepeerStreamData?.playbackId : stream.livepeerPlaybackId,
               livepeerStreamKey: needsStreamKeyUpdate ? livepeerStreamData?.streamKey : stream.livepeerStreamKey,
               previewImageUrl: needsPreviewImage ? previewImageUrl : stream.previewImageUrl,
