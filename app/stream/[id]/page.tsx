@@ -11,7 +11,6 @@ import { usePrivy } from "@privy-io/react-auth"
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi"
 import { supabase } from "@/lib/supabase/client"
 import Link from "next/link"
-import { HlsVideoPlayer, isHlsUrl } from "@/components/hls-video-player"
 import { ShareModal } from "@/components/share-modal"
 import {
   DropdownMenu,
@@ -35,11 +34,7 @@ export default function StreamPage() {
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [message, setMessage] = useState("")
   const [mintAmount, setMintAmount] = useState("1")
-  const [vodReady, setVodReady] = useState(false)
   const [checkingVod, setCheckingVod] = useState(false)
-  const [hlsPlaybackUrl, setHlsPlaybackUrl] = useState<string | null>(null)
-  const [mp4PlaybackUrl, setMp4PlaybackUrl] = useState<string | null>(null)
-  const [hlsError, setHlsError] = useState(false)
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null)
   const [assetReady, setAssetReady] = useState<boolean>(false)
   const [playerIsStreaming, setPlayerIsStreaming] = useState<boolean>(false)
@@ -59,39 +54,6 @@ export default function StreamPage() {
     const match = url.match(/\/hls\/([^\/]+)\/index\.m3u8/)
     return match ? match[1] : null
   }
-
-  // Verify that a playbackId is ready for VOD playback
-  const verifyPlaybackIdReady = useCallback(async (playbackId: string): Promise<boolean> => {
-    try {
-      const response = await fetch(`/api/streams/${params.id}/playback?playbackId=${playbackId}`)
-      if (response.ok) {
-        const data = await response.json()
-        // Check if playbackInfo indicates VOD is ready
-        const playbackInfo = data.playbackInfo || {}
-        const isVod = playbackInfo.type === "vod" || data.type === "vod"
-        const hasUrls = !!(data.hlsUrl || data.mp4Url || playbackInfo.hlsUrl || playbackInfo.playbackUrl)
-        
-        if (isVod && hasUrls) {
-          console.log(`✅ PlaybackId ${playbackId} is ready for VOD playback (type: ${playbackInfo.type || data.type})`)
-          return true
-        } else if (hasUrls) {
-          // Has URLs but type might not be set yet - still try it
-          console.log(`⚠️ PlaybackId ${playbackId} has URLs but type is ${playbackInfo.type || data.type || 'unknown'}. Will attempt playback.`)
-          return true
-        } else {
-          console.warn(`⚠️ PlaybackId ${playbackId} is not ready yet - no URLs available, type: ${playbackInfo.type || data.type || 'unknown'}`)
-          return false
-        }
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.warn(`⚠️ PlaybackId ${playbackId} verification failed: ${response.status} - ${errorData.error || 'Unknown error'}`)
-        return false
-      }
-    } catch (error: any) {
-      console.error(`Error verifying playbackId ${playbackId}:`, error?.message || error)
-      return false
-    }
-  }, [params.id])
 
   const fetchChatMessages = useCallback(async () => {
     const response = await fetch(`/api/chat/${params.id}`)
@@ -210,20 +172,18 @@ export default function StreamPage() {
             console.log(`[VOD] ✅ Found asset playbackId: ${recording.playbackId}`)
             setAssetPlaybackId(recording.playbackId)
             setAssetReady(true)
-            setVodReady(true)
             setPlaybackType("vod")
-            
-            // Also store playbackUrl as fallback (for HLS player if needed)
-            if (recording.playbackUrl) {
-              console.log(`[VOD] Also storing playbackUrl as fallback: ${recording.playbackUrl}`)
-              setHlsPlaybackUrl(recording.playbackUrl)
-            }
           } else if (recording.playbackUrl) {
-            // Fallback: If no playbackId, use playbackUrl with HLS player
-            console.log(`[VOD] ⚠️ No playbackId, using playbackUrl: ${recording.playbackUrl}`)
-            setHlsPlaybackUrl(recording.playbackUrl)
-            setVodReady(true)
-            setPlaybackType("vod")
+            // Try to extract playbackId from playbackUrl if it's an HLS URL
+            const extractedPlaybackId = extractPlaybackIdFromHlsUrl(recording.playbackUrl)
+            if (extractedPlaybackId) {
+              console.log(`[VOD] ✅ Extracted playbackId from playbackUrl: ${extractedPlaybackId}`)
+              setAssetPlaybackId(extractedPlaybackId)
+              setAssetReady(true)
+              setPlaybackType("vod")
+            } else {
+              console.warn(`[VOD] ⚠️ No playbackId found and cannot extract from playbackUrl: ${recording.playbackUrl}`)
+            }
           }
         } else if (response.status === 202) {
           // Asset is processing (202 Accepted)
@@ -279,7 +239,6 @@ export default function StreamPage() {
           console.log(`[Stream Fetch] ✅ Found asset playbackId from API: ${data.assetPlaybackId}`)
           setAssetPlaybackId(data.assetPlaybackId)
           setAssetReady(true)
-          setVodReady(true)
           setPlaybackType("vod")
         } else if (data.assetId) {
           console.log(`[Stream Fetch] ✅ Found assetId from API: ${data.assetId} - finding asset...`)
@@ -289,7 +248,6 @@ export default function StreamPage() {
             if (foundPlaybackId) {
               setAssetPlaybackId(foundPlaybackId)
               setAssetReady(true)
-              setVodReady(true)
               setPlaybackType("vod")
             } else {
               // Fallback to fetching recording
@@ -304,7 +262,6 @@ export default function StreamPage() {
             if (foundPlaybackId) {
               setAssetPlaybackId(foundPlaybackId)
               setAssetReady(true)
-              setVodReady(true)
               setPlaybackType("vod")
             } else {
               // Fallback to fetching recording by stream ID
@@ -498,44 +455,6 @@ export default function StreamPage() {
     }
   }, [params.id])
 
-  // Fetch playback URLs (HLS and/or MP4) from Livepeer for ended streams
-  const fetchHlsPlaybackUrl = useCallback(async (playbackId: string) => {
-    try {
-      console.log("Fetching playback URLs for playbackId:", playbackId)
-      // Fetch playback info from Livepeer API to get the actual playback URLs
-      const response = await fetch(`/api/streams/${params.id}/playback?playbackId=${playbackId}`)
-      if (response.ok) {
-        const data = await response.json()
-        console.log("Playback API response:", data)
-        let foundUrl = false
-        
-        if (data.hlsUrl) {
-          console.log("Found HLS playback URL:", data.hlsUrl)
-          setHlsPlaybackUrl(data.hlsUrl)
-          foundUrl = true
-        }
-        
-        if (data.mp4Url) {
-          console.log("Found MP4 playback URL:", data.mp4Url)
-          setMp4PlaybackUrl(data.mp4Url)
-          foundUrl = true
-        }
-        
-        if (foundUrl) {
-          setVodReady(true)
-          return true
-        } else {
-          console.warn("No HLS or MP4 URL in playback API response")
-        }
-      } else {
-        const errorText = await response.text()
-        console.error("Playback API error:", response.status, errorText)
-      }
-    } catch (error) {
-      console.error("Error fetching playback URLs:", error)
-    }
-    return false
-  }, [params.id])
 
   // Check playback type to determine if VOD is ready
   // The Player shows "offline" if playback type is still "live" after stream ends
@@ -560,10 +479,7 @@ export default function StreamPage() {
           setAssetReady(true)
         }
         
-        // If it's VOD, mark as ready
-        if (type === "vod") {
-          setVodReady(true)
-        }
+        // Playback type is set above
       } else if (response.status === 202) {
         // Asset is processing (202 Accepted)
         console.log(`[Playback Type] ⚠️ Asset is still processing (202 Accepted)`)
@@ -576,51 +492,6 @@ export default function StreamPage() {
     }
   }, [params.id, assetPlaybackId])
 
-  // Check if VOD is ready for ended streams
-  // According to Livepeer docs: Player automatically handles VOD with stream playbackId
-  // But we prefer to use the asset's playbackId if available (more reliable for VOD)
-  const checkVodAvailability = useCallback(async () => {
-    if (!stream?.endedAt || vodReady || !stream) return
-
-    // If we already have a playbackId, we can use it immediately
-    // The Player component handles VOD playback automatically
-    if (stream.livepeerPlaybackId && !assetPlaybackId) {
-      console.log("✅ Stream ended - using playbackId for VOD playback:", stream.livepeerPlaybackId)
-      setVodReady(true)
-      // Also try to fetch the asset recording for better VOD support
-      fetchStreamRecording()
-      return
-    }
-
-    // If we don't have playbackId yet, fetch updated stream data first
-    if (!stream.livepeerPlaybackId) {
-      setCheckingVod(true)
-      try {
-        const response = await fetch(`/api/streams/${params.id}`)
-        if (response.ok) {
-          const updatedStream = await response.json()
-          setStream(updatedStream)
-
-          // If we now have playbackId, mark as ready and fetch recording
-          if (updatedStream.livepeerPlaybackId) {
-            console.log("✅ Got playbackId after fetch - ready for VOD:", updatedStream.livepeerPlaybackId)
-            setVodReady(true)
-            // Fetch the recording asset for optimal VOD playback
-            if (updatedStream.livepeerStreamId) {
-              fetchStreamRecording()
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error checking VOD availability:", error)
-      } finally {
-        setCheckingVod(false)
-      }
-    } else {
-      // We have playbackId but no asset yet - fetch recording asset
-      fetchStreamRecording()
-    }
-  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, vodReady, assetPlaybackId, params.id, fetchStreamRecording])
 
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
@@ -984,13 +855,10 @@ export default function StreamPage() {
         setAssetPlaybackId(updatedStream.livepeerPlaybackId)
         setAssetReady(true)
       }
-      setVodReady(Boolean(updatedStream.vodUrl))
-      
       // Refresh stream data after a short delay to ensure VOD is available
       // The stream page will automatically show the VOD player when endedAt is set
       setTimeout(() => {
         fetchStream()
-        checkVodAvailability()
       }, 3000)
     } catch (error: any) {
       console.error("Error ending stream:", error)
@@ -1087,69 +955,85 @@ export default function StreamPage() {
                     </div>
                     {stream.endedAt ? (
                       // STREAM ENDED - Use Player with playRecording for VOD playback
-                      // CRITICAL: Only use asset playbackId for ended streams - stream playbackId causes loading issues
-                      assetPlaybackId ? (
-                        <>
-                          {/* Use Player component with playRecording prop for ended streams */}
-                          <Player
-                            key={`vod-player-${assetPlaybackId}`}
-                            playbackId={assetPlaybackId}
-                            playRecording
-                            autoPlay
-                            muted={false}
-                            showTitle={false}
-                            showPipButton={true}
-                            objectFit="contain"
-                            showUploadingIndicator={false}
-                          />
-                        </>
-                      ) : stream.vodUrl ? (
-                        // Fallback: Use HLS player if we have vodUrl but no asset playbackId
-                        isHlsUrl(stream.vodUrl) ? (
-                          <HlsVideoPlayer
-                            key={`hls-vod-${stream.vodUrl}`}
-                            src={stream.vodUrl}
-                            autoPlay={false}
-                            onError={(error) => {
-                              console.error("HLS Video player error:", error)
-                            }}
-                          />
-                        ) : (
-                          <video 
-                            key={`vod-${stream.vodUrl}`}
-                            className="w-full h-full object-contain"
-                            controls
-                            autoPlay={false}
-                            src={stream.vodUrl}
-                            onError={(e) => {
-                              console.error("Video player error:", e)
-                            }}
-                          >
-                            Your browser does not support the video tag.
-                          </video>
-                        )
-                      ) : (
-                        // Show loading state while waiting for playbackId
-                        <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                          <div className="text-center max-w-md px-6">
-                            <div className="mb-4">
-                              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
-                            </div>
-                            <p className="text-xl font-semibold mb-2">Processing Recording</p>
-                            <p className="text-sm text-muted-foreground mb-1">
-                              The recording is being processed by Livepeer...
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              This usually takes 1-2 minutes. The video will appear automatically when ready.
-                            </p>
-                            {(checkingVod || isCheckingPlaybackType) && (
-                              <p className="text-xs text-blue-400 mt-3">
-                                Checking for recording...
+                      // Try asset playbackId first, then extract from vodUrl, then use stream playbackId as last resort
+                      (() => {
+                        // Priority 1: Asset playbackId (best for VOD)
+                        if (assetPlaybackId) {
+                          return (
+                            <Player
+                              key={`vod-player-${assetPlaybackId}`}
+                              playbackId={assetPlaybackId}
+                              playRecording
+                              autoPlay
+                              muted={false}
+                              showTitle={false}
+                              showPipButton={true}
+                              objectFit="contain"
+                              showUploadingIndicator={false}
+                            />
+                          )
+                        }
+                        
+                        // Priority 2: Extract playbackId from vodUrl if available
+                        if (stream.vodUrl) {
+                          const extractedPlaybackId = extractPlaybackIdFromHlsUrl(stream.vodUrl)
+                          if (extractedPlaybackId) {
+                            return (
+                              <Player
+                                key={`vod-player-from-url-${extractedPlaybackId}`}
+                                playbackId={extractedPlaybackId}
+                                playRecording
+                                autoPlay
+                                muted={false}
+                                showTitle={false}
+                                showPipButton={true}
+                                objectFit="contain"
+                                showUploadingIndicator={false}
+                              />
+                            )
+                          }
+                        }
+                        
+                        // Priority 3: Use stream playbackId as last resort (may not work for VOD)
+                        if (stream.livepeerPlaybackId) {
+                          return (
+                            <Player
+                              key={`vod-player-stream-${stream.livepeerPlaybackId}`}
+                              playbackId={stream.livepeerPlaybackId}
+                              playRecording
+                              autoPlay
+                              muted={false}
+                              showTitle={false}
+                              showPipButton={true}
+                              objectFit="contain"
+                              showUploadingIndicator={false}
+                            />
+                          )
+                        }
+                        
+                        // No playbackId available - show loading state
+                        return (
+                          <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                            <div className="text-center max-w-md px-6">
+                              <div className="mb-4">
+                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                              </div>
+                              <p className="text-xl font-semibold mb-2">Processing Recording</p>
+                              <p className="text-sm text-muted-foreground mb-1">
+                                The recording is being processed by Livepeer...
                               </p>
-                            )}
+                              <p className="text-xs text-muted-foreground">
+                                This usually takes 1-2 minutes. The video will appear automatically when ready.
+                              </p>
+                              {(checkingVod || isCheckingPlaybackType) && (
+                                <p className="text-xs text-blue-400 mt-3">
+                                  Checking for recording...
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )
+                        )
+                      })()
                     ) : showLivePlayer ? (
                       // LIVE STREAM - Show live player
                       <>
@@ -1193,63 +1077,19 @@ export default function StreamPage() {
                           </div>
                         )}
                       </>
-                    ) : hlsPlaybackUrl ? (
-                        <>
-                          {/* Fallback to HLS player if we have HLS URL but no asset playbackId */}
-                          <HlsVideoPlayer
-                            key={`hls-playback-${hlsPlaybackUrl}`}
-                            src={hlsPlaybackUrl}
-                            autoPlay={false}
-                            onError={(error) => {
-                              console.error("HLS Video player error:", error)
-                              console.error("HLS URL:", hlsPlaybackUrl)
-                            }}
-                          />
-                        </>
-                      ) : mp4PlaybackUrl ? (
-                        <>
-                          {/* Fallback to MP4 player if we have MP4 URL but no HLS URL */}
-                          <video 
-                            key={`mp4-playback-${mp4PlaybackUrl}`}
-                            className="w-full h-full object-contain"
-                            controls
-                            autoPlay={false}
-                            src={mp4PlaybackUrl}
-                            onError={(e) => {
-                              console.error("MP4 Video player error:", e)
-                              console.error("MP4 URL:", mp4PlaybackUrl)
-                            }}
-                          >
-                            Your browser does not support the video tag.
-                          </video>
-                        </>
-                      ) : stream.vodUrl ? (
-                        // If vodUrl is HLS, use HLS player directly (more reliable than Player for VOD URLs)
-                        isHlsUrl(stream.vodUrl) ? (
-                          <HlsVideoPlayer
-                            key={`hls-vod-${stream.vodUrl}`}
-                            src={stream.vodUrl}
-                            autoPlay={false}
-                            onError={(error) => {
-                              console.error("HLS Video player error:", error)
-                            }}
-                          />
-                        ) : (
-                          // Fallback: Use HTML5 video player for direct video URLs (mp4, webm, etc.)
-                          <video 
-                            key={`vod-${stream.vodUrl}`}
-                            className="w-full h-full object-contain"
-                            controls
-                            autoPlay={false}
-                            src={stream.vodUrl}
-                            onError={(e) => {
-                              console.error("Video player error:", e)
-                            }}
-                          >
-                            Your browser does not support the video tag.
-                          </video>
-                        )
-                      ) : (
+                    ) : stream.livepeerPlaybackId ? (
+                      // SCHEDULED/NON-LIVE STREAM - Use Player component
+                      <Player
+                        key={`scheduled-${stream.livepeerPlaybackId}`}
+                        playbackId={stream.livepeerPlaybackId}
+                        autoPlay={false}
+                        muted
+                        showTitle={false}
+                        showPipButton={false}
+                        objectFit="contain"
+                        showUploadingIndicator={false}
+                      />
+                    ) : (
                         <div className="absolute inset-0 flex items-center justify-center text-white">
                           <div className="text-center">
                             <p className="text-lg mb-2">Stream offline</p>
@@ -1275,50 +1115,65 @@ export default function StreamPage() {
                   </>
                 ) : stream.endedAt ? (
                   // STREAM ENDED - Use Player with playRecording for VOD playback
-                  // CRITICAL: Only use asset playbackId for ended streams - stream playbackId causes loading issues
-                  assetPlaybackId ? (
-                    <>
-                      {/* Use Player component with playRecording prop for ended streams */}
-                      <Player
-                        key={`vod-player-fallback-${assetPlaybackId}`}
-                        playbackId={assetPlaybackId}
-                        playRecording
-                        autoPlay
-                        muted={false}
-                        showTitle={false}
-                        showPipButton={true}
-                        objectFit="contain"
-                        showUploadingIndicator={false}
-                      />
-                    </>
-                  ) : stream.vodUrl ? (
-                    // Fallback: Use HLS player if we have vodUrl but no asset playbackId
-                    isHlsUrl(stream.vodUrl) ? (
-                      <HlsVideoPlayer
-                        key={`hls-vod-fallback-${stream.vodUrl}`}
-                        src={stream.vodUrl}
-                        autoPlay={false}
-                        onError={(error) => {
-                          console.error("HLS Video player error:", error)
-                        }}
-                      />
-                    ) : (
-                      <video 
-                        key={`vod-fallback-${stream.vodUrl}`}
-                        className="w-full h-full object-contain"
-                        controls
-                        autoPlay={false}
-                        src={stream.vodUrl}
-                        onError={(e) => {
-                          console.error("Video player error:", e)
-                        }}
-                      >
-                        Your browser does not support the video tag.
-                      </video>
-                    )
-                  ) : (
-                    // Stream ended but no playbackId or vodUrl yet - show loading state while fetching asset
-                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                  // Try asset playbackId first, then extract from vodUrl, then use stream playbackId as last resort
+                  (() => {
+                    // Priority 1: Asset playbackId (best for VOD)
+                    if (assetPlaybackId) {
+                      return (
+                        <Player
+                          key={`vod-player-fallback-${assetPlaybackId}`}
+                          playbackId={assetPlaybackId}
+                          playRecording
+                          autoPlay
+                          muted={false}
+                          showTitle={false}
+                          showPipButton={true}
+                          objectFit="contain"
+                          showUploadingIndicator={false}
+                        />
+                      )
+                    }
+                    
+                    // Priority 2: Extract playbackId from vodUrl if available
+                    if (stream.vodUrl) {
+                      const extractedPlaybackId = extractPlaybackIdFromHlsUrl(stream.vodUrl)
+                      if (extractedPlaybackId) {
+                        return (
+                          <Player
+                            key={`vod-player-from-url-fallback-${extractedPlaybackId}`}
+                            playbackId={extractedPlaybackId}
+                            playRecording
+                            autoPlay
+                            muted={false}
+                            showTitle={false}
+                            showPipButton={true}
+                            objectFit="contain"
+                            showUploadingIndicator={false}
+                          />
+                        )
+                      }
+                    }
+                    
+                    // Priority 3: Use stream playbackId as last resort (may not work for VOD)
+                    if (stream.livepeerPlaybackId) {
+                      return (
+                        <Player
+                          key={`vod-player-stream-fallback-${stream.livepeerPlaybackId}`}
+                          playbackId={stream.livepeerPlaybackId}
+                          playRecording
+                          autoPlay
+                          muted={false}
+                          showTitle={false}
+                          showPipButton={true}
+                          objectFit="contain"
+                          showUploadingIndicator={false}
+                        />
+                      )
+                    }
+                    
+                    // No playbackId available - show loading state
+                    return (
+                      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                       <div className="text-center max-w-md px-6">
                         <div className="mb-4">
                           <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
@@ -1341,32 +1196,8 @@ export default function StreamPage() {
                         )}
                       </div>
                     </div>
-                  )
-                ) : stream.endedAt ? (
-                  // This should not happen due to the condition above, but keep as fallback
-                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                    <div className="text-center max-w-md px-6">
-                      <div className="mb-4">
-                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
-                      </div>
-                      <p className="text-xl font-semibold mb-2">Loading Recording</p>
-                      <p className="text-sm text-muted-foreground mb-1">
-                        {stream.assetId 
-                          ? `Fetching recording by asset ID: ${stream.assetId}...`
-                          : stream.livepeerStreamId
-                          ? `Fetching recording for stream: ${stream.livepeerStreamId}...`
-                          : "The recording is being processed by Livepeer..."}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        This usually takes 1-2 minutes. The video will appear automatically when ready.
-                      </p>
-                      {(checkingVod || isCheckingPlaybackType) && (
-                        <p className="text-xs text-blue-400 mt-3">
-                          Checking for recording...
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                    )
+                  })()
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
                     <div className="text-center">
