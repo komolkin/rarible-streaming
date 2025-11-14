@@ -642,9 +642,20 @@ export async function getStreamAsset(streamId: string) {
 
   try {
     // First, try to get assets filtered by source stream ID
-    const assets = await listAssets(streamId)
+    const allAssets = await listAssets(streamId)
     
-    console.log(`Found ${assets?.length || 0} assets for stream ${streamId}`)
+    // CRITICAL: Filter assets to ensure they actually belong to this stream
+    // The API might return assets from other streams, so we need to verify sourceStreamId matches
+    const assets = allAssets?.filter((asset: any) => {
+      const assetSourceStreamId = asset.sourceStreamId || asset.source?.streamId
+      const matches = assetSourceStreamId === streamId
+      if (!matches) {
+        console.warn(`Skipping asset ${asset.id} - sourceStreamId mismatch: expected ${streamId}, got ${assetSourceStreamId}`)
+      }
+      return matches
+    }) || []
+    
+    console.log(`Found ${assets.length} assets for stream ${streamId} (filtered from ${allAssets?.length || 0} total assets)`)
     
     if (assets && assets.length > 0) {
       // Sort assets by creation date (newest first) to get the most recent recording
@@ -660,12 +671,12 @@ export async function getStreamAsset(streamId: string) {
       
       // Log all assets for debugging
       sortedAssets.forEach((asset: any, index: number) => {
-        console.log(`Asset ${index + 1}:`, {
+        console.log(`Asset ${index + 1} (for stream ${streamId}):`, {
           id: asset.id,
           status: asset.status,
           playbackId: asset.playbackId,
           playbackUrl: asset.playbackUrl,
-          sourceStreamId: asset.sourceStreamId,
+          sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
           createdAt: asset.createdAt || asset.createdTimestamp || asset.created,
         })
       })
@@ -677,14 +688,14 @@ export async function getStreamAsset(streamId: string) {
       )
       
       if (readyAsset) {
-        console.log(`Found ready asset with playbackId (most recent): ${readyAsset.playbackId}`)
+        console.log(`Found ready asset with playbackId (most recent) for stream ${streamId}: ${readyAsset.playbackId}`)
         return readyAsset
       }
       
       // Fallback: find asset with playbackId even if status is not "ready" (from most recent)
       const assetWithPlaybackId = sortedAssets.find((asset: any) => asset.playbackId)
       if (assetWithPlaybackId) {
-        console.log(`Found asset with playbackId (status: ${assetWithPlaybackId.status}, most recent): ${assetWithPlaybackId.playbackId}`)
+        console.log(`Found asset with playbackId (status: ${assetWithPlaybackId.status}, most recent) for stream ${streamId}: ${assetWithPlaybackId.playbackId}`)
         return assetWithPlaybackId
       }
       
@@ -694,12 +705,12 @@ export async function getStreamAsset(streamId: string) {
       )
       
       if (assetWithPlaybackUrl) {
-        console.log(`Found asset with playbackUrl (most recent): ${assetWithPlaybackUrl.playbackUrl}`)
+        console.log(`Found asset with playbackUrl (most recent) for stream ${streamId}: ${assetWithPlaybackUrl.playbackUrl}`)
         return assetWithPlaybackUrl
       }
       
       // If no ready asset, return the most recent one (might still be processing)
-      console.log(`Using most recent asset (may still be processing): ${sortedAssets[0].id}`)
+      console.log(`Using most recent asset (may still be processing) for stream ${streamId}: ${sortedAssets[0].id}`)
       return sortedAssets[0]
     }
 
