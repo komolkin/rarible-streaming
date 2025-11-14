@@ -986,7 +986,7 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {stream.livepeerPlaybackId ? (
+                {(stream.livepeerPlaybackId || (stream.endedAt && (assetPlaybackId || stream.assetId || stream.livepeerStreamId))) ? (
                   <>
                     <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs z-20">
                       {stream.isLive ? (
@@ -996,7 +996,7 @@ export default function StreamPage() {
                         </>
                       ) : stream.endedAt ? (
                         <>
-                          Recording • Playback ID: {stream.livepeerPlaybackId}
+                          Recording {assetPlaybackId ? `• Asset Playback ID: ${assetPlaybackId}` : stream.livepeerPlaybackId ? `• Playback ID: ${stream.livepeerPlaybackId}` : stream.assetId ? `• Asset ID: ${stream.assetId}` : ''}
                         </>
                       ) : (
                         <>Playback ID: {stream.livepeerPlaybackId}</>
@@ -1252,11 +1252,87 @@ export default function StreamPage() {
                       )
                     }
                   </>
-                ) : stream.endedAt && stream.vodUrl ? (
-                  // Handle ended streams without playbackId but with vodUrl
-                  // If vodUrl is HLS and we can extract asset playbackId, use Livepeer Player (preferred for VOD)
-                  // CRITICAL: Only use Livepeer Player if asset is verified ready to prevent format errors
-                  isHlsUrl(stream.vodUrl) && (assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)) && assetReady ? (
+                ) : stream.endedAt ? (
+                  // STREAM ENDED - Handle ended streams (with or without playbackId)
+                  // Priority: 1) Asset playbackId (best for VOD), 2) Stream playbackId, 3) vodUrl, 4) Loading state
+                  assetPlaybackId ? (
+                    <>
+                      {/* Use Player with asset playbackId - this is optimal for VOD */}
+                      <Player
+                        key={`vod-asset-${assetPlaybackId}`}
+                        playbackId={assetPlaybackId}
+                        autoPlay={false}
+                        muted={false}
+                        showTitle={false}
+                        showPipButton={true}
+                        showUploadingIndicator={false}
+                        objectFit="contain"
+                        lowLatency={false}
+                        theme={{
+                          borderStyles: {
+                            containerBorderStyle: "solid",
+                          },
+                          colors: {
+                            accent: "#00a55f",
+                          },
+                        }}
+                        onError={(error) => {
+                          console.error("Livepeer Player error for VOD:", error)
+                          console.error("Asset playbackId:", assetPlaybackId)
+                          // Try fetching asset again if error
+                          if (stream.assetId || stream.livepeerStreamId) {
+                            console.log("Player error - attempting to refetch asset...")
+                            fetchStreamRecording(undefined, undefined, stream.assetId)
+                          }
+                        }}
+                      />
+                    </>
+                  ) : stream.livepeerPlaybackId ? (
+                    <>
+                      {/* Fallback: Use Player with stream playbackId - Player handles VOD automatically */}
+                      <Player
+                        key={`vod-stream-${stream.livepeerPlaybackId}`}
+                        playbackId={stream.livepeerPlaybackId}
+                        autoPlay={false}
+                        muted={false}
+                        showTitle={false}
+                        showPipButton={true}
+                        showUploadingIndicator={false}
+                        objectFit="contain"
+                        lowLatency={false}
+                        theme={{
+                          borderStyles: {
+                            containerBorderStyle: "solid",
+                          },
+                          colors: {
+                            accent: "#00a55f",
+                          },
+                        }}
+                        onError={(error) => {
+                          console.error("Livepeer Player error for VOD:", error)
+                          console.error("Stream playbackId:", stream.livepeerPlaybackId)
+                          // Try fetching asset if error
+                          if (stream.assetId || stream.livepeerStreamId) {
+                            console.log("Player error - attempting to fetch asset...")
+                            fetchStreamRecording(undefined, undefined, stream.assetId)
+                          }
+                        }}
+                      />
+                      {/* Show message that we're fetching the asset */}
+                      {checkingVod && (
+                        <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-xs z-20">
+                          <div className="flex items-center gap-2">
+                            <div className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                            <span>Fetching recording playback...</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : stream.vodUrl ? (
+                    // Handle ended streams without playbackId but with vodUrl
+                    // If vodUrl is HLS and we can extract asset playbackId, use Livepeer Player (preferred for VOD)
+                    // CRITICAL: Only use Livepeer Player if asset is verified ready to prevent format errors
+                    isHlsUrl(stream.vodUrl) && (assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)) && assetReady ? (
                     <Player
                       key={`vod-asset-no-playback-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}`}
                       playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)!}
@@ -1306,14 +1382,76 @@ export default function StreamPage() {
                       Your browser does not support the video tag.
                     </video>
                   )
+                  ) : (
+                    // Stream ended but no playbackId or vodUrl yet - show loading state while fetching asset
+                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                      <div className="text-center max-w-md px-6">
+                        <div className="mb-4">
+                          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                        </div>
+                        <p className="text-xl font-semibold mb-2">Loading Recording</p>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          {stream.assetId 
+                            ? `Fetching recording by asset ID: ${stream.assetId}...`
+                            : stream.livepeerStreamId
+                            ? `Fetching recording for stream: ${stream.livepeerStreamId}...`
+                            : "The recording is being processed by Livepeer..."}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          This usually takes 1-2 minutes. The video will appear automatically when ready.
+                        </p>
+                        {(checkingVod || isCheckingPlaybackType) && (
+                          <p className="text-xs text-blue-400 mt-3">
+                            Checking for recording...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                ) : stream.endedAt ? (
+                  // This should not happen due to the condition above, but keep as fallback
+                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                    <div className="text-center max-w-md px-6">
+                      <div className="mb-4">
+                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                      </div>
+                      <p className="text-xl font-semibold mb-2">Loading Recording</p>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {stream.assetId 
+                          ? `Fetching recording by asset ID: ${stream.assetId}...`
+                          : stream.livepeerStreamId
+                          ? `Fetching recording for stream: ${stream.livepeerStreamId}...`
+                          : "The recording is being processed by Livepeer..."}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        This usually takes 1-2 minutes. The video will appear automatically when ready.
+                      </p>
+                      {(checkingVod || isCheckingPlaybackType) && (
+                        <p className="text-xs text-blue-400 mt-3">
+                          Checking for recording...
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
                     <div className="text-center">
-                      <p className="text-lg mb-2">No playback ID available</p>
-                      <p className="text-sm text-muted-foreground">Stream ID: {stream.livepeerStreamId || "N/A"}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        The playback ID will be fetched automatically. Refresh in a few seconds.
-                      </p>
+                      <p className="text-lg mb-2">Stream offline</p>
+                      {stream.livepeerStreamKey ? (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Make sure OBS is connected with the settings below:
+                          </p>
+                          <div className="text-xs text-left space-y-2 font-mono bg-black/40 p-3 rounded">
+                            <div>Server: rtmp://ingest.livepeer.studio/live</div>
+                            <div>Stream Key: {stream.livepeerStreamKey}</div>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Waiting for the creator to start streaming...
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
