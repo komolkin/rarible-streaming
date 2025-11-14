@@ -237,6 +237,7 @@ export async function GET(
         } else if (assetPlaybackId) {
           // Even if vodUrl didn't change, return asset playbackId if we found it
           // This helps the frontend use the correct playbackId for VOD
+          console.log(`[GET Stream ${params.id}] ✅ Returning asset playbackId even though vodUrl didn't change: ${assetPlaybackId}`)
           return NextResponse.json({
             ...stream,
             category: category,
@@ -247,6 +248,9 @@ export async function GET(
           console.warn(`[GET Stream ${params.id}] ⚠️ No recording found via any method. Stream may need more time to process.`)
           console.warn(`[GET Stream ${params.id}] Livepeer Stream ID: ${stream.livepeerStreamId}`)
           console.warn(`[GET Stream ${params.id}] This is normal - recordings can take a few minutes to appear after stream ends.`)
+        } else {
+          // vodUrl exists but no assetPlaybackId was found - try to fetch it
+          console.log(`[GET Stream ${params.id}] vodUrl exists but assetPlaybackId not found. Will try to fetch asset playbackId at end of function.`)
         }
       } catch (error: any) {
         console.error(`[GET Stream ${params.id}] Error fetching asset for ended stream:`, error?.message || error)
@@ -456,16 +460,46 @@ export async function GET(
 
     // Return stream with category
     // For ended streams, try to include asset playbackId if available
+    // CRITICAL: Always try to fetch asset playbackId for ended streams, even if vodUrl already exists
+    // This ensures the frontend gets the correct asset playbackId for VOD playback
     let responseAssetPlaybackId = null
     if (isManuallyEnded && stream.livepeerStreamId) {
       try {
         const { getStreamAsset } = await import("@/lib/livepeer")
+        console.log(`[GET Stream ${params.id}] Fetching asset playbackId for ended stream: ${stream.livepeerStreamId}`)
         const asset = await getStreamAsset(stream.livepeerStreamId)
-        if (asset?.playbackId && asset.status === "ready") {
+        if (asset?.playbackId) {
+          if (asset.status === "ready") {
+            responseAssetPlaybackId = asset.playbackId
+            console.log(`[GET Stream ${params.id}] ✅ Found ready asset playbackId: ${asset.playbackId}`)
+          } else {
+            console.warn(`[GET Stream ${params.id}] ⚠️ Asset found but not ready (status: ${asset.status}). PlaybackId: ${asset.playbackId}`)
+            // Still return the playbackId even if not ready - frontend can check status
+            responseAssetPlaybackId = asset.playbackId
+          }
+        } else {
+          console.warn(`[GET Stream ${params.id}] ⚠️ Asset found but has no playbackId. Asset ID: ${asset?.id}, Status: ${asset?.status}`)
+        }
+      } catch (error: any) {
+        console.error(`[GET Stream ${params.id}] ❌ Error fetching asset playbackId:`, error?.message || error)
+        // Don't silently fail - log the error so we can debug
+        // Frontend will try to fetch it, but we should still try
+      }
+    }
+    
+    // Also check if assetPlaybackId was already set earlier in the function (from lines 115-197)
+    // This happens when vodUrl is updated, but we should return it even if vodUrl didn't change
+    if (!responseAssetPlaybackId && isManuallyEnded && stream.livepeerStreamId) {
+      // Try one more time with a quick lookup
+      try {
+        const { getStreamAsset } = await import("@/lib/livepeer")
+        const asset = await getStreamAsset(stream.livepeerStreamId)
+        if (asset?.playbackId) {
           responseAssetPlaybackId = asset.playbackId
+          console.log(`[GET Stream ${params.id}] ✅ Found asset playbackId on second attempt: ${asset.playbackId}`)
         }
       } catch (error) {
-        // Silently fail - asset will be fetched by frontend
+        // Ignore - we've already tried
       }
     }
     
