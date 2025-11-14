@@ -192,7 +192,7 @@ export default function StreamPage() {
   }, [params.id, authenticated, user?.wallet?.address])
 
   const fetchLiveViewerCount = useCallback(async () => {
-    if (!stream?.livepeerPlaybackId) {
+    if (!stream?.livepeerPlaybackId || !stream) {
       console.log("[Viewer Count] No playbackId available yet")
       return
     }
@@ -322,10 +322,10 @@ export default function StreamPage() {
 
   // Check if VOD is ready for ended streams
   const checkVodAvailability = useCallback(async () => {
-    if (!stream?.endedAt || vodReady) return
+    if (!stream?.endedAt || vodReady || !stream) return
     
       // If we already have vodUrl, no need to check
-      if (stream.vodUrl) {
+      if (stream?.vodUrl) {
         setVodReady(true)
         // Check if vodUrl is HLS, extract playbackId and use it
         if (isHlsUrl(stream.vodUrl)) {
@@ -343,7 +343,7 @@ export default function StreamPage() {
     
     // For ended streams, try to use stream playbackId directly (like lvpr.tv does)
     // Livepeer Player can handle VOD playback with stream playbackId
-    if (stream.livepeerPlaybackId && !assetPlaybackId) {
+    if (stream?.livepeerPlaybackId && !assetPlaybackId) {
       console.log("✅ Using stream playbackId directly for VOD:", stream.livepeerPlaybackId)
       setAssetPlaybackId(stream.livepeerPlaybackId)
       setAssetReady(true)
@@ -787,7 +787,7 @@ export default function StreamPage() {
   // Use useMemo to prevent unnecessary recalculations (must be before early returns)
   const showLivePlayer = useMemo(() => !!stream?.livepeerPlaybackId && !stream?.endedAt, [stream?.livepeerPlaybackId, stream?.endedAt])
   const showOfflineOverlay = useMemo(() => showLivePlayer && !stream?.isLive && !playerIsStreaming, [showLivePlayer, stream?.isLive, playerIsStreaming])
-  const effectiveViewerCount = liveViewerCount ?? stream.viewerCount ?? 0
+  const effectiveViewerCount = liveViewerCount ?? stream?.viewerCount ?? 0
 
   if (pageError) {
     return (
