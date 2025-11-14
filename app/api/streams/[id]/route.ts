@@ -454,14 +454,19 @@ export async function DELETE(
     // Related chat messages and likes will be deleted automatically via CASCADE
     if (body.permanent === true) {
       try {
-        // Delete dependent data first to satisfy foreign key constraints
-        await db.delete(chatMessages).where(eq(chatMessages.streamId, params.id))
-        await db.delete(streamLikes).where(eq(streamLikes.streamId, params.id))
-        await db.delete(streams).where(eq(streams.id, params.id))
+        await db.transaction(async (tx) => {
+          // Delete related records first to avoid foreign key violations.
+          await Promise.all([
+            tx.delete(chatMessages).where(eq(chatMessages.streamId, stream.id)),
+            tx.delete(streamLikes).where(eq(streamLikes.streamId, stream.id)),
+          ])
+          await tx.delete(streams).where(eq(streams.id, stream.id))
+        })
         return NextResponse.json({ message: "Stream deleted successfully" })
-      } catch (error) {
+      } catch (error: any) {
         console.error(`[DELETE Stream ${params.id}] Failed to permanently delete stream:`, error)
-        return NextResponse.json({ error: "Failed to delete stream permanently" }, { status: 500 })
+        const errorMessage = error?.message || "Failed to delete stream permanently"
+        return NextResponse.json({ error: errorMessage }, { status: 500 })
       }
     }
 
