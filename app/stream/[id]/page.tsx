@@ -524,23 +524,34 @@ export default function StreamPage() {
   }, [params.id, fetchStream, fetchChatMessages, subscribeToChat])
   
   // Separate effect for VOD checking to avoid circular dependencies
-  // When stream ends, fetch recording from Livepeer by stream ID
+  // When stream ends, IMMEDIATELY fetch recording from Livepeer by stream ID
   useEffect(() => {
-    if (stream?.endedAt && !vodReady) {
-      // Immediately check VOD availability and fetch recording
-      checkVodAvailability()
+    if (stream?.endedAt) {
+      // CRITICAL: When stream ends, immediately mark as ready if we have playbackId
+      // The Player component handles VOD automatically with stream playbackId
+      if (stream.livepeerPlaybackId && !vodReady) {
+        console.log("✅ Stream ended - marking VOD as ready with playbackId:", stream.livepeerPlaybackId)
+        setVodReady(true)
+      }
       
-      // Poll for recording every 10 seconds until found
-      const vodCheckInterval = setInterval(() => {
-        checkVodAvailability()
-      }, 10000)
-      
-      return () => clearInterval(vodCheckInterval)
-    } else if (stream?.endedAt && stream?.vodUrl) {
-      // If vodUrl already exists, mark as ready
-      setVodReady(true)
+      // Also fetch the recording asset for optimal VOD playback (upgrades to asset playbackId)
+      if (stream.livepeerStreamId && !assetPlaybackId) {
+        console.log("📹 Fetching recording asset for optimal VOD playback...")
+        fetchStreamRecording()
+        
+        // Poll for recording asset every 10 seconds until found
+        const vodCheckInterval = setInterval(() => {
+          if (!assetPlaybackId) {
+            fetchStreamRecording()
+          } else {
+            clearInterval(vodCheckInterval)
+          }
+        }, 10000)
+        
+        return () => clearInterval(vodCheckInterval)
+      }
     }
-  }, [stream?.endedAt, stream?.vodUrl, vodReady, checkVodAvailability])
+  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, vodReady, assetPlaybackId, fetchStreamRecording])
 
   // Debug: log stream data when it changes
   useEffect(() => {
@@ -847,7 +858,45 @@ export default function StreamPage() {
                         <>Playback ID: {stream.livepeerPlaybackId}</>
                       )}
                     </div>
-                    {!stream.endedAt && showLivePlayer ? (
+                    {stream.endedAt ? (
+                      // STREAM ENDED - Always show recording playback immediately
+                      // According to Livepeer docs: Player handles VOD with stream playbackId automatically
+                      // We show Player immediately with stream playbackId, then upgrade to asset playbackId when available
+                      <>
+                        {/* CRITICAL: Always show Player for ended streams - it handles VOD automatically */}
+                        <Player
+                          key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
+                          playbackId={assetPlaybackId || stream.livepeerPlaybackId}
+                          autoPlay={false}
+                          muted={false}
+                          showTitle={false}
+                          showPipButton={true}
+                          showUploadingIndicator={checkingVod}
+                          objectFit="contain"
+                          lowLatency={false}
+                          theme={{
+                            borderStyles: {
+                              containerBorderStyle: "solid",
+                            },
+                            colors: {
+                              accent: "#00a55f",
+                            },
+                          }}
+                          onError={(error) => {
+                            console.error("Livepeer Player error for VOD:", error)
+                            console.error("PlaybackId:", assetPlaybackId || stream.livepeerPlaybackId)
+                            // Player will automatically retry or fallback internally
+                          }}
+                        />
+                        {checkingVod && (
+                          <div className="absolute top-4 right-4 bg-blue-500 text-white px-3 py-2 rounded text-sm z-10">
+                            <div className="font-semibold">Loading recording...</div>
+                            <div className="text-xs mt-1">Fetching from Livepeer</div>
+                          </div>
+                        )}
+                      </>
+                    ) : showLivePlayer ? (
+                      // LIVE STREAM - Show live player
                       <>
                         <Player
                           key={`live-${stream.livepeerPlaybackId}`}
@@ -889,60 +938,7 @@ export default function StreamPage() {
                           </div>
                         )}
                       </>
-                    ) : !stream.endedAt ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-white">
-                        <div className="text-center max-w-md bg-black/70 px-5 py-4 rounded">
-                          <p className="text-lg font-semibold mb-2">Stream offline</p>
-                          {stream.livepeerStreamKey ? (
-                            <>
-                              <p className="text-sm text-muted-foreground mb-3">
-                                Make sure OBS is connected with the settings below:
-                              </p>
-                              <div className="text-xs text-left space-y-2 font-mono bg-black/40 p-3 rounded">
-                                <div>Server: rtmp://ingest.livepeer.studio/live</div>
-                                <div>Stream Key: {stream.livepeerStreamKey}</div>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              Waiting for the creator to start streaming...
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ) : stream.endedAt ? (
-                      // For ended streams, use Livepeer Player with playbackId
-                      // Priority: 1) Asset playbackId (from recording API - most reliable for VOD)
-                      //          2) Stream playbackId (works but asset playbackId is preferred)
-                      (assetPlaybackId || stream.livepeerPlaybackId) ? (
-                        <>
-                          {/* Use Livepeer Player with asset playbackId (preferred) or stream playbackId */}
-                          <Player
-                            key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
-                            playbackId={assetPlaybackId || stream.livepeerPlaybackId!}
-                            autoPlay={false}
-                            muted={false}
-                            showTitle={false}
-                            showPipButton={true}
-                            showUploadingIndicator={false}
-                            objectFit="contain"
-                            lowLatency={false}
-                            theme={{
-                              borderStyles: {
-                                containerBorderStyle: "solid",
-                              },
-                              colors: {
-                                accent: "#00a55f",
-                              },
-                            }}
-                            onError={(error) => {
-                              console.error("Livepeer Player error for VOD:", error)
-                              console.error("PlaybackId:", assetPlaybackId || stream.livepeerPlaybackId)
-                              // Player will automatically retry or fallback internally
-                            }}
-                          />
-                        </>
-                      ) : hlsPlaybackUrl ? (
+                    ) : hlsPlaybackUrl ? (
                         <>
                           {/* Fallback to HLS player if we have HLS URL but no asset playbackId */}
                           <HlsVideoPlayer
@@ -1028,25 +1024,26 @@ export default function StreamPage() {
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center text-white">
                           <div className="text-center">
-                            <p className="text-lg mb-2">Stream has ended</p>
-                            {checkingVod ? (
+                            <p className="text-lg mb-2">Stream offline</p>
+                            {stream.livepeerStreamKey ? (
                               <>
-                                <p className="text-sm text-muted-foreground mt-2">
-                                  Recording is being processed...
+                                <p className="text-sm text-muted-foreground mb-3">
+                                  Make sure OBS is connected with the settings below:
                                 </p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  This may take a few minutes
-                                </p>
+                                <div className="text-xs text-left space-y-2 font-mono bg-black/40 p-3 rounded">
+                                  <div>Server: rtmp://ingest.livepeer.studio/live</div>
+                                  <div>Stream Key: {stream.livepeerStreamKey}</div>
+                                </div>
                               </>
                             ) : (
-                              <p className="text-sm text-muted-foreground mt-2">
-                                Recording is being processed. Please check back later.
+                              <p className="text-sm text-muted-foreground">
+                                Waiting for the creator to start streaming...
                               </p>
                             )}
                           </div>
                         </div>
                       )
-                    ) : null}
+                    }
                   </>
                 ) : stream.endedAt && stream.vodUrl ? (
                   // Handle ended streams without playbackId but with vodUrl
