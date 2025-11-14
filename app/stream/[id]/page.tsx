@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { Player } from "@livepeer/react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -187,20 +187,29 @@ export default function StreamPage() {
   }, [params.id, authenticated, user?.wallet?.address])
 
   const fetchLiveViewerCount = useCallback(async () => {
-    if (!stream?.livepeerPlaybackId) return
+    if (!stream?.livepeerPlaybackId) {
+      console.log("[Viewer Count] No playbackId available yet")
+      return
+    }
     try {
+      console.log(`[Viewer Count] Fetching from /api/streams/${params.id}/viewers for playbackId: ${stream.livepeerPlaybackId}`)
       const response = await fetch(`/api/streams/${params.id}/viewers`)
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error(`[Viewer Count] API error ${response.status}:`, errorData)
         throw new Error(errorData.error || `Viewer API error ${response.status}`)
       }
       const data = await response.json()
+      console.log("[Viewer Count] API response:", data)
       if (typeof data.viewerCount === "number") {
+        console.log(`[Viewer Count] Setting viewer count to ${data.viewerCount}`)
         setLiveViewerCount(data.viewerCount)
         setViewerCountError(null)
+      } else {
+        console.warn("[Viewer Count] No viewerCount in response:", data)
       }
     } catch (error: any) {
-      console.warn("Failed to fetch live viewer count:", error?.message || error)
+      console.error("[Viewer Count] Failed to fetch:", error?.message || error)
       setViewerCountError(error?.message || "Viewer count unavailable")
     }
   }, [params.id, stream?.livepeerPlaybackId])
@@ -417,6 +426,7 @@ export default function StreamPage() {
   ])
 
   const handlePlaybackStatusUpdate = useCallback((status: any) => {
+    // Extract viewer count from Livepeer's player status
     const viewerCount =
       typeof status?.viewerCount === "number"
         ? status.viewerCount
@@ -425,9 +435,26 @@ export default function StreamPage() {
           : undefined
 
     if (typeof viewerCount === "number") {
+      console.log(`[Viewer Count] Player reports ${viewerCount} viewers`)
       setLiveViewerCount(viewerCount)
       setViewerCountError(null)
       setHasRealtimeViewerData(true)
+    }
+  }, [])
+  
+  const handleStreamStatusChange = useCallback((isLive: boolean) => {
+    if (playerOfflineTimeoutRef.current) {
+      clearTimeout(playerOfflineTimeoutRef.current)
+      playerOfflineTimeoutRef.current = null
+    }
+    if (isLive) {
+      setPlayerIsStreaming(true)
+    } else {
+      playerOfflineTimeoutRef.current = setTimeout(() => {
+        if (!streamLiveStatusRef.current) {
+          setPlayerIsStreaming(false)
+        }
+      }, 10000)
     }
   }, [])
 
@@ -438,10 +465,10 @@ export default function StreamPage() {
     // Set up real-time subscription for chat
     const cleanup = subscribeToChat()
     
-    // Poll for stream status updates every 5 seconds
+    // Poll for stream status updates every 10 seconds (reduced from 5s to minimize re-renders)
     const interval = setInterval(() => {
       fetchStream()
-    }, 5000)
+    }, 10000)
     
     // For ended streams without vodUrl, check VOD availability more aggressively
     let vodCheckInterval: NodeJS.Timeout | null = null
@@ -755,8 +782,10 @@ export default function StreamPage() {
     )
   }
 
-  const showLivePlayer = !!stream?.livepeerPlaybackId && !stream?.endedAt
-  const showOfflineOverlay = showLivePlayer && !stream?.isLive && !playerIsStreaming
+  // Show live player if we have a playbackId and stream hasn't ended
+  // Use useMemo to prevent unnecessary recalculations
+  const showLivePlayer = useMemo(() => !!stream?.livepeerPlaybackId && !stream?.endedAt, [stream?.livepeerPlaybackId, stream?.endedAt])
+  const showOfflineOverlay = useMemo(() => showLivePlayer && !stream?.isLive && !playerIsStreaming, [showLivePlayer, stream?.isLive, playerIsStreaming])
   const effectiveViewerCount = liveViewerCount ?? stream.viewerCount ?? 0
 
   return (
@@ -786,7 +815,7 @@ export default function StreamPage() {
                     {!stream.endedAt && showLivePlayer ? (
                       <>
                         <Player
-                          key={stream.livepeerPlaybackId}
+                          key={`live-${stream.livepeerPlaybackId}`}
                           playbackId={stream.livepeerPlaybackId}
                           autoPlay
                           muted
@@ -795,39 +824,8 @@ export default function StreamPage() {
                           objectFit="contain"
                           priority
                           showUploadingIndicator={false}
-                          onError={(error) => {
-                            console.error("Player error:", error)
-                            console.error("Error details:", {
-                              playbackId: stream.livepeerPlaybackId,
-                              streamId: stream.livepeerStreamId,
-                              isLive: stream.isLive,
-                              error: error
-                            })
-                          }}
                           onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-                          onStreamStatusChange={(isLive: boolean) => {
-                            console.log("🎥 Player stream status:", isLive, {
-                              playbackId: stream.livepeerPlaybackId,
-                              isLive: stream.isLive,
-                              playerIsLive: isLive
-                            })
-                            if (playerOfflineTimeoutRef.current) {
-                              clearTimeout(playerOfflineTimeoutRef.current)
-                              playerOfflineTimeoutRef.current = null
-                            }
-                            if (isLive) {
-                              console.log("✅ Stream is live in Player!")
-                              setPlayerIsStreaming(true)
-                            } else {
-                              console.log("⏳ Player shows offline - OBS may not be connected")
-                              console.log("💡 Check OBS is streaming to:", `rtmp://ingest.livepeer.studio/live/${stream.livepeerStreamKey}`)
-                              playerOfflineTimeoutRef.current = setTimeout(() => {
-                                if (!streamLiveStatusRef.current) {
-                                  setPlayerIsStreaming(false)
-                                }
-                              }, 10000)
-                            }
-                          }}
+                          onStreamStatusChange={handleStreamStatusChange}
                         />
                         {showOfflineOverlay && (
                           <div className="absolute top-4 right-4 bg-yellow-500 text-black px-3 py-1 rounded text-sm font-semibold z-10 max-w-xs">
