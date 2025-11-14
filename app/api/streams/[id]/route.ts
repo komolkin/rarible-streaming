@@ -27,25 +27,27 @@ export async function GET(
     const isManuallyEnded = !!stream.endedAt
 
     // For ended streams without vodUrl, try to fetch asset from Livepeer
-    if (isManuallyEnded && stream.livepeerStreamId && !stream.vodUrl) {
+    // Also check if vodUrl exists but asset might need updating (e.g., asset became ready)
+    if (isManuallyEnded && stream.livepeerStreamId) {
       try {
         const { getStreamAsset, getThumbnailUrl } = await import("@/lib/livepeer")
         
-        console.log(`Fetching asset for ended stream: ${stream.livepeerStreamId}`)
+        console.log(`[GET Stream ${params.id}] Fetching asset for ended stream: ${stream.livepeerStreamId}`)
         
         const asset = await getStreamAsset(stream.livepeerStreamId)
         
         if (asset) {
-          let vodUrl = null
+          let vodUrl = stream.vodUrl || null // Preserve existing vodUrl if set
           // Preserve user-uploaded cover image - only generate thumbnail if none exists
           let previewImageUrl = stream.previewImageUrl || null
           
-          console.log(`Asset details:`, {
+          console.log(`[GET Stream ${params.id}] Asset details:`, {
             id: asset.id,
             status: asset.status,
             playbackId: asset.playbackId,
             playbackUrl: asset.playbackUrl,
-            sourceStreamId: asset.sourceStreamId
+            sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
+            hasExistingVodUrl: !!stream.vodUrl
           })
           
           // CRITICAL: Only use asset if it's ready - unready assets will cause format errors
@@ -53,16 +55,28 @@ export async function GET(
             console.warn(`[GET Stream ${params.id}] Asset ${asset.id} is not ready yet. Status: ${asset.status}. Will not set vodUrl yet.`)
             // Don't set vodUrl if asset is not ready - this prevents format errors
             // The stream will be checked again on next request
+            // But still try to update preview image if we don't have one
           } else if (asset.playbackId) {
             // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
             // This is the correct playbackId for VOD assets
-            vodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
-            console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
+            // Only update if we don't have a vodUrl or if the current one doesn't match
+            const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
+            if (!vodUrl || vodUrl !== newVodUrl) {
+              vodUrl = newVodUrl
+              console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
+            } else {
+              console.log(`[GET Stream ${params.id}] ✅ Asset is ready, vodUrl already set correctly`)
+            }
           } else if (asset.playbackUrl) {
             // Use asset playback URL if available (could be HLS or MP4)
             // Only if asset is ready
-            vodUrl = asset.playbackUrl
-            console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackUrl: ${vodUrl}`)
+            // Only update if we don't have a vodUrl or if the current one doesn't match
+            if (!vodUrl || vodUrl !== asset.playbackUrl) {
+              vodUrl = asset.playbackUrl
+              console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackUrl: ${vodUrl}`)
+            } else {
+              console.log(`[GET Stream ${params.id}] ✅ Asset is ready, vodUrl already set correctly`)
+            }
           } else {
             console.warn(`[GET Stream ${params.id}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
             // Don't use stream playbackId for VOD - it won't work
@@ -93,7 +107,13 @@ export async function GET(
           }
           
           // Update stream with asset information
-          if (vodUrl || previewImageUrl) {
+          // Update if we have new vodUrl or previewImageUrl, or if asset status changed
+          const needsUpdate = (vodUrl && vodUrl !== stream.vodUrl) || 
+                              (previewImageUrl && previewImageUrl !== stream.previewImageUrl) ||
+                              (!stream.vodUrl && asset.status === "ready")
+          
+          if (needsUpdate) {
+            console.log(`[GET Stream ${params.id}] Updating stream with asset information...`)
             const [updated] = await db
               .update(streams)
               .set({
@@ -111,14 +131,24 @@ export async function GET(
               updatedCategory = categoryData || null
             }
             
+            console.log(`[GET Stream ${params.id}] ✅ Stream updated with vodUrl: ${updated.vodUrl ? 'set' : 'null'}, previewImageUrl: ${updated.previewImageUrl ? 'set' : 'null'}`)
+            
             return NextResponse.json({
               ...updated,
               category: updatedCategory,
             })
+          } else {
+            console.log(`[GET Stream ${params.id}] No update needed - asset status: ${asset.status}, vodUrl: ${stream.vodUrl ? 'exists' : 'missing'}`)
           }
+        } else {
+          console.warn(`[GET Stream ${params.id}] No asset found for stream ${stream.livepeerStreamId}`)
         }
-      } catch (error) {
-        console.warn(`Could not fetch asset for ended stream ${params.id}:`, error)
+      } catch (error: any) {
+        console.error(`[GET Stream ${params.id}] Error fetching asset for ended stream:`, error?.message || error)
+        // Log full error for debugging
+        if (error?.stack) {
+          console.error(`[GET Stream ${params.id}] Error stack:`, error.stack)
+        }
         // Continue to return stream even if asset fetch fails
       }
     }

@@ -573,6 +573,7 @@ export async function getViewerCount(playbackId: string): Promise<number> {
 /**
  * List assets from Livepeer API
  * Can filter by source stream ID to find assets created from a specific stream
+ * Handles pagination and different response formats
  */
 export async function listAssets(sourceStreamId?: string) {
   if (!LIVEPEER_API_KEY) {
@@ -592,14 +593,49 @@ export async function listAssets(sourceStreamId?: string) {
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to list assets: ${response.status}`)
+      const errorText = await response.text()
+      console.error(`[listAssets] API error ${response.status}:`, errorText)
+      throw new Error(`Failed to list assets: ${response.status} ${errorText}`)
     }
 
     const data = await response.json()
-    // Livepeer API returns assets in different formats, normalize it
-    return Array.isArray(data) ? data : (data.assets || [])
+    
+    // Livepeer API can return assets in different formats:
+    // 1. Direct array: [...]
+    // 2. Object with data array: { data: [...] }
+    // 3. Object with assets array: { assets: [...] }
+    // 4. Paginated: { data: [...], nextCursor: "...", total: N }
+    let assets: any[] = []
+    
+    if (Array.isArray(data)) {
+      assets = data
+    } else if (data.data && Array.isArray(data.data)) {
+      assets = data.data
+      // Handle pagination if needed
+      if (data.nextCursor && assets.length > 0) {
+        console.log(`[listAssets] Found ${assets.length} assets, more available (nextCursor: ${data.nextCursor})`)
+        // For now, we'll just use the first page. Can implement pagination later if needed.
+      }
+    } else if (data.assets && Array.isArray(data.assets)) {
+      assets = data.assets
+    } else if (data.items && Array.isArray(data.items)) {
+      assets = data.items
+    } else {
+      console.warn(`[listAssets] Unexpected response format:`, Object.keys(data))
+      // Try to find any array in the response
+      for (const key in data) {
+        if (Array.isArray(data[key])) {
+          console.log(`[listAssets] Found array in key '${key}', using it`)
+          assets = data[key]
+          break
+        }
+      }
+    }
+    
+    console.log(`[listAssets] Found ${assets.length} assets${sourceStreamId ? ` for sourceStreamId ${sourceStreamId}` : ''}`)
+    return assets
   } catch (error) {
-    console.error("Error listing assets:", error)
+    console.error("[listAssets] Error listing assets:", error)
     throw error
   }
 }
@@ -641,21 +677,54 @@ export async function getStreamAsset(streamId: string) {
   }
 
   try {
+    console.log(`[getStreamAsset] Fetching assets for stream ${streamId}`)
+    
     // First, try to get assets filtered by source stream ID
-    const allAssets = await listAssets(streamId)
+    let allAssets: any[] = []
+    try {
+      allAssets = await listAssets(streamId)
+    } catch (error: any) {
+      console.warn(`[getStreamAsset] Failed to list assets with sourceStreamId filter:`, error?.message)
+      // Fallback: try listing all assets and filtering client-side
+      console.log(`[getStreamAsset] Falling back to listing all assets and filtering...`)
+      try {
+        allAssets = await listAssets()
+        console.log(`[getStreamAsset] Listed ${allAssets.length} total assets, filtering for stream ${streamId}`)
+      } catch (fallbackError: any) {
+        console.error(`[getStreamAsset] Failed to list all assets:`, fallbackError?.message)
+        throw fallbackError
+      }
+    }
     
     // CRITICAL: Filter assets to ensure they actually belong to this stream
     // The API might return assets from other streams, so we need to verify sourceStreamId matches
+    // Also check for different field names: sourceStreamId, source.streamId, sourceId, etc.
     const assets = allAssets?.filter((asset: any) => {
-      const assetSourceStreamId = asset.sourceStreamId || asset.source?.streamId
+      const assetSourceStreamId = asset.sourceStreamId || 
+                                  asset.source?.streamId || 
+                                  asset.source?.id ||
+                                  asset.sourceId ||
+                                  asset.sourceStream?.id
       const matches = assetSourceStreamId === streamId
-      if (!matches) {
-        console.warn(`Skipping asset ${asset.id} - sourceStreamId mismatch: expected ${streamId}, got ${assetSourceStreamId}`)
+      if (!matches && assetSourceStreamId) {
+        console.log(`[getStreamAsset] Skipping asset ${asset.id} - sourceStreamId mismatch: expected ${streamId}, got ${assetSourceStreamId}`)
       }
       return matches
     }) || []
     
-    console.log(`Found ${assets.length} assets for stream ${streamId} (filtered from ${allAssets?.length || 0} total assets)`)
+    console.log(`[getStreamAsset] Found ${assets.length} assets for stream ${streamId} (filtered from ${allAssets?.length || 0} total assets)`)
+    
+    // Log all found assets for debugging
+    if (allAssets.length > 0) {
+      console.log(`[getStreamAsset] Sample asset structure:`, {
+        id: allAssets[0].id,
+        status: allAssets[0].status,
+        sourceStreamId: allAssets[0].sourceStreamId,
+        source: allAssets[0].source,
+        playbackId: allAssets[0].playbackId,
+        keys: Object.keys(allAssets[0])
+      })
+    }
     
     if (assets && assets.length > 0) {
       // Sort assets by creation date (newest first) to get the most recent recording
@@ -735,26 +804,69 @@ export async function getStreamAsset(streamId: string) {
       return null
     }
 
-    // If no assets found by source stream ID, try checking the stream's sessions
-    // Sometimes assets are linked through sessions
-    const stream = await getStream(streamId)
+    // If no assets found by source stream ID, try alternative methods
+    console.log(`[getStreamAsset] No assets found via sourceStreamId filter, trying alternative methods...`)
     
-    if (stream?.sessions) {
-      for (const session of stream.sessions) {
-        if (session.record && session.recordingUrl) {
-          // Try to find asset by checking if recordingUrl contains asset ID
-          // Or use the session's recording info
-          return {
-            id: session.id,
-            playbackUrl: session.recordingUrl,
-            playbackId: stream.playbackId,
-            status: "ready",
+    // Method 1: Check the stream's sessions for recording info
+    try {
+      const stream = await getStream(streamId)
+      
+      if (stream?.sessions && Array.isArray(stream.sessions)) {
+        console.log(`[getStreamAsset] Checking ${stream.sessions.length} sessions for recording info`)
+        for (const session of stream.sessions) {
+          if (session.record && (session.recordingUrl || session.playbackUrl)) {
+            console.log(`[getStreamAsset] Found recording in session ${session.id}`)
+            return {
+              id: session.id,
+              playbackUrl: session.recordingUrl || session.playbackUrl,
+              playbackId: stream.playbackId,
+              status: "ready",
+              sourceStreamId: streamId,
+            }
+          }
+        }
+      }
+      
+      // Method 2: Check if stream has recordings array
+      if (stream?.recordings && Array.isArray(stream.recordings) && stream.recordings.length > 0) {
+        const recording = stream.recordings[0]
+        console.log(`[getStreamAsset] Found recording in stream.recordings`)
+        return {
+          id: recording.id || streamId,
+          playbackUrl: recording.recordingUrl || recording.playbackUrl,
+          playbackId: recording.playbackId || stream.playbackId,
+          status: "ready",
+          sourceStreamId: streamId,
+        }
+      }
+    } catch (streamError: any) {
+      console.warn(`[getStreamAsset] Error checking stream sessions:`, streamError?.message)
+    }
+    
+    // Method 3: If we listed all assets earlier, check if any match by checking all possible fields
+    if (allAssets.length > 0) {
+      console.log(`[getStreamAsset] Re-checking ${allAssets.length} assets with relaxed matching...`)
+      for (const asset of allAssets) {
+        // Check all possible source stream ID fields
+        const possibleSourceIds = [
+          asset.sourceStreamId,
+          asset.source?.streamId,
+          asset.source?.id,
+          asset.sourceId,
+          asset.sourceStream?.id,
+          asset.streamId,
+        ]
+        
+        if (possibleSourceIds.includes(streamId)) {
+          console.log(`[getStreamAsset] Found matching asset ${asset.id} with relaxed matching`)
+          if (asset.status === "ready" && asset.playbackId) {
+            return asset
           }
         }
       }
     }
 
-    console.log(`No assets found for stream ${streamId}`)
+    console.warn(`[getStreamAsset] No assets found for stream ${streamId} after all attempts`)
     return null
   } catch (error) {
     console.error("Error fetching stream asset:", error)
