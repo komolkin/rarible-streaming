@@ -49,6 +49,8 @@ export default function StreamPage() {
   const [viewerCountError, setViewerCountError] = useState<string | null>(null)
   const [hasRealtimeViewerData, setHasRealtimeViewerData] = useState<boolean>(false)
   const [pageError, setPageError] = useState<string | null>(null)
+  const [playbackType, setPlaybackType] = useState<"live" | "vod" | null>(null)
+  const [isCheckingPlaybackType, setIsCheckingPlaybackType] = useState<boolean>(false)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -320,6 +322,32 @@ export default function StreamPage() {
     return false
   }, [params.id])
 
+  // Check playback type to determine if VOD is ready
+  // The Player shows "offline" if playback type is still "live" after stream ends
+  const checkPlaybackType = useCallback(async (playbackId: string) => {
+    if (!playbackId) return
+
+    setIsCheckingPlaybackType(true)
+    try {
+      const response = await fetch(`/api/streams/${params.id}/playback?playbackId=${playbackId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const type = data.type || data.playbackInfo?.type
+        console.log(`[Playback Type] PlaybackId ${playbackId} type: ${type}`)
+        setPlaybackType(type === "vod" ? "vod" : type === "live" ? "live" : null)
+        
+        // If it's VOD, mark as ready
+        if (type === "vod") {
+          setVodReady(true)
+        }
+      }
+    } catch (error) {
+      console.error("[Playback Type] Error checking playback type:", error)
+    } finally {
+      setIsCheckingPlaybackType(false)
+    }
+  }, [params.id])
+
   // Fetch recording from Livepeer by stream ID when stream ends
   // According to Livepeer docs: When a stream ends with recording enabled,
   // Livepeer creates an Asset that can be queried by sourceStreamId
@@ -350,6 +378,7 @@ export default function StreamPage() {
             setAssetPlaybackId(recording.playbackId)
             setAssetReady(true)
             setVodReady(true)
+            setPlaybackType("vod") // Asset playbackId is always VOD
 
             // Also update stream with recording info if available
             if (recording.playbackUrl && !stream.vodUrl) {
@@ -527,11 +556,11 @@ export default function StreamPage() {
   // When stream ends, IMMEDIATELY fetch recording from Livepeer by stream ID
   useEffect(() => {
     if (stream?.endedAt) {
-      // CRITICAL: When stream ends, immediately mark as ready if we have playbackId
-      // The Player component handles VOD automatically with stream playbackId
-      if (stream.livepeerPlaybackId && !vodReady) {
-        console.log("✅ Stream ended - marking VOD as ready with playbackId:", stream.livepeerPlaybackId)
-        setVodReady(true)
+      // CRITICAL: When stream ends, check playback type first
+      // The Player shows "offline" if playback type is still "live"
+      if (stream.livepeerPlaybackId && !playbackType) {
+        console.log("📹 Checking playback type for ended stream...")
+        checkPlaybackType(stream.livepeerPlaybackId)
       }
       
       // Also fetch the recording asset for optimal VOD playback (upgrades to asset playbackId)
@@ -550,8 +579,16 @@ export default function StreamPage() {
         
         return () => clearInterval(vodCheckInterval)
       }
+      
+      // Also poll playback type until it becomes VOD (if we don't have asset playbackId yet)
+      if (stream.livepeerPlaybackId && playbackType !== "vod" && !assetPlaybackId) {
+        const typeCheckInterval = setInterval(() => {
+          checkPlaybackType(stream.livepeerPlaybackId)
+        }, 10000)
+        return () => clearInterval(typeCheckInterval)
+      }
     }
-  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, vodReady, assetPlaybackId, fetchStreamRecording])
+  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, playbackType, assetPlaybackId, fetchStreamRecording, checkPlaybackType])
 
   // Debug: log stream data when it changes
   useEffect(() => {
@@ -859,42 +896,59 @@ export default function StreamPage() {
                       )}
                     </div>
                     {stream.endedAt ? (
-                      // STREAM ENDED - Always show recording playback immediately
+                      // STREAM ENDED - Show recording playback
                       // According to Livepeer docs: Player handles VOD with stream playbackId automatically
-                      // We show Player immediately with stream playbackId, then upgrade to asset playbackId when available
-                      <>
-                        {/* CRITICAL: Always show Player for ended streams - it handles VOD automatically */}
-                        <Player
-                          key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
-                          playbackId={assetPlaybackId || stream.livepeerPlaybackId}
-                          autoPlay={false}
-                          muted={false}
-                          showTitle={false}
-                          showPipButton={true}
-                          showUploadingIndicator={checkingVod}
-                          objectFit="contain"
-                          lowLatency={false}
-                          theme={{
-                            borderStyles: {
-                              containerBorderStyle: "solid",
-                            },
-                            colors: {
-                              accent: "#00a55f",
-                            },
-                          }}
-                          onError={(error) => {
-                            console.error("Livepeer Player error for VOD:", error)
-                            console.error("PlaybackId:", assetPlaybackId || stream.livepeerPlaybackId)
-                            // Player will automatically retry or fallback internally
-                          }}
-                        />
-                        {checkingVod && (
-                          <div className="absolute top-4 right-4 bg-blue-500 text-white px-3 py-2 rounded text-sm z-10">
-                            <div className="font-semibold">Loading recording...</div>
-                            <div className="text-xs mt-1">Fetching from Livepeer</div>
+                      // But we need to wait for playback type to be "vod" to avoid "offline" message
+                      playbackType === "vod" || assetPlaybackId ? (
+                        <>
+                          {/* Show Player when VOD is ready (playback type is "vod" or we have asset playbackId) */}
+                          <Player
+                            key={`vod-${assetPlaybackId || stream.livepeerPlaybackId}`}
+                            playbackId={assetPlaybackId || stream.livepeerPlaybackId}
+                            autoPlay={false}
+                            muted={false}
+                            showTitle={false}
+                            showPipButton={true}
+                            showUploadingIndicator={false}
+                            objectFit="contain"
+                            lowLatency={false}
+                            theme={{
+                              borderStyles: {
+                                containerBorderStyle: "solid",
+                              },
+                              colors: {
+                                accent: "#00a55f",
+                              },
+                            }}
+                            onError={(error) => {
+                              console.error("Livepeer Player error for VOD:", error)
+                              console.error("PlaybackId:", assetPlaybackId || stream.livepeerPlaybackId)
+                              // Player will automatically retry or fallback internally
+                            }}
+                          />
+                        </>
+                      ) : (
+                        // Show loading state while VOD is processing
+                        <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                          <div className="text-center max-w-md px-6">
+                            <div className="mb-4">
+                              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                            </div>
+                            <p className="text-xl font-semibold mb-2">Processing Recording</p>
+                            <p className="text-sm text-muted-foreground mb-1">
+                              The recording is being processed by Livepeer...
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              This usually takes 1-2 minutes. The video will appear automatically when ready.
+                            </p>
+                            {(checkingVod || isCheckingPlaybackType) && (
+                              <p className="text-xs text-blue-400 mt-3">
+                                Checking for recording...
+                              </p>
+                            )}
                           </div>
-                        )}
-                      </>
+                        </div>
+                      )
                     ) : showLivePlayer ? (
                       // LIVE STREAM - Show live player
                       <>
