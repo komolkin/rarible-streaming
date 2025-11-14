@@ -40,14 +40,14 @@ function getClient() {
   // Encode connection string to handle special characters
   const encodedConnectionString = encodeConnectionString(connectionString)
 
-  // For serverless environments (Next.js API routes), reuse the connection
-  // For non-serverless (scripts), create a new connection each time
+// For serverless environments (Next.js API routes), reuse the connection
+// For non-serverless (scripts), create a new connection each time
   if (!globalThis.postgresClient) {
     globalThis.postgresClient = postgres(encodedConnectionString, {
-      max: 1, // Limit connections for serverless environments
-      idle_timeout: 20,
-      connect_timeout: 10,
-    })
+  max: 1, // Limit connections for serverless environments
+  idle_timeout: 20,
+  connect_timeout: 10,
+})
   }
 
   return globalThis.postgresClient
