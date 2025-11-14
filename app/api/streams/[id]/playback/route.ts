@@ -19,38 +19,73 @@ export async function GET(
       return NextResponse.json({ error: "playbackId is required" }, { status: 400 })
     }
 
+    // Get the stream to check if it has ended
+    // CRITICAL: For ended streams, we MUST use asset playbackId, not stream playbackId
+    const [stream] = await db.select().from(streams).where(eq(streams.id, params.id))
+    const isEnded = !!stream?.endedAt
+
     // Try to fetch playback info from Livepeer
     let playbackInfo
     let actualPlaybackId = playbackId
     
-    try {
-      playbackInfo = await getPlaybackInfo(playbackId)
-    } catch (error: any) {
-      console.warn(`Failed to get playback info for playbackId ${playbackId}:`, error?.message)
-      
-      // If playbackId doesn't work, it might be a stream playbackId, not an asset playbackId
-      // Try to find the asset playbackId from the stream
+    // For ended streams, always try to fetch asset playbackId first
+    // Stream playbackId will cause format errors for VOD
+    if (isEnded && stream?.livepeerStreamId) {
       try {
-        // Get the stream to find its livepeerStreamId
-        const [stream] = await db.select().from(streams).where(eq(streams.id, params.id))
-        if (stream?.livepeerStreamId) {
-          const asset = await getStreamAsset(stream.livepeerStreamId)
-          if (asset?.playbackId) {
-            console.log(`Found asset playbackId ${asset.playbackId} for stream ${stream.livepeerStreamId}`)
-            actualPlaybackId = asset.playbackId
-            playbackInfo = await getPlaybackInfo(asset.playbackId)
+        console.log(`[Playback API] Stream has ended, fetching asset playbackId for stream ${stream.livepeerStreamId}`)
+        const asset = await getStreamAsset(stream.livepeerStreamId)
+        if (asset?.playbackId && asset.status === "ready") {
+          console.log(`[Playback API] ✅ Found ready asset playbackId ${asset.playbackId} for ended stream`)
+          actualPlaybackId = asset.playbackId
+          playbackInfo = await getPlaybackInfo(asset.playbackId)
+        } else if (asset && asset.status !== "ready") {
+          console.warn(`[Playback API] ⚠️ Asset found but not ready (status: ${asset.status}). Cannot use for playback yet.`)
+          return NextResponse.json(
+            { 
+              error: `Asset is not ready yet (status: ${asset.status}). Please try again in a few minutes.`,
+              assetStatus: asset.status
+            },
+            { status: 202 } // 202 Accepted - asset is processing
+          )
+        }
+      } catch (assetError: any) {
+        console.warn(`[Playback API] Could not fetch asset for ended stream:`, assetError?.message)
+        // Continue to try with provided playbackId as fallback
+      }
+    }
+    
+    // If we don't have playbackInfo yet, try with the provided playbackId
+    if (!playbackInfo) {
+      try {
+        playbackInfo = await getPlaybackInfo(playbackId)
+        // If playbackInfo succeeds but stream has ended, warn that this might not work for VOD
+        if (isEnded) {
+          console.warn(`[Playback API] ⚠️ Using provided playbackId ${playbackId} for ended stream. This might be a stream playbackId and may cause format errors. Asset playbackId is required for VOD.`)
+        }
+      } catch (error: any) {
+        console.warn(`[Playback API] Failed to get playback info for playbackId ${playbackId}:`, error?.message)
+        
+        // If playbackId doesn't work and we haven't tried asset yet, try to find the asset playbackId
+        if (!isEnded && stream?.livepeerStreamId) {
+          try {
+            const asset = await getStreamAsset(stream.livepeerStreamId)
+            if (asset?.playbackId && asset.status === "ready") {
+              console.log(`[Playback API] Found asset playbackId ${asset.playbackId} for stream ${stream.livepeerStreamId}`)
+              actualPlaybackId = asset.playbackId
+              playbackInfo = await getPlaybackInfo(asset.playbackId)
+            }
+          } catch (assetError) {
+            console.warn("Could not fetch asset:", assetError)
           }
         }
-      } catch (assetError) {
-        console.warn("Could not fetch asset:", assetError)
-      }
-      
-      // If still no playbackInfo, return error
-      if (!playbackInfo) {
-        return NextResponse.json(
-          { error: `Failed to get playback info for playbackId: ${playbackId}. This might be a stream playbackId, not an asset playbackId.` },
-          { status: 404 }
-        )
+        
+        // If still no playbackInfo, return error
+        if (!playbackInfo) {
+          return NextResponse.json(
+            { error: `Failed to get playback info for playbackId: ${playbackId}. ${isEnded ? 'For ended streams, asset playbackId is required for VOD playback.' : 'This might be a stream playbackId, not an asset playbackId.'}` },
+            { status: 404 }
+          )
+        }
       }
     }
     

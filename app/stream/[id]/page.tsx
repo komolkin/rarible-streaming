@@ -294,15 +294,13 @@ export default function StreamPage() {
         return
       }
     
-    // If we have playbackId but no vodUrl, try to fetch HLS URL
-    if (stream.livepeerPlaybackId && !hlsPlaybackUrl) {
-      const fetched = await fetchHlsPlaybackUrl(stream.livepeerPlaybackId)
-      if (fetched) return
-    }
+    // CRITICAL: Never use stream playbackId for VOD - it will cause format errors
+    // For ended streams, we MUST fetch the asset playbackId from Livepeer
+    // The API endpoint will handle fetching the asset and setting vodUrl
     
     setCheckingVod(true)
     try {
-      // Fetch updated stream data - the API will check for VOD availability
+      // Fetch updated stream data - the API will check for VOD availability and fetch asset
       const response = await fetch(`/api/streams/${params.id}`)
       if (response.ok) {
         const updatedStream = await response.json()
@@ -320,17 +318,15 @@ export default function StreamPage() {
             }
           }
           setVodReady(true)
-        } else if (updatedStream.livepeerPlaybackId && !hlsPlaybackUrl) {
-          // Try to fetch HLS URL from playback API
-          await fetchHlsPlaybackUrl(updatedStream.livepeerPlaybackId)
         }
+        // Don't try to use stream playbackId for VOD - it won't work
       }
     } catch (error) {
       console.error("Error checking VOD availability:", error)
     } finally {
       setCheckingVod(false)
     }
-  }, [stream?.endedAt, stream?.vodUrl, stream?.livepeerPlaybackId, vodReady, hlsPlaybackUrl, params.id, fetchHlsPlaybackUrl])
+  }, [stream?.endedAt, stream?.vodUrl, vodReady, params.id])
 
   useEffect(() => {
     fetchStream()
@@ -379,10 +375,9 @@ export default function StreamPage() {
         title: stream.title
       })
       
-      // For ended streams with playbackId, try to fetch HLS URL
-      if (stream.endedAt && stream.livepeerPlaybackId && !hlsPlaybackUrl && !stream.vodUrl) {
-        fetchHlsPlaybackUrl(stream.livepeerPlaybackId)
-      }
+      // CRITICAL: Never use stream playbackId for ended streams - it will cause format errors
+      // For VOD, we MUST use the asset playbackId, which comes from vodUrl
+      // The API endpoint will fetch the asset and set vodUrl when ready
       
       // Extract asset playbackId from vodUrl if it exists
       // This is critical for VOD playback - Livepeer Player works better than HLS player for VOD
@@ -782,39 +777,6 @@ export default function StreamPage() {
                           >
                             Your browser does not support the video tag.
                           </video>
-                        </>
-                      ) : stream.livepeerPlaybackId ? (
-                        <>
-                          {/* Last resort: try Livepeer Player with stream playbackId (may not work for VOD) */}
-                          <Player
-                            key={`vod-stream-${stream.livepeerPlaybackId}`}
-                            playbackId={stream.livepeerPlaybackId}
-                            autoPlay={false}
-                            muted={false}
-                            showTitle={false}
-                            showPipButton={true}
-                            showUploadingIndicator={false}
-                            objectFit="contain"
-                            lowLatency={false}
-                            theme={{
-                              borderStyles: {
-                                containerBorderStyle: "solid",
-                              },
-                              colors: {
-                                accent: "#00a55f",
-                              },
-                            }}
-                            onError={(error) => {
-                              console.error("Livepeer Player error with stream playbackId:", error)
-                              console.error("Stream playbackId:", stream.livepeerPlaybackId)
-                              console.warn("Note: Stream playbackId may not work for VOD. Asset playbackId is required.")
-                            }}
-                          />
-                          {checkingVod && !stream.vodUrl && !hlsPlaybackUrl && !mp4PlaybackUrl && (
-                            <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-sm z-20">
-                              Loading recording...
-                            </div>
-                          )}
                         </>
                       ) : stream.vodUrl ? (
                         // If vodUrl is HLS and we can extract asset playbackId, use Livepeer Player (preferred for VOD)
