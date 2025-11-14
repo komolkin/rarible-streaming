@@ -641,14 +641,16 @@ export async function getViewerCount(playbackId: string): Promise<number> {
   }
 
   try {
-    const response = await fetch(
-      `https://livepeer.studio/api/data/views/now?playbackId=${playbackId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${LIVEPEER_API_KEY}`,
-        },
-      }
-    )
+    const url = new URL("https://livepeer.studio/api/data/views/now")
+    url.searchParams.set("playbackId", playbackId)
+    // Request breakdown by playbackId so response items include playbackId field
+    url.searchParams.append("breakdownBy", "playbackId")
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
+    })
 
     if (!response.ok) {
       // If API returns 404 or error, return 0 (stream might not have viewers yet)
@@ -660,15 +662,21 @@ export async function getViewerCount(playbackId: string): Promise<number> {
 
     const data = await response.json()
     
-    // API returns an array of metrics, find the one matching our playbackId
     if (Array.isArray(data) && data.length > 0) {
-      const metrics = data.find((item: any) => item.playbackId === playbackId)
-      if (metrics && typeof metrics.viewCount === 'number') {
-        return metrics.viewCount
+      // Try to locate entry with matching playbackId
+      const exactMatch = data.find((item: any) => item.playbackId === playbackId)
+      if (exactMatch && typeof exactMatch.viewCount === "number") {
+        return exactMatch.viewCount
+      }
+
+      // Fallback: if API omits playbackId, use first entry
+      const fallback = data[0]
+      if (fallback && typeof fallback.viewCount === "number") {
+        return fallback.viewCount
       }
     }
     
-    // If no matching playbackId found, return 0
+    // If no metrics returned, treat as zero viewers
     return 0
   } catch (error) {
     console.error("Error fetching viewer count:", error)
