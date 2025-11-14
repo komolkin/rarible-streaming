@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useParams } from "next/navigation"
 import { Player } from "@livepeer/react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -42,6 +42,8 @@ export default function StreamPage() {
   const [hlsError, setHlsError] = useState(false)
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null)
   const [assetReady, setAssetReady] = useState<boolean>(false)
+  const [playerIsStreaming, setPlayerIsStreaming] = useState<boolean>(false)
+  const playerOfflineTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -346,6 +348,15 @@ export default function StreamPage() {
       setCheckingVod(false)
     }
   }, [stream?.endedAt, stream?.vodUrl, stream?.livepeerPlaybackId, vodReady, assetPlaybackId, params.id])
+
+  useEffect(() => {
+    // Reset player streaming override whenever playbackId changes
+    if (playerOfflineTimeoutRef.current) {
+      clearTimeout(playerOfflineTimeoutRef.current)
+      playerOfflineTimeoutRef.current = null
+    }
+    setPlayerIsStreaming(false)
+  }, [stream?.livepeerPlaybackId])
 
   useEffect(() => {
     fetchStream()
@@ -665,6 +676,8 @@ export default function StreamPage() {
     )
   }
 
+  const shouldShowLivePlayer = !stream?.endedAt && (stream?.isLive || playerIsStreaming)
+
   return (
     <main className="min-h-screen pt-24 pb-8">
       <div className="w-full grid grid-cols-12 gap-4 px-4 lg:px-8 h-[calc(100vh-8rem)]">
@@ -689,7 +702,7 @@ export default function StreamPage() {
                         <>Playback ID: {stream.livepeerPlaybackId}</>
                       )}
                     </div>
-                    {stream.isLive ? (
+                    {!stream.endedAt && shouldShowLivePlayer ? (
                       <>
                         <Player
                           key={stream.livepeerPlaybackId} // Force re-render if playbackId changes
@@ -716,15 +729,24 @@ export default function StreamPage() {
                               isLive: stream.isLive,
                               playerIsLive: isLive
                             })
+                            if (playerOfflineTimeoutRef.current) {
+                              clearTimeout(playerOfflineTimeoutRef.current)
+                              playerOfflineTimeoutRef.current = null
+                            }
                             if (isLive) {
                               console.log("✅ Stream is live in Player!")
+                              setPlayerIsStreaming(true)
                             } else {
                               console.log("⏳ Player shows offline - OBS may not be connected")
                               console.log("💡 Check OBS is streaming to:", `rtmp://ingest.livepeer.studio/live/${stream.livepeerStreamKey}`)
+                              // Delay clearing the streaming flag to avoid flicker from transient status updates
+                              playerOfflineTimeoutRef.current = setTimeout(() => {
+                                setPlayerIsStreaming(false)
+                              }, 5000)
                             }
                           }}
                         />
-                        {!stream.isLive && !stream.endedAt && (
+                        {!stream.isLive && !playerIsStreaming && !stream.endedAt && (
                           <div className="absolute top-4 right-4 bg-yellow-500 text-black px-3 py-1 rounded text-sm font-semibold z-10 max-w-xs">
                             <div className="font-bold mb-1">⚠️ Stream Offline</div>
                             {stream.livepeerStreamKey ? (
@@ -751,6 +773,27 @@ export default function StreamPage() {
                           </div>
                         )}
                       </>
+                    ) : !stream.endedAt ? (
+                      <div className="absolute inset-0 flex items-center justify-center text-white">
+                        <div className="text-center max-w-md bg-black/70 px-5 py-4 rounded">
+                          <p className="text-lg font-semibold mb-2">Stream offline</p>
+                          {stream.livepeerStreamKey ? (
+                            <>
+                              <p className="text-sm text-muted-foreground mb-3">
+                                Make sure OBS is connected with the settings below:
+                              </p>
+                              <div className="text-xs text-left space-y-2 font-mono bg-black/40 p-3 rounded">
+                                <div>Server: rtmp://ingest.livepeer.studio/live</div>
+                                <div>Stream Key: {stream.livepeerStreamKey}</div>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              Waiting for the creator to start streaming...
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     ) : stream.endedAt ? (
                       // For ended streams, show recording if available
                       // Priority: 1) Livepeer Player with playbackId (works for VOD!), 2) HLS URL (direct), 3) HTML5 video with vodUrl
@@ -890,13 +933,7 @@ export default function StreamPage() {
                           </div>
                         </div>
                       )
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-white">
-                        <div className="text-center">
-                          <p className="text-lg mb-2">Stream not started</p>
-                        </div>
-                      </div>
-                    )}
+                    ) : null}
                   </>
                 ) : stream.endedAt && stream.vodUrl ? (
                   // Handle ended streams without playbackId but with vodUrl
