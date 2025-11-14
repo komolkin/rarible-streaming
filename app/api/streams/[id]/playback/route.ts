@@ -205,7 +205,10 @@ export async function GET(
       hlsUrl,
       mp4Url, // Also return MP4 URL if available
       type: playbackType, // Return playback type ("live" or "vod")
-      playbackInfo,
+      playbackInfo, // Full playbackInfo object for UI Kit Player
+      // Also return playbackInfo in the format expected by UI Kit Player
+      // The UI Kit Player expects playbackInfo.playbackInfo to contain the sources
+      playbackInfoForPlayer: playbackInfo,
     })
   } catch (error: any) {
     console.error("Error fetching playback info:", error)
