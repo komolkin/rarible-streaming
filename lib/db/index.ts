@@ -15,24 +15,26 @@ if (!connectionString) {
 }
 
 // Ensure the connection string is properly formatted
-// Handle special characters in password by encoding them
+// Handle special characters in password by encoding them BEFORE parsing
+// We need to encode the password first because URL parsing will fail with unencoded special chars
 let encodedConnectionString = connectionString
-try {
-  // Try to parse as URL - if it fails, manually encode the password
-  const url = new URL(connectionString)
-  // If parsing succeeded, reconstruct with properly encoded components
-  if (url.password) {
-    encodedConnectionString = `${url.protocol}//${url.username ? `${encodeURIComponent(url.username)}:${encodeURIComponent(url.password)}@` : ''}${url.host}${url.pathname}${url.search}${url.hash}`
+
+// Match pattern: postgresql://username:password@host:port/database
+const connectionStringMatch = connectionString.match(/^(postgresql?:\/\/)([^:]+):([^@]+)@(.+)$/)
+if (connectionStringMatch) {
+  const [, protocol, username, password, rest] = connectionStringMatch
+  // Encode username and password to handle special characters like &, @, etc.
+  encodedConnectionString = `${protocol}${encodeURIComponent(username)}:${encodeURIComponent(password)}@${rest}`
+} else {
+  // If regex doesn't match, try to parse as-is (might be a different format)
+  // But wrap in try-catch to avoid build-time errors
+  try {
+    new URL(connectionString)
+    // If parsing succeeds, use original string
+  } catch (e) {
+    // If parsing fails, log warning but use original - postgres library might handle it
+    console.warn('Could not parse DATABASE_URL, using as-is. Special characters in password may cause issues.')
   }
-} catch (e) {
-  // If URL parsing fails due to special characters, manually encode the password
-  // Match pattern: postgresql://username:password@host:port/database
-  const match = connectionString.match(/^(postgresql?:\/\/)([^:]+):([^@]+)@(.+)$/)
-  if (match) {
-    const [, protocol, username, password, rest] = match
-    encodedConnectionString = `${protocol}${encodeURIComponent(username)}:${encodeURIComponent(password)}@${rest}`
-  }
-  // If regex doesn't match, use original string - postgres library might handle it
 }
 
 // Use singleton pattern to prevent multiple connections in serverless environments
