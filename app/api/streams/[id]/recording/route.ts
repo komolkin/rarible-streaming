@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { streams } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
-import { getStreamAsset, getStreamSessions, getStream } from "@/lib/livepeer"
+import { getStreamAsset, getStreamSessions, getStream, getAsset } from "@/lib/livepeer"
 
 /**
  * GET /api/streams/[id]/recording
@@ -27,6 +27,61 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Check if assetId is provided as query parameter
+    const { searchParams } = new URL(request.url)
+    const assetId = searchParams.get("assetId")
+
+    // If assetId is provided, fetch asset directly by ID
+    if (assetId) {
+      console.log(`[Recording API] Fetching asset directly by ID: ${assetId}`)
+      try {
+        const asset = await getAsset(assetId)
+        
+        if (asset && asset.status === "ready") {
+          console.log(`[Recording API] ✅ Found ready asset by ID:`, {
+            assetId: asset.id,
+            playbackId: asset.playbackId,
+            playbackUrl: asset.playbackUrl,
+            status: asset.status,
+            duration: asset.duration,
+          })
+
+          const playbackUrl = asset.playbackUrl || 
+            (asset.playbackId ? `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8` : null)
+
+          if (playbackUrl || asset.playbackId) {
+            return NextResponse.json({
+              success: true,
+              source: "asset_by_id",
+              recording: {
+                id: asset.id,
+                playbackId: asset.playbackId,
+                playbackUrl: playbackUrl,
+                status: asset.status,
+                duration: asset.duration,
+                createdAt: asset.createdAt,
+                sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
+              },
+            })
+          }
+        } else if (asset && asset.status !== "ready") {
+          console.log(`[Recording API] ⚠️ Asset found but not ready (status: ${asset.status})`)
+          return NextResponse.json({
+            success: false,
+            source: "asset_by_id",
+            status: asset.status,
+            message: `Asset is ${asset.status}. Please try again in a few moments.`,
+          }, { status: 202 }) // 202 Accepted - processing
+        }
+      } catch (assetError: any) {
+        console.error(`[Recording API] Error fetching asset by ID:`, assetError?.message)
+        return NextResponse.json(
+          { error: `Failed to fetch asset: ${assetError?.message || "Unknown error"}` },
+          { status: 500 }
+        )
+      }
+    }
+
     // Get stream from database
     const [stream] = await db.select().from(streams).where(eq(streams.id, params.id))
 

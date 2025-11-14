@@ -127,9 +127,16 @@ export default function StreamPage() {
         setPlaybackType("vod")
       }
       
-      // For ended streams, immediately try to fetch asset if not already set
-      if (data.endedAt && data.livepeerStreamId && !data.assetPlaybackId && !assetPlaybackId) {
-        console.log(`[Stream Fetch] Stream ended - fetching asset playbackId immediately...`)
+      // If stream has ended and API returned assetId, fetch recording using assetId (most reliable)
+      if (data.endedAt && data.assetId && !assetPlaybackId) {
+        console.log(`[Stream Fetch] ✅ Found assetId from API: ${data.assetId} - fetching recording directly...`)
+        // Trigger asset fetch immediately using assetId
+        setTimeout(() => {
+          fetchStreamRecording(undefined, undefined, data.assetId)
+        }, 500)
+      } else if (data.endedAt && data.livepeerStreamId && !data.assetPlaybackId && !data.assetId && !assetPlaybackId) {
+        // Fallback: For ended streams without assetId, try fetching by stream ID
+        console.log(`[Stream Fetch] Stream ended - fetching asset playbackId by stream ID...`)
         // Trigger asset fetch immediately
         setTimeout(() => {
           fetchStreamRecording()
@@ -386,13 +393,18 @@ export default function StreamPage() {
   // According to Livepeer docs: When a stream ends with recording enabled,
   // Livepeer creates an Asset that can be queried by sourceStreamId
   // The Asset has its own playbackId which is optimal for VOD playback
-  const fetchStreamRecording = useCallback(async (streamId?: string, livepeerStreamId?: string) => {
+  // If assetId is available, we can fetch the asset directly by ID (faster and more reliable)
+  const fetchStreamRecording = useCallback(async (streamId?: string, livepeerStreamId?: string, assetIdParam?: string) => {
     // Allow passing streamId and livepeerStreamId directly for immediate fetching
     const targetStreamId = streamId || stream?.livepeerStreamId
     const targetLivepeerStreamId = livepeerStreamId || stream?.livepeerStreamId
+    const targetAssetId = assetIdParam || stream?.assetId
     
-    if (!targetStreamId || !targetLivepeerStreamId) {
-      console.warn(`[VOD] Cannot fetch recording - missing streamId or livepeerStreamId`)
+    // If we have assetId, use it directly (most reliable method)
+    if (targetAssetId) {
+      console.log(`[VOD] Using assetId to fetch recording directly: ${targetAssetId}`)
+    } else if (!targetStreamId || !targetLivepeerStreamId) {
+      console.warn(`[VOD] Cannot fetch recording - missing streamId, livepeerStreamId, or assetId`)
       return
     }
     
@@ -404,8 +416,13 @@ export default function StreamPage() {
 
     setCheckingVod(true)
     try {
-      console.log(`[VOD] Fetching recording for stream ${targetLivepeerStreamId}...`)
-      const response = await fetch(`/api/streams/${params.id}/recording`)
+      // Build recording API URL - use assetId if available, otherwise use stream ID
+      const recordingUrl = targetAssetId 
+        ? `/api/streams/${params.id}/recording?assetId=${encodeURIComponent(targetAssetId)}`
+        : `/api/streams/${params.id}/recording`
+      
+      console.log(`[VOD] Fetching recording ${targetAssetId ? `by assetId ${targetAssetId}` : `for stream ${targetLivepeerStreamId}`}...`)
+      const response = await fetch(recordingUrl)
 
       if (response.ok) {
         const data = await response.json()
@@ -460,7 +477,7 @@ export default function StreamPage() {
     } finally {
       setCheckingVod(false)
     }
-  }, [stream?.endedAt, stream?.livepeerStreamId, stream?.vodUrl, params.id])
+  }, [stream?.endedAt, stream?.livepeerStreamId, stream?.vodUrl, stream?.assetId, params.id])
 
   // Check if VOD is ready for ended streams
   // According to Livepeer docs: Player automatically handles VOD with stream playbackId
@@ -618,13 +635,31 @@ export default function StreamPage() {
   }, [params.id, fetchStream, fetchChatMessages, subscribeToChat])
   
   // Separate effect for VOD checking to avoid circular dependencies
-  // When stream ends, IMMEDIATELY fetch recording from Livepeer by stream ID
+  // When stream ends, IMMEDIATELY fetch recording from Livepeer by assetId (if available) or stream ID
   useEffect(() => {
     if (stream?.endedAt) {
       // CRITICAL: Always try to fetch asset playbackId for ended streams
       // Asset playbackId is guaranteed to be VOD-ready, while stream playbackId might still be "live" type
-      if (stream.livepeerStreamId) {
-        console.log("📹 Stream ended - fetching recording asset for VOD playback...")
+      // Priority: Use assetId if available (most reliable), otherwise use stream ID
+      if (stream.assetId) {
+        console.log(`📹 Stream ended - fetching recording asset by assetId: ${stream.assetId}...`)
+        // Fetch immediately using assetId
+        fetchStreamRecording(undefined, undefined, stream.assetId)
+        
+        // Poll for recording asset every 10 seconds until found
+        const vodCheckInterval = setInterval(() => {
+          if (!assetPlaybackId) {
+            console.log(`📹 Polling for recording asset by assetId: ${stream.assetId}...`)
+            fetchStreamRecording(undefined, undefined, stream.assetId)
+          } else {
+            console.log("📹 Asset playbackId found, stopping poll")
+            clearInterval(vodCheckInterval)
+          }
+        }, 10000)
+        
+        return () => clearInterval(vodCheckInterval)
+      } else if (stream.livepeerStreamId) {
+        console.log("📹 Stream ended - fetching recording asset by stream ID...")
         // Fetch immediately
         fetchStreamRecording()
         
@@ -660,7 +695,7 @@ export default function StreamPage() {
         return () => clearInterval(typeCheckInterval)
       }
     }
-  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, playbackType, assetPlaybackId, fetchStreamRecording, checkPlaybackType])
+  }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, stream?.assetId, playbackType, assetPlaybackId, fetchStreamRecording, checkPlaybackType])
 
   // Debug: log stream data when it changes
   useEffect(() => {

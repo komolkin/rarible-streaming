@@ -47,6 +47,7 @@ export async function GET(
       let vodUrl = stream.vodUrl || null
       let previewImageUrl = stream.previewImageUrl || null
       let assetPlaybackId = null // Track asset playbackId separately for Player component
+      let assetId = null // Track asset ID for direct asset fetching
       
       try {
         const { getStream, getStreamAsset, getStreamRecording, getStreamSessions } = await import("@/lib/livepeer")
@@ -142,8 +143,9 @@ export async function GET(
                 // Don't set vodUrl if asset is not ready - this prevents format errors
                 // The stream will be checked again on next request
               } else if (asset.playbackId) {
-                // Asset is ready - store the asset playbackId for Player component
+                // Asset is ready - store the asset playbackId and ID for Player component
                 assetPlaybackId = asset.playbackId
+                assetId = asset.id
                 // Use the asset's playbackId to construct HLS URL for VOD
                 // This is the correct playbackId for VOD assets
                 const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
@@ -230,6 +232,7 @@ export async function GET(
             ...updated,
             category: updatedCategory,
             assetPlaybackId: assetPlaybackId, // Include asset playbackId for Player component
+            assetId: assetId, // Include asset ID for direct asset fetching
           })
         } else if (assetPlaybackId) {
           // Even if vodUrl didn't change, return asset playbackId if we found it
@@ -238,6 +241,7 @@ export async function GET(
             ...stream,
             category: category,
             assetPlaybackId: assetPlaybackId,
+            assetId: assetId, // Include asset ID for direct asset fetching
           })
         } else if (!vodUrl) {
           console.warn(`[GET Stream ${params.id}] ⚠️ No recording found via any method. Stream may need more time to process.`)
