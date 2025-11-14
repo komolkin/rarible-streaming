@@ -8,52 +8,63 @@ if (!process.env.DATABASE_URL) {
   dotenv.config({ path: ".env.local" })
 }
 
-const connectionString = process.env.DATABASE_URL
-
-if (!connectionString) {
-  throw new Error("DATABASE_URL environment variable is not set")
-}
-
-// Ensure the connection string is properly formatted
-// Handle special characters in password by encoding them BEFORE parsing
-// We need to encode the password first because URL parsing will fail with unencoded special chars
-let encodedConnectionString = connectionString
-
-// Match pattern: postgresql://username:password@host:port/database
-const connectionStringMatch = connectionString.match(/^(postgresql?:\/\/)([^:]+):([^@]+)@(.+)$/)
-if (connectionStringMatch) {
-  const [, protocol, username, password, rest] = connectionStringMatch
-  // Encode username and password to handle special characters like &, @, etc.
-  encodedConnectionString = `${protocol}${encodeURIComponent(username)}:${encodeURIComponent(password)}@${rest}`
-} else {
-  // If regex doesn't match, try to parse as-is (might be a different format)
-  // But wrap in try-catch to avoid build-time errors
-  try {
-    new URL(connectionString)
-    // If parsing succeeds, use original string
-  } catch (e) {
-    // If parsing fails, log warning but use original - postgres library might handle it
-    console.warn('Could not parse DATABASE_URL, using as-is. Special characters in password may cause issues.')
+// Function to encode connection string with special characters
+function encodeConnectionString(connectionString: string): string {
+  // Match pattern: postgresql://username:password@host:port/database
+  const connectionStringMatch = connectionString.match(/^(postgresql?:\/\/)([^:]+):([^@]+)@(.+)$/)
+  if (connectionStringMatch) {
+    const [, protocol, username, password, rest] = connectionStringMatch
+    // Encode username and password to handle special characters like &, @, etc.
+    return `${protocol}${encodeURIComponent(username)}:${encodeURIComponent(password)}@${rest}`
   }
+  // If regex doesn't match, return original (might be a different format)
+  return connectionString
 }
 
 // Use singleton pattern to prevent multiple connections in serverless environments
 declare global {
   // eslint-disable-next-line no-var
   var postgresClient: ReturnType<typeof postgres> | undefined
+  // eslint-disable-next-line no-var
+  var drizzleDb: ReturnType<typeof drizzle> | undefined
 }
 
-// For serverless environments (Next.js API routes), reuse the connection
-// For non-serverless (scripts), create a new connection each time
-const client = globalThis.postgresClient ?? postgres(encodedConnectionString, {
-  max: 1, // Limit connections for serverless environments
-  idle_timeout: 20,
-  connect_timeout: 10,
+// Lazy initialization function - only called at runtime, not during build
+function getClient() {
+  const connectionString = process.env.DATABASE_URL
+  
+  if (!connectionString) {
+    throw new Error("DATABASE_URL environment variable is not set")
+  }
+
+  // Encode connection string to handle special characters
+  const encodedConnectionString = encodeConnectionString(connectionString)
+
+  // For serverless environments (Next.js API routes), reuse the connection
+  // For non-serverless (scripts), create a new connection each time
+  if (!globalThis.postgresClient) {
+    globalThis.postgresClient = postgres(encodedConnectionString, {
+      max: 1, // Limit connections for serverless environments
+      idle_timeout: 20,
+      connect_timeout: 10,
+    })
+  }
+
+  return globalThis.postgresClient
+}
+
+// Lazy getter for db - only initializes when actually used (at runtime)
+function getDb() {
+  if (!globalThis.drizzleDb) {
+    globalThis.drizzleDb = drizzle(getClient(), { schema })
+  }
+  return globalThis.drizzleDb
+}
+
+// Export db as a getter that lazily initializes
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_target, prop) {
+    return getDb()[prop as keyof ReturnType<typeof drizzle>]
+  }
 })
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.postgresClient = client
-}
-
-export const db = drizzle(client, { schema })
 

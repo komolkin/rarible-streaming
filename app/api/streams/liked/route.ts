@@ -3,6 +3,9 @@ import { db } from "@/lib/db"
 import { streamLikes, streams, categories } from "@/lib/db/schema"
 import { eq, desc, inArray } from "drizzle-orm"
 
+// Mark this route as dynamic since it uses request.url
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
