@@ -357,7 +357,11 @@ export async function DELETE(
     let vodUrl = updated.vodUrl || null
     let previewImageUrl = updated.previewImageUrl || null
 
-    if (updated.livepeerStreamId && updated.livepeerPlaybackId) {
+    // CRITICAL: Store the stream ID and Livepeer stream ID for verification
+    const streamId = params.id
+    const livepeerStreamId = updated.livepeerStreamId
+
+    if (livepeerStreamId && updated.livepeerPlaybackId) {
       try {
         const { 
           waitForVOD, 
@@ -367,7 +371,8 @@ export async function DELETE(
           getStreamAsset
         } = await import("@/lib/livepeer")
         
-        console.log(`Preparing recording and preview for stream: ${updated.livepeerStreamId}, playbackId: ${updated.livepeerPlaybackId}`)
+        console.log(`[DELETE Stream ${streamId}] Preparing recording and preview for Livepeer stream: ${livepeerStreamId}, playbackId: ${updated.livepeerPlaybackId}`)
+        console.log(`[DELETE Stream ${streamId}] Database stream ID: ${streamId}, Livepeer stream ID: ${livepeerStreamId}`)
         
         // Wait a bit for Livepeer to process the recording (assets are created asynchronously)
         await new Promise(resolve => setTimeout(resolve, 5000))
@@ -375,14 +380,24 @@ export async function DELETE(
         // Try to get asset from Livepeer (this is the preferred method for recordings)
         // For VOD preview images, we should use the asset's playbackId, not the stream's playbackId
         try {
-          const asset = await getStreamAsset(updated.livepeerStreamId)
+          const asset = await getStreamAsset(livepeerStreamId)
           
           if (asset) {
-            console.log(`Found asset for stream:`, {
+            // CRITICAL: Verify the asset actually belongs to this stream
+            const assetSourceStreamId = asset.sourceStreamId || asset.source?.streamId
+            if (assetSourceStreamId !== livepeerStreamId) {
+              console.error(`[DELETE Stream ${streamId}] SECURITY ISSUE: Asset ${asset.id} does not belong to stream!`)
+              console.error(`[DELETE Stream ${streamId}] Expected sourceStreamId: ${livepeerStreamId}, Got: ${assetSourceStreamId}`)
+              throw new Error(`Asset ${asset.id} does not belong to stream ${livepeerStreamId}`)
+            }
+            
+            console.log(`[DELETE Stream ${streamId}] Found asset for stream:`, {
               assetId: asset.id,
               playbackUrl: asset.playbackUrl,
               playbackId: asset.playbackId,
-              status: asset.status
+              status: asset.status,
+              sourceStreamId: assetSourceStreamId,
+              verified: assetSourceStreamId === livepeerStreamId
             })
             
             // For VOD, we MUST use the asset's playbackId, not the stream's playbackId
@@ -391,7 +406,7 @@ export async function DELETE(
               // Use the asset's playbackId to construct HLS URL for VOD
               // This is the correct playbackId for VOD assets
               vodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
-              console.log(`Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
+              console.log(`[DELETE Stream ${streamId}] Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
               
               // Only generate thumbnail if user hasn't uploaded a cover image
               // This preserves user-uploaded cover images
@@ -403,20 +418,23 @@ export async function DELETE(
                   maxRetries: 3,
                   retryDelay: 2000, // 2 seconds between retries
                 })
-                console.log(`Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
+                console.log(`[DELETE Stream ${streamId}] Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
               } else {
-                console.log(`Preserving user-uploaded cover image: ${previewImageUrl}`)
+                console.log(`[DELETE Stream ${streamId}] Preserving user-uploaded cover image: ${previewImageUrl}`)
               }
             } else if (asset.playbackUrl) {
               // Use asset playback URL if available (could be HLS or MP4)
               vodUrl = asset.playbackUrl
-              console.log(`Using asset playbackUrl: ${vodUrl}`)
+              console.log(`[DELETE Stream ${streamId}] Using asset playbackUrl: ${vodUrl}`)
             } else {
-              console.warn(`Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
+              console.warn(`[DELETE Stream ${streamId}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
             }
+          } else {
+            console.warn(`[DELETE Stream ${streamId}] No asset found for Livepeer stream ${livepeerStreamId}`)
           }
-        } catch (assetError) {
-          console.warn("Could not fetch asset:", assetError)
+        } catch (assetError: any) {
+          console.error(`[DELETE Stream ${streamId}] Could not fetch asset for stream ${livepeerStreamId}:`, assetError?.message || assetError)
+          // Don't throw - continue with fallbacks
         }
         
         // Fallback: Generate thumbnail using stream playbackId if we don't have asset playbackId
@@ -428,13 +446,14 @@ export async function DELETE(
             maxRetries: 2, // Fewer retries for fallback
             retryDelay: 2000,
           })
-          console.log(`Generated preview image URL from stream playbackId (fallback): ${previewImageUrl}`)
+          console.log(`[DELETE Stream ${streamId}] Generated preview image URL from stream playbackId (fallback): ${previewImageUrl}`)
         }
         
         // Fallback: Try to get recording/asset information from stream sessions
         if (!vodUrl) {
           try {
-            const recording = await getStreamRecording(updated.livepeerStreamId)
+            console.log(`[DELETE Stream ${streamId}] Trying to get recording from stream sessions for ${livepeerStreamId}`)
+            const recording = await getStreamRecording(livepeerStreamId)
             if (recording?.recordingUrl) {
               vodUrl = recording.recordingUrl
               console.log(`Found recording URL: ${vodUrl}`)
@@ -473,6 +492,8 @@ export async function DELETE(
         }
         
         // Update database with preview image and VOD URL
+        // CRITICAL: Always use params.id (the database stream ID) to ensure we update the correct stream
+        console.log(`[DELETE Stream ${streamId}] Updating database stream ${streamId} with vodUrl: ${vodUrl}, previewImageUrl: ${previewImageUrl ? 'set' : 'null'}`)
         const [finalUpdated] = await db
           .update(streams)
           .set({
@@ -480,8 +501,16 @@ export async function DELETE(
             vodUrl: vodUrl || null,
             updatedAt: new Date(),
           })
-          .where(eq(streams.id, params.id))
+          .where(eq(streams.id, streamId)) // Use streamId variable, not params.id directly
           .returning()
+        
+        // Verify we updated the correct stream
+        if (finalUpdated.id !== streamId) {
+          console.error(`[DELETE Stream ${streamId}] CRITICAL ERROR: Updated wrong stream! Expected ${streamId}, got ${finalUpdated.id}`)
+          throw new Error(`Updated wrong stream: expected ${streamId}, got ${finalUpdated.id}`)
+        }
+        
+        console.log(`[DELETE Stream ${streamId}] Successfully updated stream ${finalUpdated.id} with VOD URL and preview image`)
         
         // Fetch category for the response
         let category = null
@@ -494,8 +523,8 @@ export async function DELETE(
           ...finalUpdated,
           category: category,
         })
-      } catch (error) {
-        console.error("Error preparing recording and preview:", error)
+      } catch (error: any) {
+        console.error(`[DELETE Stream ${streamId}] Error preparing recording and preview:`, error?.message || error)
         // Continue even if recording/preview preparation fails
         // The stream is still marked as ended
       }

@@ -681,10 +681,20 @@ export async function getStreamAsset(streamId: string) {
         })
       })
       
+      // Helper function to verify asset belongs to stream
+      const verifyAsset = (asset: any): boolean => {
+        const assetSourceStreamId = asset.sourceStreamId || asset.source?.streamId
+        const matches = assetSourceStreamId === streamId
+        if (!matches) {
+          console.error(`[getStreamAsset] Asset ${asset.id} does not belong to stream ${streamId}! sourceStreamId: ${assetSourceStreamId}`)
+        }
+        return matches
+      }
+      
       // Prioritize assets that are ready and have playbackId (from most recent)
       // For VOD, the asset's playbackId is what we need
       const readyAsset = sortedAssets.find((asset: any) => 
-        asset.status === "ready" && asset.playbackId
+        asset.status === "ready" && asset.playbackId && verifyAsset(asset)
       )
       
       if (readyAsset) {
@@ -693,7 +703,7 @@ export async function getStreamAsset(streamId: string) {
       }
       
       // Fallback: find asset with playbackId even if status is not "ready" (from most recent)
-      const assetWithPlaybackId = sortedAssets.find((asset: any) => asset.playbackId)
+      const assetWithPlaybackId = sortedAssets.find((asset: any) => asset.playbackId && verifyAsset(asset))
       if (assetWithPlaybackId) {
         console.log(`Found asset with playbackId (status: ${assetWithPlaybackId.status}, most recent) for stream ${streamId}: ${assetWithPlaybackId.playbackId}`)
         return assetWithPlaybackId
@@ -701,7 +711,7 @@ export async function getStreamAsset(streamId: string) {
       
       // Fallback: find asset with playbackUrl (from most recent)
       const assetWithPlaybackUrl = sortedAssets.find((asset: any) => 
-        asset.playbackUrl || asset.status === "ready"
+        (asset.playbackUrl || asset.status === "ready") && verifyAsset(asset)
       )
       
       if (assetWithPlaybackUrl) {
@@ -709,9 +719,16 @@ export async function getStreamAsset(streamId: string) {
         return assetWithPlaybackUrl
       }
       
-      // If no ready asset, return the most recent one (might still be processing)
-      console.log(`Using most recent asset (may still be processing) for stream ${streamId}: ${sortedAssets[0].id}`)
-      return sortedAssets[0]
+      // If no verified asset found, log warning and return null instead of wrong asset
+      console.warn(`[getStreamAsset] No verified assets found for stream ${streamId} after filtering. Found ${sortedAssets.length} assets but none match sourceStreamId.`)
+      if (sortedAssets.length > 0) {
+        console.warn(`[getStreamAsset] First asset details:`, {
+          id: sortedAssets[0].id,
+          sourceStreamId: sortedAssets[0].sourceStreamId || sortedAssets[0].source?.streamId,
+          expectedStreamId: streamId
+        })
+      }
+      return null
     }
 
     // If no assets found by source stream ID, try checking the stream's sessions
