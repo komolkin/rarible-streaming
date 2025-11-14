@@ -178,9 +178,51 @@ export async function GET(request: NextRequest) {
     const streamsWithThumbnailsCount = streamsWithThumbnails.filter(s => s.endedAt && s.previewImageUrl).length
     console.log(`[Streams API] Returning ${streamsWithThumbnails.length} streams, ${streamsWithThumbnailsCount} ended streams have thumbnails`)
 
+    // Fetch viewer counts from Livepeer for streams with playbackId
+    // Only fetch for live streams or streams that haven't ended to avoid unnecessary API calls
+    const streamsWithViewerCounts = await Promise.all(
+      streamsWithThumbnails.map(async (stream) => {
+        // Only fetch viewer count for live streams or streams with playbackId that haven't ended
+        // This ensures viewer counts are up-to-date for active streams
+        if (stream.livepeerPlaybackId && !stream.endedAt) {
+          try {
+            const { getViewerCount } = await import("@/lib/livepeer")
+            const viewerCount = await getViewerCount(stream.livepeerPlaybackId)
+            
+            // Update viewer count in database if it changed
+            if (viewerCount !== stream.viewerCount) {
+              try {
+                await db
+                  .update(streams)
+                  .set({
+                    viewerCount: viewerCount,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(streams.id, stream.id))
+                
+                console.log(`[Streams API] Updated viewer count for stream ${stream.id}: ${stream.viewerCount} -> ${viewerCount}`)
+              } catch (dbError) {
+                console.warn(`[Streams API] Failed to update viewer count for stream ${stream.id}:`, dbError)
+              }
+            }
+            
+            return {
+              ...stream,
+              viewerCount: viewerCount,
+            }
+          } catch (error) {
+            console.warn(`[Streams API] Could not fetch viewer count for stream ${stream.id}:`, error)
+            // Continue with existing viewer count from database
+          }
+        }
+        
+        return stream
+      })
+    )
+
     // Fetch categories for all streams and attach them
     const streamsWithCategories = await Promise.all(
-      streamsWithThumbnails.map(async (stream) => {
+      streamsWithViewerCounts.map(async (stream) => {
         if (stream.categoryId) {
           try {
             const [categoryData] = await db
