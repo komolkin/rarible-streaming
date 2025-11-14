@@ -5,14 +5,15 @@
   "scripts": {
     "dev": "NODE_OPTIONS=--no-deprecation next dev",
     "build": "next build",
-    "build:with-migrations": "npm run db:migrate && next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "drizzle-kit push:pg",
+    "db:migrate:up": "drizzle-kit up:pg",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed-categories.ts",
-    "db:delete-streams": "tsx scripts/delete-all-streams.ts"
+    "db:delete-streams": "tsx scripts/delete-all-streams.ts",
+    "db:migrate:run": "tsx scripts/run-migrations.ts"
   },
   "dependencies": {
     "@livepeer/react": "^2.0.0",
