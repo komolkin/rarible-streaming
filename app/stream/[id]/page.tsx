@@ -47,7 +47,7 @@ export default function StreamPage() {
   const streamLiveStatusRef = useRef<boolean>(false)
   const [liveViewerCount, setLiveViewerCount] = useState<number | null>(null)
   const [viewerCountError, setViewerCountError] = useState<string | null>(null)
-  const [lowLatencyMode, setLowLatencyMode] = useState<"force" | boolean>(true)
+  const [hasRealtimeViewerData, setHasRealtimeViewerData] = useState<boolean>(false)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -379,11 +379,14 @@ export default function StreamPage() {
       playerOfflineTimeoutRef.current = null
     }
     setPlayerIsStreaming(false)
-    setLowLatencyMode(true)
   }, [stream?.livepeerPlaybackId])
 
   useEffect(() => {
-    streamLiveStatusRef.current = !!stream?.isLive
+    const isLive = !!stream?.isLive
+    streamLiveStatusRef.current = isLive
+    if (!isLive) {
+      setHasRealtimeViewerData(false)
+    }
   }, [stream?.isLive])
 
   useEffect(() => {
@@ -393,9 +396,8 @@ export default function StreamPage() {
     }
 
     const shouldPoll =
-      !!stream?.isLive ||
-      playerIsStreaming ||
-      (!stream?.endedAt && stream?.livepeerStreamId)
+      !hasRealtimeViewerData &&
+      (stream?.isLive || playerIsStreaming || (!stream?.endedAt && stream?.livepeerStreamId))
 
     if (!shouldPoll) {
       return
@@ -404,7 +406,30 @@ export default function StreamPage() {
     fetchLiveViewerCount()
     const interval = setInterval(fetchLiveViewerCount, 5000)
     return () => clearInterval(interval)
-  }, [stream?.livepeerPlaybackId, stream?.isLive, stream?.endedAt, stream?.livepeerStreamId, playerIsStreaming, fetchLiveViewerCount])
+  }, [
+    stream?.livepeerPlaybackId,
+    stream?.isLive,
+    stream?.endedAt,
+    stream?.livepeerStreamId,
+    playerIsStreaming,
+    hasRealtimeViewerData,
+    fetchLiveViewerCount,
+  ])
+
+  const handlePlaybackStatusUpdate = useCallback((status: any) => {
+    const viewerCount =
+      typeof status?.viewerCount === "number"
+        ? status.viewerCount
+        : typeof status?.metrics?.viewCount === "number"
+          ? status.metrics.viewCount
+          : undefined
+
+    if (typeof viewerCount === "number") {
+      setLiveViewerCount(viewerCount)
+      setViewerCountError(null)
+      setHasRealtimeViewerData(true)
+    }
+  }, [])
 
   useEffect(() => {
     fetchStream()
@@ -769,9 +794,6 @@ export default function StreamPage() {
                           showPipButton={false}
                           objectFit="contain"
                           priority
-                          lowLatency={lowLatencyMode}
-                          webrtcConfig={{ sdpTimeout: 15000 }}
-                          hlsConfig={{ lowLatencyMode: true, backBufferLength: 30 }}
                           showUploadingIndicator={false}
                           onError={(error) => {
                             console.error("Player error:", error)
@@ -781,12 +803,8 @@ export default function StreamPage() {
                               isLive: stream.isLive,
                               error: error
                             })
-                            setLowLatencyMode((prev) => {
-                              if (prev === "force") return true
-                              if (prev === true) return false
-                              return prev
-                            })
                           }}
+                          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
                           onStreamStatusChange={(isLive: boolean) => {
                             console.log("🎥 Player stream status:", isLive, {
                               playbackId: stream.livepeerPlaybackId,
