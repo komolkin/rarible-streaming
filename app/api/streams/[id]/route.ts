@@ -37,6 +37,7 @@ export async function GET(
         
         if (asset) {
           let vodUrl = null
+          // Preserve user-uploaded cover image - only generate thumbnail if none exists
           let previewImageUrl = stream.previewImageUrl || null
           
           console.log(`Asset details:`, {
@@ -63,10 +64,9 @@ export async function GET(
             // Don't use stream playbackId for VOD - it won't work
           }
           
-          // Generate thumbnail using asset playbackId (preferred for VOD)
-          // Asset playbackId generates thumbnails from the actual recorded content
-          // Use optimized VOD thumbnail settings with verification and retry logic
-          if (asset.playbackId) {
+          // Only generate thumbnail if user hasn't uploaded a cover image
+          // This preserves user-uploaded cover images
+          if (!previewImageUrl && asset.playbackId) {
             const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
             previewImageUrl = await generateAndVerifyThumbnail(asset.playbackId, {
               isVod: true,
@@ -76,7 +76,7 @@ export async function GET(
             })
             console.log(`Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
           } else if (!previewImageUrl && stream.livepeerPlaybackId) {
-            // Fallback to stream playbackId if asset doesn't have playbackId
+            // Fallback to stream playbackId if asset doesn't have playbackId and no user image
             const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
             previewImageUrl = await generateAndVerifyThumbnail(stream.livepeerPlaybackId, {
               isVod: false,
@@ -84,6 +84,8 @@ export async function GET(
               retryDelay: 2000,
             })
             console.log(`Generated preview image URL from stream playbackId (fallback): ${previewImageUrl}`)
+          } else if (previewImageUrl) {
+            console.log(`Preserving user-uploaded cover image: ${previewImageUrl}`)
           }
           
           // Update stream with asset information
@@ -128,7 +130,7 @@ export async function GET(
         // Also update streamKey if missing
         const needsStreamKeyUpdate = !stream.livepeerStreamKey && livepeerStreamData?.streamKey
         
-        // Generate preview image for live streams if missing
+        // Generate preview image for live streams if missing (don't overwrite user-uploaded images)
         const needsPreviewImage = !stream.previewImageUrl && livepeerStreamData?.playbackId
         let previewImageUrl = stream.previewImageUrl
         
@@ -136,12 +138,15 @@ export async function GET(
           const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
           // For live streams, use async generation but don't block on verification
           // Live stream thumbnails may not be immediately available
+          // Only generate if user hasn't uploaded a cover image
           previewImageUrl = await generateAndVerifyThumbnail(livepeerStreamData.playbackId, {
             isVod: false,
             maxRetries: 2, // Fewer retries for live streams
             retryDelay: 1500,
           })
           console.log(`[Stream ${params.id}] Generated preview image for live stream: ${previewImageUrl}`)
+        } else if (stream.previewImageUrl) {
+          console.log(`[Stream ${params.id}] Preserving user-uploaded cover image: ${stream.previewImageUrl}`)
         }
         
         // Always update viewer count from Livepeer (for real-time accuracy)
@@ -218,7 +223,8 @@ export async function GET(
     } else if (isManuallyEnded) {
       console.log(`[Stream ${params.id}] Stream has been manually ended, skipping Livepeer status check`)
       
-      // Generate thumbnail if missing (for both live and ended streams)
+      // Generate thumbnail if missing (only if user hasn't uploaded a cover image)
+      // This preserves user-uploaded cover images
       if (!stream.previewImageUrl && (stream.livepeerStreamId || stream.livepeerPlaybackId)) {
         try {
           const { getStreamAsset, generateAndVerifyThumbnail } = await import("@/lib/livepeer")
@@ -254,7 +260,8 @@ export async function GET(
           }
           
           // Save thumbnail URL if we got one (even if verification failed, it might become available later)
-          if (previewImageUrl) {
+          // Only save if user hasn't uploaded a cover image
+          if (previewImageUrl && !stream.previewImageUrl) {
             const [updated] = await db
               .update(streams)
               .set({
@@ -282,6 +289,8 @@ export async function GET(
         } catch (error) {
           console.warn(`[Stream ${params.id}] Could not generate preview image:`, error)
         }
+      } else if (stream.previewImageUrl) {
+        console.log(`[Stream ${params.id}] Preserving user-uploaded cover image: ${stream.previewImageUrl}`)
       }
     } else {
       console.log(`[Stream ${params.id}] No livepeerStreamId found`)
@@ -344,6 +353,7 @@ export async function DELETE(
       .returning()
 
     // Prepare recording and preview image
+    // Preserve user-uploaded cover image - only generate thumbnail if none exists
     let vodUrl = updated.vodUrl || null
     let previewImageUrl = updated.previewImageUrl || null
 
@@ -383,17 +393,20 @@ export async function DELETE(
               vodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
               console.log(`Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
               
-              // Generate thumbnail URL using asset playbackId (better for VOD)
-              // Asset playbackId generates thumbnails from the actual recorded content
-              // Use optimized VOD thumbnail settings with verification and retry logic
-              const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
-              previewImageUrl = await generateAndVerifyThumbnail(asset.playbackId, {
-                isVod: true,
-                duration: asset.duration,
-                maxRetries: 3,
-                retryDelay: 2000, // 2 seconds between retries
-              })
-              console.log(`Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
+              // Only generate thumbnail if user hasn't uploaded a cover image
+              // This preserves user-uploaded cover images
+              if (!previewImageUrl) {
+                const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
+                previewImageUrl = await generateAndVerifyThumbnail(asset.playbackId, {
+                  isVod: true,
+                  duration: asset.duration,
+                  maxRetries: 3,
+                  retryDelay: 2000, // 2 seconds between retries
+                })
+                console.log(`Generated and verified preview image URL from asset playbackId: ${previewImageUrl}`)
+              } else {
+                console.log(`Preserving user-uploaded cover image: ${previewImageUrl}`)
+              }
             } else if (asset.playbackUrl) {
               // Use asset playback URL if available (could be HLS or MP4)
               vodUrl = asset.playbackUrl
@@ -407,7 +420,7 @@ export async function DELETE(
         }
         
         // Fallback: Generate thumbnail using stream playbackId if we don't have asset playbackId
-        // This works for live streams but may not be as accurate for VOD
+        // Only if user hasn't uploaded a cover image
         if (!previewImageUrl && updated.livepeerPlaybackId) {
           const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
           previewImageUrl = await generateAndVerifyThumbnail(updated.livepeerPlaybackId, {

@@ -647,48 +647,60 @@ export async function getStreamAsset(streamId: string) {
     console.log(`Found ${assets?.length || 0} assets for stream ${streamId}`)
     
     if (assets && assets.length > 0) {
+      // Sort assets by creation date (newest first) to get the most recent recording
+      // Assets typically have createdAt or createdTimestamp field
+      const sortedAssets = [...assets].sort((a: any, b: any) => {
+        const aTime = a.createdAt || a.createdTimestamp || a.created || 0
+        const bTime = b.createdAt || b.createdTimestamp || b.created || 0
+        // Convert to timestamp if it's a string
+        const aTimestamp = typeof aTime === 'string' ? new Date(aTime).getTime() : aTime
+        const bTimestamp = typeof bTime === 'string' ? new Date(bTime).getTime() : bTime
+        return bTimestamp - aTimestamp // Newest first
+      })
+      
       // Log all assets for debugging
-      assets.forEach((asset: any, index: number) => {
+      sortedAssets.forEach((asset: any, index: number) => {
         console.log(`Asset ${index + 1}:`, {
           id: asset.id,
           status: asset.status,
           playbackId: asset.playbackId,
           playbackUrl: asset.playbackUrl,
           sourceStreamId: asset.sourceStreamId,
+          createdAt: asset.createdAt || asset.createdTimestamp || asset.created,
         })
       })
       
-      // Prioritize assets that are ready and have playbackId
+      // Prioritize assets that are ready and have playbackId (from most recent)
       // For VOD, the asset's playbackId is what we need
-      const readyAsset = assets.find((asset: any) => 
+      const readyAsset = sortedAssets.find((asset: any) => 
         asset.status === "ready" && asset.playbackId
       )
       
       if (readyAsset) {
-        console.log(`Found ready asset with playbackId: ${readyAsset.playbackId}`)
+        console.log(`Found ready asset with playbackId (most recent): ${readyAsset.playbackId}`)
         return readyAsset
       }
       
-      // Fallback: find asset with playbackId even if status is not "ready"
-      const assetWithPlaybackId = assets.find((asset: any) => asset.playbackId)
+      // Fallback: find asset with playbackId even if status is not "ready" (from most recent)
+      const assetWithPlaybackId = sortedAssets.find((asset: any) => asset.playbackId)
       if (assetWithPlaybackId) {
-        console.log(`Found asset with playbackId (status: ${assetWithPlaybackId.status}): ${assetWithPlaybackId.playbackId}`)
+        console.log(`Found asset with playbackId (status: ${assetWithPlaybackId.status}, most recent): ${assetWithPlaybackId.playbackId}`)
         return assetWithPlaybackId
       }
       
-      // Fallback: find asset with playbackUrl
-      const assetWithPlaybackUrl = assets.find((asset: any) => 
+      // Fallback: find asset with playbackUrl (from most recent)
+      const assetWithPlaybackUrl = sortedAssets.find((asset: any) => 
         asset.playbackUrl || asset.status === "ready"
       )
       
       if (assetWithPlaybackUrl) {
-        console.log(`Found asset with playbackUrl: ${assetWithPlaybackUrl.playbackUrl}`)
+        console.log(`Found asset with playbackUrl (most recent): ${assetWithPlaybackUrl.playbackUrl}`)
         return assetWithPlaybackUrl
       }
       
-      // If no ready asset, return the first one (might still be processing)
-      console.log(`Using first asset (may still be processing): ${assets[0].id}`)
-      return assets[0]
+      // If no ready asset, return the most recent one (might still be processing)
+      console.log(`Using most recent asset (may still be processing): ${sortedAssets[0].id}`)
+      return sortedAssets[0]
     }
 
     // If no assets found by source stream ID, try checking the stream's sessions
