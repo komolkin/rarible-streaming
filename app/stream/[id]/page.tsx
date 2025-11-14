@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { useParams } from "next/navigation"
-import * as Player from "@livepeer/react/player"
-import { getSrc } from "@livepeer/react/external"
-import { Player as LegacyPlayer } from "@livepeer/react" // For live streams
+import { Player } from "@livepeer/react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -53,8 +51,6 @@ export default function StreamPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [playbackType, setPlaybackType] = useState<"live" | "vod" | null>(null)
   const [isCheckingPlaybackType, setIsCheckingPlaybackType] = useState<boolean>(false)
-  const [playbackSrc, setPlaybackSrc] = useState<any>(null) // Source for UI Kit Player
-  const [isLoadingPlaybackInfo, setIsLoadingPlaybackInfo] = useState<boolean>(false)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -122,29 +118,52 @@ export default function StreamPage() {
       setStream(data)
       setPageError(null) // Clear any previous errors
       
-      // If stream has ended and API returned asset playbackId, use it immediately
-      if (data.endedAt && data.assetPlaybackId && !assetPlaybackId) {
-        console.log(`[Stream Fetch] ✅ Found asset playbackId from API: ${data.assetPlaybackId}`)
-        setAssetPlaybackId(data.assetPlaybackId)
-        setAssetReady(true)
-        setVodReady(true)
-        setPlaybackType("vod")
-      }
-      
-      // If stream has ended and API returned assetId, fetch recording using assetId (most reliable)
-      if (data.endedAt && data.assetId && !assetPlaybackId) {
-        console.log(`[Stream Fetch] ✅ Found assetId from API: ${data.assetId} - fetching recording directly...`)
-        // Trigger asset fetch immediately using assetId
-        setTimeout(() => {
-          fetchStreamRecording(undefined, undefined, data.assetId)
-        }, 500)
-      } else if (data.endedAt && data.livepeerStreamId && !data.assetPlaybackId && !data.assetId && !assetPlaybackId) {
-        // Fallback: For ended streams without assetId, try fetching by stream ID
-        console.log(`[Stream Fetch] Stream ended - fetching asset playbackId by stream ID...`)
-        // Trigger asset fetch immediately
-        setTimeout(() => {
-          fetchStreamRecording()
-        }, 500)
+      // If stream has ended, find asset by playbackId or assetId
+      if (data.endedAt && !assetPlaybackId) {
+        // Priority: 1) assetPlaybackId from API, 2) assetId from API, 3) playbackId from API, 4) fetch by stream ID
+        if (data.assetPlaybackId) {
+          console.log(`[Stream Fetch] ✅ Found asset playbackId from API: ${data.assetPlaybackId}`)
+          setAssetPlaybackId(data.assetPlaybackId)
+          setAssetReady(true)
+          setVodReady(true)
+          setPlaybackType("vod")
+        } else if (data.assetId) {
+          console.log(`[Stream Fetch] ✅ Found assetId from API: ${data.assetId} - finding asset...`)
+          // Find asset by assetId
+          setTimeout(async () => {
+            const foundPlaybackId = await findAssetByPlaybackIdOrAssetId(data.assetId)
+            if (foundPlaybackId) {
+              setAssetPlaybackId(foundPlaybackId)
+              setAssetReady(true)
+              setVodReady(true)
+              setPlaybackType("vod")
+            } else {
+              // Fallback to fetching recording
+              fetchStreamRecording(undefined, undefined, data.assetId)
+            }
+          }, 500)
+        } else if (data.livepeerPlaybackId) {
+          console.log(`[Stream Fetch] ✅ Found playbackId from API: ${data.livepeerPlaybackId} - checking if it's an asset...`)
+          // Check if this playbackId is an asset playbackId
+          setTimeout(async () => {
+            const foundPlaybackId = await findAssetByPlaybackIdOrAssetId(data.livepeerPlaybackId)
+            if (foundPlaybackId) {
+              setAssetPlaybackId(foundPlaybackId)
+              setAssetReady(true)
+              setVodReady(true)
+              setPlaybackType("vod")
+            } else {
+              // Fallback to fetching recording by stream ID
+              fetchStreamRecording()
+            }
+          }, 500)
+        } else if (data.livepeerStreamId) {
+          // Fallback: For ended streams without assetId or playbackId, try fetching by stream ID
+          console.log(`[Stream Fetch] Stream ended - fetching asset playbackId by stream ID...`)
+          setTimeout(() => {
+            fetchStreamRecording()
+          }, 500)
+        }
       }
       
       // Fetch creator profile if we have creator address
@@ -223,7 +242,7 @@ export default function StreamPage() {
     } catch (error) {
       console.error("Error fetching stream:", error)
     }
-  }, [params.id, authenticated, user?.wallet?.address])
+  }, [params.id, authenticated, user?.wallet?.address, findAssetByPlaybackIdOrAssetId, fetchStreamRecording])
 
   const fetchLiveViewerCount = useCallback(async () => {
     if (!stream?.livepeerPlaybackId || !stream) {
@@ -393,34 +412,61 @@ export default function StreamPage() {
     }
   }, [params.id, assetPlaybackId])
 
-  // Fetch playback info and convert to src for UI Kit Player
-  const fetchPlaybackInfo = useCallback(async (playbackId: string) => {
-    if (!playbackId) return null
+  // Find asset by playbackId or assetId
+  const findAssetByPlaybackIdOrAssetId = useCallback(async (playbackIdOrAssetId: string) => {
+    if (!playbackIdOrAssetId) return null
     
-    setIsLoadingPlaybackInfo(true)
     try {
-      console.log(`[Playback Info] Fetching playback info for playbackId: ${playbackId}`)
-      const response = await fetch(`/api/streams/${params.id}/playback?playbackId=${encodeURIComponent(playbackId)}`)
+      console.log(`[Asset Finder] Looking for asset by playbackId/assetId: ${playbackIdOrAssetId}`)
       
-      if (response.ok) {
-        const data = await response.json()
-        if (data.playbackInfo) {
-          // Use getSrc to convert playbackInfo to src format for UI Kit Player
-          const src = getSrc(data.playbackInfo)
-          console.log(`[Playback Info] ✅ Got playback src for UI Kit Player:`, src)
-          setPlaybackSrc(src)
-          return src
+      // Try to get asset by ID first (if it's a UUID format)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playbackIdOrAssetId)
+      
+      if (isUUID) {
+        // It's an asset ID - fetch directly
+        console.log(`[Asset Finder] Detected UUID format, fetching asset by ID...`)
+        const response = await fetch(`/api/streams/${params.id}/recording?assetId=${encodeURIComponent(playbackIdOrAssetId)}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.recording?.playbackId) {
+            console.log(`[Asset Finder] ✅ Found asset by ID: ${data.recording.playbackId}`)
+            return data.recording.playbackId
+          }
         }
-      } else {
-        console.warn(`[Playback Info] Failed to fetch playback info: ${response.status}`)
       }
+      
+      // Try to find asset by playbackId
+      // First check if this playbackId belongs to an asset by checking playback info
+      const playbackResponse = await fetch(`/api/streams/${params.id}/playback?playbackId=${encodeURIComponent(playbackIdOrAssetId)}`)
+      if (playbackResponse.ok) {
+        const playbackData = await playbackResponse.json()
+        // If playback type is "vod", this is likely an asset playbackId
+        if (playbackData.type === "vod" || playbackData.playbackInfo?.type === "vod") {
+          console.log(`[Asset Finder] ✅ PlaybackId ${playbackIdOrAssetId} is VOD (asset playbackId)`)
+          return playbackIdOrAssetId
+        }
+      }
+      
+      // If stream has ended, try to find asset by checking all assets
+      if (stream?.endedAt && stream?.livepeerStreamId) {
+        const recordingResponse = await fetch(`/api/streams/${params.id}/recording`)
+        if (recordingResponse.ok) {
+          const recordingData = await recordingResponse.json()
+          if (recordingData.success && recordingData.recording?.playbackId) {
+            console.log(`[Asset Finder] ✅ Found asset playbackId from recording: ${recordingData.recording.playbackId}`)
+            return recordingData.recording.playbackId
+          }
+        }
+      }
+      
+      // Fallback: assume it's a playbackId and return it
+      console.log(`[Asset Finder] Using ${playbackIdOrAssetId} as playbackId`)
+      return playbackIdOrAssetId
     } catch (error) {
-      console.error("[Playback Info] Error fetching playback info:", error)
-    } finally {
-      setIsLoadingPlaybackInfo(false)
+      console.error("[Asset Finder] Error finding asset:", error)
+      return null
     }
-    return null
-  }, [params.id])
+  }, [params.id, stream?.endedAt, stream?.livepeerStreamId])
 
   // Fetch recording from Livepeer by stream ID when stream ends
   // According to Livepeer docs: When a stream ends with recording enabled,
@@ -469,18 +515,14 @@ export default function StreamPage() {
             playbackUrl: recording.playbackUrl,
           })
 
-          // CRITICAL: According to Livepeer docs, UI Kit Player needs playbackInfo converted to src
-          // Priority: Use asset playbackId with UI Kit Player (best for VOD)
-          // Fetch playback info and convert to src format for the UI Kit Player
+          // CRITICAL: Use asset playbackId with Player component (best for VOD)
+          // The Player component accepts playbackId directly
           if (recording.playbackId) {
             console.log(`[VOD] ✅ Found asset playbackId: ${recording.playbackId}`)
             setAssetPlaybackId(recording.playbackId)
             setAssetReady(true)
             setVodReady(true)
             setPlaybackType("vod")
-            
-            // Fetch playback info and convert to src for UI Kit Player
-            await fetchPlaybackInfo(recording.playbackId)
             
             // Also store playbackUrl as fallback (for HLS player if needed)
             if (recording.playbackUrl) {
@@ -513,7 +555,7 @@ export default function StreamPage() {
     } finally {
       setCheckingVod(false)
     }
-  }, [stream?.endedAt, stream?.livepeerStreamId, stream?.vodUrl, stream?.assetId, params.id, fetchPlaybackInfo])
+  }, [stream?.endedAt, stream?.livepeerStreamId, stream?.vodUrl, stream?.assetId, params.id])
 
   // Check if VOD is ready for ended streams
   // According to Livepeer docs: Player automatically handles VOD with stream playbackId
@@ -733,21 +775,6 @@ export default function StreamPage() {
     }
   }, [stream?.endedAt, stream?.livepeerPlaybackId, stream?.livepeerStreamId, stream?.assetId, playbackType, assetPlaybackId, fetchStreamRecording, checkPlaybackType])
 
-  // Fetch playback info when assetPlaybackId is set
-  useEffect(() => {
-    if (assetPlaybackId && !playbackSrc && !isLoadingPlaybackInfo) {
-      console.log(`[Effect] Fetching playback info for assetPlaybackId: ${assetPlaybackId}`)
-      fetchPlaybackInfo(assetPlaybackId)
-    }
-  }, [assetPlaybackId, playbackSrc, isLoadingPlaybackInfo, fetchPlaybackInfo])
-
-  // Also fetch playback info for stream playbackId if we don't have assetPlaybackId
-  useEffect(() => {
-    if (stream?.endedAt && stream?.livepeerPlaybackId && !assetPlaybackId && !playbackSrc && !isLoadingPlaybackInfo) {
-      console.log(`[Effect] Fetching playback info for stream playbackId: ${stream.livepeerPlaybackId}`)
-      fetchPlaybackInfo(stream.livepeerPlaybackId)
-    }
-  }, [stream?.endedAt, stream?.livepeerPlaybackId, assetPlaybackId, playbackSrc, isLoadingPlaybackInfo, fetchPlaybackInfo])
 
   // Debug: log stream data when it changes
   useEffect(() => {
@@ -1059,72 +1086,69 @@ export default function StreamPage() {
                       // According to Livepeer docs: Player handles VOD automatically with playbackId
                       // Priority: 1) Asset playbackId (best for VOD), 2) Stream playbackId (fallback)
                       // The Player component will automatically detect VOD and handle playback
-                      playbackSrc && assetPlaybackId ? (
+                      assetPlaybackId ? (
                         <>
-                          {/* Use UI Kit Player with asset playbackId src - this is optimal for VOD */}
-                          <Player.Root src={playbackSrc} key={`vod-asset-${assetPlaybackId}`}>
-                            <Player.Container className="w-full h-full">
-                              <Player.Video 
-                                title={stream.title || "Recording"}
-                                className="w-full h-full object-contain"
-                              />
-                              <Player.Controls className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                                <Player.PlayPauseTrigger className="w-16 h-16 bg-black/70 rounded-full flex items-center justify-center text-white hover:bg-black/90 transition-colors">
-                                  <Player.PlayingIndicator asChild matcher={false}>
-                                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                                      <path d="M8 5v14l11-7z"/>
-                                    </svg>
-                                  </Player.PlayingIndicator>
-                                  <Player.PlayingIndicator asChild>
-                                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                                      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-                                    </svg>
-                                  </Player.PlayingIndicator>
-                                </Player.PlayPauseTrigger>
-                              </Player.Controls>
-                            </Player.Container>
-                          </Player.Root>
+                          {/* Use Player with asset playbackId - this is optimal for VOD */}
+                          <Player
+                            key={`vod-asset-${assetPlaybackId}`}
+                            playbackId={assetPlaybackId}
+                            autoPlay={false}
+                            muted={false}
+                            showTitle={false}
+                            showPipButton={true}
+                            showUploadingIndicator={false}
+                            objectFit="contain"
+                            lowLatency={false}
+                            theme={{
+                              borderStyles: {
+                                containerBorderStyle: "solid",
+                              },
+                              colors: {
+                                accent: "#00a55f",
+                              },
+                            }}
+                            onError={(error) => {
+                              console.error("Livepeer Player error for VOD:", error)
+                              console.error("Asset playbackId:", assetPlaybackId)
+                              // Try fetching asset again if error
+                              if (stream.assetId || stream.livepeerStreamId) {
+                                console.log("Player error - attempting to refetch asset...")
+                                fetchStreamRecording(undefined, undefined, stream.assetId)
+                              }
+                            }}
+                          />
                         </>
-                      ) : assetPlaybackId && !playbackSrc ? (
+                      ) : stream.livepeerPlaybackId ? (
                         <>
-                          {/* Loading playback info for UI Kit Player */}
-                          <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                            <div className="text-center">
-                              <div className="mb-4">
-                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
-                              </div>
-                              <p className="text-lg font-semibold mb-2">Loading Playback</p>
-                              <p className="text-sm text-muted-foreground">
-                                Fetching playback info for asset...
-                              </p>
-                            </div>
-                          </div>
-                        </>
-                      ) : playbackSrc && stream.livepeerPlaybackId ? (
-                        <>
-                          {/* Fallback: Use UI Kit Player with stream playbackId src */}
-                          <Player.Root src={playbackSrc} key={`vod-stream-${stream.livepeerPlaybackId}`}>
-                            <Player.Container className="w-full h-full">
-                              <Player.Video 
-                                title={stream.title || "Recording"}
-                                className="w-full h-full object-contain"
-                              />
-                              <Player.Controls className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                                <Player.PlayPauseTrigger className="w-16 h-16 bg-black/70 rounded-full flex items-center justify-center text-white hover:bg-black/90 transition-colors">
-                                  <Player.PlayingIndicator asChild matcher={false}>
-                                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                                      <path d="M8 5v14l11-7z"/>
-                                    </svg>
-                                  </Player.PlayingIndicator>
-                                  <Player.PlayingIndicator asChild>
-                                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                                      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-                                    </svg>
-                                  </Player.PlayingIndicator>
-                                </Player.PlayPauseTrigger>
-                              </Player.Controls>
-                            </Player.Container>
-                          </Player.Root>
+                          {/* Fallback: Use Player with stream playbackId - Player handles VOD automatically */}
+                          <Player
+                            key={`vod-stream-${stream.livepeerPlaybackId}`}
+                            playbackId={stream.livepeerPlaybackId}
+                            autoPlay={false}
+                            muted={false}
+                            showTitle={false}
+                            showPipButton={true}
+                            showUploadingIndicator={false}
+                            objectFit="contain"
+                            lowLatency={false}
+                            theme={{
+                              borderStyles: {
+                                containerBorderStyle: "solid",
+                              },
+                              colors: {
+                                accent: "#00a55f",
+                              },
+                            }}
+                            onError={(error) => {
+                              console.error("Livepeer Player error for VOD:", error)
+                              console.error("Stream playbackId:", stream.livepeerPlaybackId)
+                              // Try fetching asset if error
+                              if (stream.assetId || stream.livepeerStreamId) {
+                                console.log("Player error - attempting to fetch asset...")
+                                fetchStreamRecording(undefined, undefined, stream.assetId)
+                              }
+                            }}
+                          />
                           {/* Show message that we're fetching the asset */}
                           {checkingVod && (
                             <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-xs z-20">
@@ -1134,21 +1158,6 @@ export default function StreamPage() {
                               </div>
                             </div>
                           )}
-                        </>
-                      ) : stream.livepeerPlaybackId && !playbackSrc ? (
-                        <>
-                          {/* Loading playback info for stream playbackId */}
-                          <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                            <div className="text-center">
-                              <div className="mb-4">
-                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
-                              </div>
-                              <p className="text-lg font-semibold mb-2">Loading Playback</p>
-                              <p className="text-sm text-muted-foreground">
-                                Fetching playback info...
-                              </p>
-                            </div>
-                          </div>
                         </>
                       ) : (
                         // Show loading state while waiting for playbackId
@@ -1175,7 +1184,7 @@ export default function StreamPage() {
                     ) : showLivePlayer ? (
                       // LIVE STREAM - Show live player
                       <>
-                        <LegacyPlayer
+                        <Player
                           key={`live-${stream.livepeerPlaybackId}`}
                           playbackId={stream.livepeerPlaybackId}
                           autoPlay
