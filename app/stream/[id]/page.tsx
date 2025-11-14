@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Heart, Share2, MoreVertical, Trash2 } from "lucide-react"
+import { Heart, Share2, MoreVertical, Trash2, Eye } from "lucide-react"
 
 export default function StreamPage() {
   const params = useParams()
@@ -1092,7 +1092,7 @@ export default function StreamPage() {
                             playbackId={assetPlaybackId || stream.livepeerPlaybackId}
                             playRecording
                             autoPlay
-                            muted={true}
+                            muted={false}
                             showTitle={false}
                             showPipButton={true}
                             objectFit="contain"
@@ -1213,7 +1213,7 @@ export default function StreamPage() {
                               playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl) || stream.livepeerPlaybackId}
                               playRecording
                               autoPlay
-                              muted={true}
+                              muted={false}
                               showTitle={false}
                               showPipButton={true}
                               objectFit="contain"
@@ -1279,7 +1279,7 @@ export default function StreamPage() {
                         playbackId={assetPlaybackId || stream.livepeerPlaybackId}
                         playRecording
                         autoPlay
-                        muted={true}
+                        muted={false}
                         showTitle={false}
                         showPipButton={true}
                         objectFit="contain"
@@ -1306,7 +1306,7 @@ export default function StreamPage() {
                           playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}
                           playRecording
                           autoPlay
-                          muted={true}
+                          muted={false}
                           showTitle={false}
                           showPipButton={true}
                           objectFit="contain"
@@ -1472,17 +1472,24 @@ export default function StreamPage() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-3 ml-4">
-                    {/* Viewers counter */}
-                    <div className="flex items-center gap-3 px-3 py-2 bg-muted rounded-md">
-                      <div className="flex flex-col">
-                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Live viewers</span>
-                        <span className="text-lg font-semibold">{effectiveViewerCount}</span>
-                      </div>
-                      {viewerCountError && (
-                        <span className="text-[11px] text-destructive">{viewerCountError}</span>
-                      )}
-                    </div>
                     <div className="flex flex-row gap-2">
+                    {/* Viewers counter - styled like Like button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                      }}
+                      className="flex items-center gap-2 cursor-default hover:bg-muted"
+                      title={viewerCountError || `Live viewers: ${effectiveViewerCount}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span>{effectiveViewerCount}</span>
+                      {viewerCountError && (
+                        <span className="text-[10px] text-destructive ml-1" title={viewerCountError}>⚠</span>
+                      )}
+                    </Button>
                     <Button
                       variant={isLiked ? "default" : "outline"}
                       size="sm"
