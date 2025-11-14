@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { StreamCoverPlaceholder } from "@/components/stream-cover-placeholder"
+import { Eye } from "lucide-react"
 
 interface StreamPreviewCardProps {
   stream: {
@@ -88,6 +89,11 @@ export function StreamPreviewCard({
               Ended
             </div>
           )}
+          {/* Viewers counter - left bottom corner */}
+          <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1.5">
+            <Eye className="w-3 h-3" />
+            <span>{stream.viewerCount ?? 0} {stream.viewerCount === 1 ? 'viewer' : 'viewers'}</span>
+          </div>
         </div>
         <CardHeader className="p-3 pb-2">
           {stream.category && (

@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase/client"
 import Link from "next/link"
 import { HlsVideoPlayer, isHlsUrl } from "@/components/hls-video-player"
 import { ShareModal } from "@/components/share-modal"
-import { Heart, Share2 } from "lucide-react"
+import { Heart, Share2, Eye } from "lucide-react"
 
 export default function StreamPage() {
   const params = useParams()
@@ -883,21 +883,24 @@ export default function StreamPage() {
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
                       {stream.isLive ? (
                         <span className="inline-block px-2 py-1 bg-red-500 text-white rounded text-sm">
-                          {stream.viewerCount !== undefined && stream.viewerCount > 0 
-                            ? `Live • ${stream.viewerCount} ${stream.viewerCount === 1 ? 'viewer' : 'viewers'}`
-                            : "Live"}
+                          Live
                         </span>
                       ) : stream.endedAt ? (
                         <span className="inline-block px-2 py-1 bg-muted text-muted-foreground rounded text-sm">
                           Ended {new Date(stream.endedAt).toLocaleDateString()}
-                          {stream.viewerCount !== undefined && stream.viewerCount > 0 && (
-                            <span className="ml-2">• {stream.viewerCount} {stream.viewerCount === 1 ? 'viewer' : 'viewers'}</span>
-                          )}
                         </span>
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex flex-row gap-2 ml-4">
+                  <div className="flex flex-col items-end gap-3 ml-4">
+                    {/* Viewers counter */}
+                    <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md">
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">
+                        {stream.viewerCount ?? 0} {stream.viewerCount === 1 ? 'viewer' : 'viewers'}
+                      </span>
+                    </div>
+                    <div className="flex flex-row gap-2">
                     <Button
                       variant={isLiked ? "default" : "outline"}
                       size="sm"
@@ -939,6 +942,7 @@ export default function StreamPage() {
                         End Stream
                       </Button>
                     )}
+                    </div>
                   </div>
                 </div>
               </div>
