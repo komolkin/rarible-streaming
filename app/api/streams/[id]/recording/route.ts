@@ -152,6 +152,7 @@ export async function GET(
 
     // METHOD 2: Try Sessions API (fastest, available immediately after stream ends)
     // Sessions surface recordings quickly but may not have full asset metadata
+    // CRITICAL: Only use session data if it has an asset playbackId (not stream playbackId)
     try {
       console.log(`[Recording API] Method 2: Checking Sessions API...`)
       const sessions = await getStreamSessions(stream.livepeerStreamId, {
@@ -160,9 +161,15 @@ export async function GET(
       })
 
       if (sessions && sessions.length > 0) {
-        // Find the most recent session with recording
+        // Find the most recent session with recording that has asset playbackId
         const recordingSession = sessions.find(
-          (s: any) => s.record && (s.recordingUrl || s.playbackUrl || s.playbackId)
+          (s: any) => {
+            // Must have recording and an asset playbackId (not stream playbackId)
+            const hasRecording = s.record && (s.recordingUrl || s.playbackUrl || s.playbackId)
+            const playbackId = s.playbackId || s?.playback?.id
+            // Only use if playbackId exists and is different from stream playbackId (indicating it's an asset playbackId)
+            return hasRecording && playbackId && playbackId !== stream.livepeerPlaybackId
+          }
         )
 
         if (recordingSession) {
@@ -172,12 +179,9 @@ export async function GET(
             recordingSession?.playback?.hls ||
             recordingSession?.playback?.url
 
-          const playbackId =
-            recordingSession.playbackId ||
-            recordingSession?.playback?.id ||
-            stream.livepeerPlaybackId
+          const playbackId = recordingSession.playbackId || recordingSession?.playback?.id
 
-          console.log(`[Recording API] ✅ Found recording in session:`, {
+          console.log(`[Recording API] ✅ Found recording in session with asset playbackId:`, {
             sessionId: recordingSession.id,
             playbackId,
             recordingUrl,
@@ -189,7 +193,7 @@ export async function GET(
             source: "session",
             recording: {
               id: recordingSession.id,
-              playbackId: playbackId || stream.livepeerPlaybackId,
+              playbackId: playbackId, // Asset playbackId only
               playbackUrl: recordingUrl || (playbackId ? `https://playback.livepeer.com/hls/${playbackId}/index.m3u8` : null),
               status: "ready",
               duration: recordingSession.duration || recordingSession.recordingDuration,
@@ -204,50 +208,43 @@ export async function GET(
     }
 
     // METHOD 3: Check stream metadata (fallback)
-    // Sometimes recordings are included in the stream response
+    // CRITICAL: Only use if recording has asset playbackId (not stream playbackId)
     try {
       console.log(`[Recording API] Method 3: Checking stream metadata...`)
       const streamData = await getStream(stream.livepeerStreamId)
 
       if (streamData?.recordings && Array.isArray(streamData.recordings) && streamData.recordings.length > 0) {
         const recording = streamData.recordings[0]
-        console.log(`[Recording API] ✅ Found recording in stream metadata`)
-
-        return NextResponse.json({
-          success: true,
-          source: "stream_metadata",
-          recording: {
-            id: recording.id || stream.livepeerStreamId,
-            playbackId: recording.playbackId || stream.livepeerPlaybackId,
-            playbackUrl: recording.recordingUrl || recording.playbackUrl,
-            status: "ready",
-            duration: recording.duration,
-            createdAt: recording.createdAt,
-            sourceStreamId: stream.livepeerStreamId,
-          },
-        })
+        const recordingPlaybackId = recording.playbackId
+        
+        // Only use if playbackId exists and is different from stream playbackId (indicating it's an asset playbackId)
+        if (recordingPlaybackId && recordingPlaybackId !== stream.livepeerPlaybackId) {
+          console.log(`[Recording API] ✅ Found recording in stream metadata with asset playbackId`)
+          
+          return NextResponse.json({
+            success: true,
+            source: "stream_metadata",
+            recording: {
+              id: recording.id || stream.livepeerStreamId,
+              playbackId: recordingPlaybackId, // Asset playbackId only
+              playbackUrl: recording.recordingUrl || recording.playbackUrl || `https://playback.livepeer.com/hls/${recordingPlaybackId}/index.m3u8`,
+              status: "ready",
+              duration: recording.duration,
+              createdAt: recording.createdAt,
+              sourceStreamId: stream.livepeerStreamId,
+            },
+          })
+        } else {
+          console.log(`[Recording API] ⚠️ Recording in stream metadata has stream playbackId, skipping (need asset playbackId)`)
+        }
       }
     } catch (streamError: any) {
       console.warn(`[Recording API] Stream metadata check failed:`, streamError?.message)
     }
 
-    // If stream has playbackId, we can still use it for VOD playback
-    // According to Livepeer docs, the Player can handle VOD with stream playbackId
-    if (stream.livepeerPlaybackId) {
-      console.log(`[Recording API] ⚠️ No asset/session found, but stream has playbackId - Player can handle VOD`)
-      return NextResponse.json({
-        success: true,
-        source: "stream_playbackId",
-        recording: {
-          id: stream.livepeerStreamId,
-          playbackId: stream.livepeerPlaybackId,
-          playbackUrl: `https://playback.livepeer.com/hls/${stream.livepeerPlaybackId}/index.m3u8`,
-          status: "ready",
-          sourceStreamId: stream.livepeerStreamId,
-          note: "Using stream playbackId - Livepeer Player handles VOD automatically",
-        },
-      })
-    }
+    // CRITICAL: Do NOT fall back to stream playbackId for ended streams
+    // Ended streams MUST use Asset playbackId for reliable VOD playback
+    // Stream playbackId may still be marked as "live" type and cause playback issues
 
     // No recording found
     console.warn(`[Recording API] ⚠️ No recording found for stream ${stream.livepeerStreamId}`)
