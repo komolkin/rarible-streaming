@@ -237,16 +237,22 @@ export async function GET(
         let previewImageUrl = stream.previewImageUrl
         
         if (needsPreviewImage) {
-          const { generateAndVerifyThumbnail } = await import("@/lib/livepeer")
-          // For live streams, use async generation but don't block on verification
-          // Live stream thumbnails may not be immediately available
-          // Only generate if user hasn't uploaded a cover image
-          previewImageUrl = await generateAndVerifyThumbnail(livepeerStreamData.playbackId, {
-            isVod: false,
-            maxRetries: 2, // Fewer retries for live streams
-            retryDelay: 1500,
-          })
-          console.log(`[Stream ${params.id}] Generated preview image for live stream: ${previewImageUrl}`)
+          const { getLiveThumbnailUrl, generateAndVerifyThumbnail } = await import("@/lib/livepeer")
+          // Try Livepeer live thumbnail endpoint first (updates every few seconds)
+          previewImageUrl = await getLiveThumbnailUrl(livepeerStreamData.playbackId)
+
+          if (!previewImageUrl) {
+            // Fallback to thumbnailer if live endpoint not ready yet
+            previewImageUrl = await generateAndVerifyThumbnail(livepeerStreamData.playbackId, {
+              isVod: false,
+              maxRetries: 2,
+              retryDelay: 1500,
+            })
+          }
+
+          if (previewImageUrl) {
+            console.log(`[Stream ${params.id}] Generated preview image for live stream: ${previewImageUrl}`)
+          }
         } else if (stream.previewImageUrl) {
           console.log(`[Stream ${params.id}] Preserving user-uploaded cover image: ${stream.previewImageUrl}`)
         }

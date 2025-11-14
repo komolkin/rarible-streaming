@@ -45,6 +45,8 @@ export default function StreamPage() {
   const [playerIsStreaming, setPlayerIsStreaming] = useState<boolean>(false)
   const playerOfflineTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const streamLiveStatusRef = useRef<boolean>(false)
+  const [liveViewerCount, setLiveViewerCount] = useState<number | null>(null)
+  const [viewerCountError, setViewerCountError] = useState<string | null>(null)
   
   // Extract playbackId from HLS URL
   const extractPlaybackIdFromHlsUrl = (url: string): string | null => {
@@ -182,6 +184,25 @@ export default function StreamPage() {
       console.error("Error fetching stream:", error)
     }
   }, [params.id, authenticated, user?.wallet?.address])
+
+  const fetchLiveViewerCount = useCallback(async () => {
+    if (!stream?.livepeerPlaybackId) return
+    try {
+      const response = await fetch(`/api/streams/${params.id}/viewers`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Viewer API error ${response.status}`)
+      }
+      const data = await response.json()
+      if (typeof data.viewerCount === "number") {
+        setLiveViewerCount(data.viewerCount)
+        setViewerCountError(null)
+      }
+    } catch (error: any) {
+      console.warn("Failed to fetch live viewer count:", error?.message || error)
+      setViewerCountError(error?.message || "Viewer count unavailable")
+    }
+  }, [params.id, stream?.livepeerPlaybackId])
 
   const subscribeToChat = useCallback(() => {
     if (!params.id) return () => {}
@@ -362,6 +383,26 @@ export default function StreamPage() {
   useEffect(() => {
     streamLiveStatusRef.current = !!stream?.isLive
   }, [stream?.isLive])
+
+  useEffect(() => {
+    if (!stream?.livepeerPlaybackId) {
+      setLiveViewerCount(null)
+      return
+    }
+
+    const shouldPoll =
+      !!stream?.isLive ||
+      playerIsStreaming ||
+      (!stream?.endedAt && stream?.livepeerStreamId)
+
+    if (!shouldPoll) {
+      return
+    }
+
+    fetchLiveViewerCount()
+    const interval = setInterval(fetchLiveViewerCount, 5000)
+    return () => clearInterval(interval)
+  }, [stream?.livepeerPlaybackId, stream?.isLive, stream?.endedAt, stream?.livepeerStreamId, playerIsStreaming, fetchLiveViewerCount])
 
   useEffect(() => {
     fetchStream()
@@ -683,6 +724,7 @@ export default function StreamPage() {
 
   const showLivePlayer = !!stream?.livepeerPlaybackId && !stream?.endedAt
   const showOfflineOverlay = showLivePlayer && !stream?.isLive && !playerIsStreaming
+  const effectiveViewerCount = liveViewerCount ?? stream.viewerCount ?? 0
 
   return (
     <main className="min-h-screen pt-24 pb-8">
@@ -718,6 +760,10 @@ export default function StreamPage() {
                           showTitle={false}
                           showPipButton={false}
                           objectFit="contain"
+                          priority
+                          lowLatency="force"
+                          webrtcConfig={{ sdpTimeout: 15000 }}
+                          hlsConfig={{ lowLatencyMode: true, backBufferLength: 30 }}
                           showUploadingIndicator={false}
                           onError={(error) => {
                             console.error("Player error:", error)
@@ -1070,10 +1116,14 @@ export default function StreamPage() {
                   </div>
                   <div className="flex flex-col items-end gap-3 ml-4">
                     {/* Viewers counter */}
-                    <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md">
-                      <span className="text-sm font-medium">
-                        {stream.viewerCount ?? 0} {stream.viewerCount === 1 ? 'viewer' : 'viewers'}
-                      </span>
+                    <div className="flex items-center gap-3 px-3 py-2 bg-muted rounded-md">
+                      <div className="flex flex-col">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Live viewers</span>
+                        <span className="text-lg font-semibold">{effectiveViewerCount}</span>
+                      </div>
+                      {viewerCountError && (
+                        <span className="text-[11px] text-destructive">{viewerCountError}</span>
+                      )}
                     </div>
                     <div className="flex flex-row gap-2">
                     <Button

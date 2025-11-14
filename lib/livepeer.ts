@@ -386,6 +386,38 @@ export async function getThumbnailUrlFromPlaybackInfo(playbackId: string): Promi
 }
 
 /**
+ * Fetch the auto-updating thumbnail URL for a live stream from playback info.
+ * Livepeer exposes a PNG source in the playback info response for live streams.
+ */
+export async function getLiveThumbnailUrl(playbackId: string): Promise<string | null> {
+  if (!playbackId) return null
+
+  try {
+    const playbackInfo = await getPlaybackInfo(playbackId)
+    const sources =
+      playbackInfo?.meta?.source ||
+      playbackInfo?.source ||
+      []
+
+    if (Array.isArray(sources)) {
+      const pngSource = sources.find(
+        (source: any) =>
+          source?.type === "image/png" ||
+          source?.hrn === "Thumbnail (PNG)"
+      )
+
+      if (pngSource?.url) {
+        return pngSource.url as string
+      }
+    }
+  } catch (error) {
+    console.warn(`[Thumbnail] Could not get live thumbnail from playback info for ${playbackId}:`, error)
+  }
+
+  return null
+}
+
+/**
  * Generate thumbnail/preview image URL for a Livepeer playbackId
  * Livepeer provides thumbnail URLs via thumbnailer service
  * 
