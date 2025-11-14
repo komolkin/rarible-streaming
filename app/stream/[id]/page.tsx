@@ -351,12 +351,31 @@ export default function StreamPage() {
       }
       
       // Extract asset playbackId from vodUrl if it exists
-      if (stream.endedAt && stream.vodUrl && isHlsUrl(stream.vodUrl)) {
-        const extractedId = extractPlaybackIdFromHlsUrl(stream.vodUrl)
-        if (extractedId) {
-          setAssetPlaybackId(extractedId)
-          console.log("Extracted asset playbackId from stream vodUrl:", extractedId)
+      // This is critical for VOD playback - Livepeer Player works better than HLS player for VOD
+      if (stream.endedAt && stream.vodUrl) {
+        if (isHlsUrl(stream.vodUrl)) {
+          const extractedId = extractPlaybackIdFromHlsUrl(stream.vodUrl)
+          if (extractedId) {
+            console.log("✅ Extracted asset playbackId from stream vodUrl:", extractedId)
+            console.log("✅ Will use Livepeer Player for VOD playback")
+            setAssetPlaybackId(extractedId)
+            // Also set hlsPlaybackUrl as fallback
+            setHlsPlaybackUrl(stream.vodUrl)
+          } else {
+            console.warn("⚠️ Could not extract asset playbackId from vodUrl:", stream.vodUrl)
+            // Still try to use HLS player as fallback
+            setHlsPlaybackUrl(stream.vodUrl)
+            setAssetPlaybackId(null)
+          }
+        } else {
+          // If vodUrl is not HLS, clear assetPlaybackId
+          console.log("vodUrl is not HLS format, using direct video player")
+          setAssetPlaybackId(null)
         }
+      } else if (stream.endedAt && !stream.vodUrl) {
+        // Stream ended but no vodUrl yet - clear assetPlaybackId
+        console.log("Stream ended but vodUrl not available yet")
+        setAssetPlaybackId(null)
       }
       
       if (stream.livepeerStreamId && !stream.livepeerPlaybackId) {
@@ -648,12 +667,12 @@ export default function StreamPage() {
                       // For ended streams, show recording if available
                       // Priority: 1) Livepeer Player with asset playbackId, 2) HLS URL (direct), 3) HTML5 video with vodUrl
                       // Use asset playbackId (from vodUrl) or stream playbackId for Livepeer Player
-                      assetPlaybackId ? (
+                      (assetPlaybackId || (stream.vodUrl && isHlsUrl(stream.vodUrl) && extractPlaybackIdFromHlsUrl(stream.vodUrl))) ? (
                         <>
                           {/* Use Livepeer Player with asset playbackId for VOD - this handles VOD correctly */}
                           <Player
-                            key={`vod-asset-${assetPlaybackId}`}
-                            playbackId={assetPlaybackId}
+                            key={`vod-asset-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl!)}`}
+                            playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl!)!}
                             autoPlay={false}
                             muted={false}
                             showTitle={false}
@@ -671,7 +690,8 @@ export default function StreamPage() {
                             }}
                             onError={(error) => {
                               console.error("Livepeer Player error with asset playbackId:", error)
-                              console.error("Asset playbackId:", assetPlaybackId)
+                              console.error("Asset playbackId:", assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl!))
+                              console.error("Stream vodUrl:", stream.vodUrl)
                             }}
                           />
                         </>
@@ -739,8 +759,34 @@ export default function StreamPage() {
                           )}
                         </>
                       ) : stream.vodUrl ? (
-                        // Check if vodUrl is M3U8/HLS format, use HLS player if so
-                        isHlsUrl(stream.vodUrl) ? (
+                        // If vodUrl is HLS and we can extract asset playbackId, use Livepeer Player (preferred for VOD)
+                        // Extract playbackId directly from vodUrl if assetPlaybackId not set yet
+                        isHlsUrl(stream.vodUrl) && (assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)) ? (
+                          <Player
+                            key={`vod-asset-from-url-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}`}
+                            playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)!}
+                            autoPlay={false}
+                            muted={false}
+                            showTitle={false}
+                            showPipButton={true}
+                            showUploadingIndicator={false}
+                            objectFit="contain"
+                            lowLatency={false}
+                            theme={{
+                              borderStyles: {
+                                containerBorderStyle: "solid",
+                              },
+                              colors: {
+                                accent: "#00a55f",
+                              },
+                            }}
+                            onError={(error) => {
+                              console.error("Livepeer Player error with asset playbackId from vodUrl:", error)
+                              console.error("Asset playbackId:", assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl))
+                              console.error("Stream vodUrl:", stream.vodUrl)
+                            }}
+                          />
+                        ) : isHlsUrl(stream.vodUrl) ? (
                           <HlsVideoPlayer
                             key={`hls-vod-${stream.vodUrl}`}
                             src={stream.vodUrl}
@@ -795,8 +841,34 @@ export default function StreamPage() {
                   </>
                 ) : stream.endedAt && stream.vodUrl ? (
                   // Handle ended streams without playbackId but with vodUrl
-                  // Check if vodUrl is M3U8/HLS format
-                  isHlsUrl(stream.vodUrl) ? (
+                  // If vodUrl is HLS and we can extract asset playbackId, use Livepeer Player (preferred for VOD)
+                  // Extract playbackId directly from vodUrl if assetPlaybackId not set yet
+                  isHlsUrl(stream.vodUrl) && (assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)) ? (
+                    <Player
+                      key={`vod-asset-no-playback-${assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)}`}
+                      playbackId={assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl)!}
+                      autoPlay={false}
+                      muted={false}
+                      showTitle={false}
+                      showPipButton={true}
+                      showUploadingIndicator={false}
+                      objectFit="contain"
+                      lowLatency={false}
+                      theme={{
+                        borderStyles: {
+                          containerBorderStyle: "solid",
+                        },
+                        colors: {
+                          accent: "#00a55f",
+                        },
+                      }}
+                      onError={(error) => {
+                        console.error("Livepeer Player error with asset playbackId from vodUrl:", error)
+                        console.error("Asset playbackId:", assetPlaybackId || extractPlaybackIdFromHlsUrl(stream.vodUrl))
+                        console.error("Stream vodUrl:", stream.vodUrl)
+                      }}
+                    />
+                  ) : isHlsUrl(stream.vodUrl) ? (
                     <HlsVideoPlayer
                       key={`hls-vod-no-playback-${stream.vodUrl}`}
                       src={stream.vodUrl}
