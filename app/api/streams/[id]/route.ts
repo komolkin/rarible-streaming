@@ -48,19 +48,23 @@ export async function GET(
             sourceStreamId: asset.sourceStreamId
           })
           
-          // For VOD, we MUST use the asset's playbackId, not the stream's playbackId
-          // The asset playbackId is what works for VOD playback
-          if (asset.playbackId) {
-            // Use the asset's playbackId to construct HLS URL for VOD
+          // CRITICAL: Only use asset if it's ready - unready assets will cause format errors
+          if (asset.status !== "ready") {
+            console.warn(`[GET Stream ${params.id}] Asset ${asset.id} is not ready yet. Status: ${asset.status}. Will not set vodUrl yet.`)
+            // Don't set vodUrl if asset is not ready - this prevents format errors
+            // The stream will be checked again on next request
+          } else if (asset.playbackId) {
+            // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
             // This is the correct playbackId for VOD assets
             vodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
-            console.log(`Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
+            console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
           } else if (asset.playbackUrl) {
             // Use asset playback URL if available (could be HLS or MP4)
+            // Only if asset is ready
             vodUrl = asset.playbackUrl
-            console.log(`Using asset playbackUrl: ${vodUrl}`)
+            console.log(`[GET Stream ${params.id}] ✅ Asset is ready! Using asset playbackUrl: ${vodUrl}`)
           } else {
-            console.warn(`Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
+            console.warn(`[GET Stream ${params.id}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
             // Don't use stream playbackId for VOD - it won't work
           }
           
@@ -400,13 +404,17 @@ export async function DELETE(
               verified: assetSourceStreamId === livepeerStreamId
             })
             
-            // For VOD, we MUST use the asset's playbackId, not the stream's playbackId
-            // The asset playbackId is what works for VOD playback and thumbnails
-            if (asset.playbackId) {
-              // Use the asset's playbackId to construct HLS URL for VOD
+            // CRITICAL: Only use asset if it's ready - unready assets will cause format errors
+            if (asset.status !== "ready") {
+              console.warn(`[DELETE Stream ${streamId}] Asset ${asset.id} is not ready yet. Status: ${asset.status}. Will not set vodUrl yet.`)
+              console.warn(`[DELETE Stream ${streamId}] The asset will be checked again when the stream is fetched.`)
+              // Don't set vodUrl if asset is not ready - this prevents format errors
+              // The GET endpoint will check again and set vodUrl when asset is ready
+            } else if (asset.playbackId) {
+              // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
               // This is the correct playbackId for VOD assets
               vodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
-              console.log(`[DELETE Stream ${streamId}] Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
+              console.log(`[DELETE Stream ${streamId}] ✅ Asset is ready! Using asset playbackId for VOD: ${asset.playbackId}, HLS URL: ${vodUrl}`)
               
               // Only generate thumbnail if user hasn't uploaded a cover image
               // This preserves user-uploaded cover images
@@ -424,8 +432,9 @@ export async function DELETE(
               }
             } else if (asset.playbackUrl) {
               // Use asset playback URL if available (could be HLS or MP4)
+              // Only if asset is ready
               vodUrl = asset.playbackUrl
-              console.log(`[DELETE Stream ${streamId}] Using asset playbackUrl: ${vodUrl}`)
+              console.log(`[DELETE Stream ${streamId}] ✅ Asset is ready! Using asset playbackUrl: ${vodUrl}`)
             } else {
               console.warn(`[DELETE Stream ${streamId}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
             }

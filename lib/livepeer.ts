@@ -691,22 +691,26 @@ export async function getStreamAsset(streamId: string) {
         return matches
       }
       
+      // CRITICAL: For VOD playback, we MUST only use assets with status "ready"
+      // Unready assets will cause format errors in the player (MEDIA_ELEMENT_ERROR: Format error)
       // Prioritize assets that are ready and have playbackId (from most recent)
-      // For VOD, the asset's playbackId is what we need
       const readyAsset = sortedAssets.find((asset: any) => 
         asset.status === "ready" && asset.playbackId && verifyAsset(asset)
       )
       
       if (readyAsset) {
-        console.log(`Found ready asset with playbackId (most recent) for stream ${streamId}: ${readyAsset.playbackId}`)
+        console.log(`✅ Found ready asset with playbackId (most recent) for stream ${streamId}: ${readyAsset.playbackId}`)
         return readyAsset
       }
       
-      // Fallback: find asset with playbackId even if status is not "ready" (from most recent)
-      const assetWithPlaybackId = sortedAssets.find((asset: any) => asset.playbackId && verifyAsset(asset))
-      if (assetWithPlaybackId) {
-        console.log(`Found asset with playbackId (status: ${assetWithPlaybackId.status}, most recent) for stream ${streamId}: ${assetWithPlaybackId.playbackId}`)
-        return assetWithPlaybackId
+      // If no ready asset found, log warning but don't return unready asset
+      // This prevents format errors - the asset will be checked again later
+      const unreadyAsset = sortedAssets.find((asset: any) => asset.playbackId && verifyAsset(asset))
+      if (unreadyAsset) {
+        console.warn(`⚠️ [getStreamAsset] Asset ${unreadyAsset.id} has playbackId but is not ready (status: ${unreadyAsset.status}). Will not use for playback yet.`)
+        console.warn(`⚠️ [getStreamAsset] The asset will be checked again when it's ready. Returning null to prevent format errors.`)
+        // Return null instead of unready asset to prevent format errors
+        return null
       }
       
       // Fallback: find asset with playbackUrl (from most recent)
