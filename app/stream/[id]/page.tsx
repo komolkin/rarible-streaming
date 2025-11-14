@@ -106,6 +106,10 @@ export default function StreamPage() {
         return
       }
       const data = await response.json()
+      
+      // Update stream live status ref for player offline detection
+      streamLiveStatusRef.current = !!data.isLive
+      
       setStream(data)
       
       // Fetch creator profile if we have creator address
@@ -391,9 +395,8 @@ export default function StreamPage() {
   }, [stream?.livepeerPlaybackId])
 
   useEffect(() => {
-    const isLive = !!stream?.isLive
-    streamLiveStatusRef.current = isLive
-    if (!isLive) {
+    // Reset realtime viewer data flag when stream goes offline
+    if (stream && !stream.isLive) {
       setHasRealtimeViewerData(false)
     }
   }, [stream?.isLive])
