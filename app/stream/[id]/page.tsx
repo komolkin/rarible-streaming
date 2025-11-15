@@ -44,6 +44,7 @@ export default function StreamPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null);
   const [assetPlaybackUrl, setAssetPlaybackUrl] = useState<string | null>(null);
+  const [streamJustEnded, setStreamJustEnded] = useState<boolean>(false);
 
   const fetchChatMessages = useCallback(async () => {
     const response = await fetch(`/api/chat/${params.id}`);
@@ -76,9 +77,11 @@ export default function StreamPage() {
         if (data.success && data.recording) {
           if (data.recording.playbackUrl) {
             setAssetPlaybackUrl(data.recording.playbackUrl);
+            setStreamJustEnded(false); // Recording is available
           }
           if (data.recording.playbackId) {
             setAssetPlaybackId(data.recording.playbackId);
+            setStreamJustEnded(false); // Recording is available
           }
         }
       }
@@ -677,6 +680,7 @@ export default function StreamPage() {
 
       const updatedStream = await response.json();
       setStream(updatedStream);
+      setStreamJustEnded(true);
     } catch (error: any) {
       console.error("Error ending stream:", error);
       alert(error?.message || "Failed to end stream");
@@ -812,6 +816,23 @@ export default function StreamPage() {
                           objectFit="contain"
                           showUploadingIndicator={false}
                         />
+                      ) : streamJustEnded ? (
+                        <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                          <div className="text-center max-w-md px-4">
+                            <div className="text-2xl mb-4">⏳</div>
+                            <h3 className="text-xl font-semibold mb-2">
+                              Recording Processing
+                            </h3>
+                            <p className="text-muted-foreground mb-4">
+                              Your recording will be available shortly. Please
+                              check back in a few minutes.
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              The recording is being processed and will appear
+                              here once ready.
+                            </p>
+                          </div>
+                        </div>
                       ) : null
                     ) : showLivePlayer ? (
                       // LIVE STREAM - Show live player
@@ -926,6 +947,23 @@ export default function StreamPage() {
                       objectFit="contain"
                       showUploadingIndicator={false}
                     />
+                  ) : streamJustEnded ? (
+                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                      <div className="text-center max-w-md px-4">
+                        <div className="text-2xl mb-4">⏳</div>
+                        <h3 className="text-xl font-semibold mb-2">
+                          Recording Processing
+                        </h3>
+                        <p className="text-muted-foreground mb-4">
+                          Your recording will be available shortly. Please check
+                          back in a few minutes.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          The recording is being processed and will appear here
+                          once ready.
+                        </p>
+                      </div>
+                    </div>
                   ) : null
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
