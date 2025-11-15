@@ -8,34 +8,55 @@ import { getStreamStatus, getTotalViews as getLivepeerTotalViews } from "@/lib/l
 export const maxDuration = 30
 
 // Helper function to get the correct playbackId for views
-// For ended streams, uses asset playbackId (matches Livepeer dashboard)
-// For live streams, uses stream playbackId
+// CRITICAL: For ended streams, MUST use asset playbackId (matches Livepeer dashboard)
+// Reference: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
+// For live streams, uses stream playbackId (or asset playbackId if recording is available)
 async function getViewsPlaybackId(
   streamId: string,
   streamPlaybackId: string | null | undefined,
   endedAt: Date | null | undefined,
   livepeerStreamId: string | null | undefined
 ): Promise<string | null> {
-  // For live streams, use stream playbackId
-  if (!endedAt) {
-    return streamPlaybackId || null
-  }
+  const isEnded = !!endedAt
   
-  // For ended streams, try to get asset playbackId
-  if (endedAt && livepeerStreamId) {
+  // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
+  // This is critical because stream playbackId views don't match asset views for VOD
+  if (isEnded && livepeerStreamId) {
     try {
       const { getStreamAsset } = await import("@/lib/livepeer")
       const asset = await getStreamAsset(livepeerStreamId)
       if (asset?.playbackId) {
-        console.log(`[Views] Using asset playbackId ${asset.playbackId} for ended stream ${streamId}`)
+        console.log(`[Views] ✅ Using asset playbackId ${asset.playbackId} for ended stream ${streamId} (matches Livepeer dashboard)`)
         return asset.playbackId
+      } else {
+        // Asset not ready yet - return null instead of falling back to stream playbackId
+        console.warn(`[Views] Asset not ready for ended stream ${streamId} - views not available yet`)
+        return null
       }
     } catch (error) {
-      console.warn(`[Views] Could not fetch asset for ended stream ${streamId}, using stream playbackId`)
+      // Don't fall back to stream playbackId for ended streams
+      console.warn(`[Views] Could not fetch asset for ended stream ${streamId} - views not available yet`)
+      return null
     }
   }
   
-  // Fallback to stream playbackId
+  // For live streams, use stream playbackId (or try asset if available)
+  if (!isEnded && livepeerStreamId) {
+    try {
+      const { getStreamAsset } = await import("@/lib/livepeer")
+      const asset = await getStreamAsset(livepeerStreamId)
+      if (asset?.playbackId) {
+        // Use asset playbackId if available (for recordings during live stream)
+        console.log(`[Views] Using asset playbackId ${asset.playbackId} for live stream ${streamId} (recording available)`)
+        return asset.playbackId
+      }
+    } catch (error) {
+      // Fall back to stream playbackId for live streams
+      console.log(`[Views] Using stream playbackId for live stream ${streamId}`)
+    }
+  }
+  
+  // Fallback to stream playbackId (for live streams or when no livepeerStreamId)
   return streamPlaybackId || null
 }
 

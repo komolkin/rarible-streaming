@@ -32,61 +32,121 @@ export async function GET(
       return NextResponse.json({ error: "Stream not found" }, { status: 404 })
     }
 
-    let playbackId = stream.playbackId
+    let playbackId: string | null = null
     let assetInfo: any = null
+    const isEnded = !!stream.endedAt
     
-    // CRITICAL: Always try to get asset playbackId for views
-    // The Livepeer dashboard shows views for the asset (VOD), not the stream
-    // Even for live streams, if there's a recording/asset, the dashboard shows asset views
-    // This ensures we match what the Livepeer dashboard displays
-    // According to Livepeer docs: views are tracked per playbackId, and assets have their own playbackId
-    if (stream.livepeerStreamId) {
+    // CRITICAL: According to Livepeer docs, for ended streams we MUST use asset playbackId
+    // The Livepeer dashboard shows views for the asset (VOD), not the stream playbackId
+    // Reference: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
+    // "The playbackId can be a canonical playback ID from a specific Livepeer asset or stream objects"
+    // For ended streams, assets have their own playbackId which tracks views separately
+    
+    if (isEnded && stream.livepeerStreamId) {
+      // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
+      // This is critical because stream playbackId views don't match asset views for VOD
       try {
-        console.log(`[Views API] Fetching asset for stream ${stream.livepeerStreamId} (ended: ${!!stream.endedAt})`)
+        console.log(`[Views API] Stream has ended - fetching asset playbackId for views (stream: ${stream.livepeerStreamId})`)
         
-        // Add timeout to prevent hanging (8 seconds max)
+        // Add timeout to prevent hanging (10 seconds max - longer for ended streams)
         const assetPromise = getStreamAsset(stream.livepeerStreamId)
         const assetTimeout = new Promise<null>((resolve) => 
           setTimeout(() => {
-            console.warn(`[Views API] Asset fetch timeout after 8 seconds`)
+            console.warn(`[Views API] Asset fetch timeout after 10 seconds for ended stream`)
             resolve(null)
-          }, 8000)
+          }, 10000)
         )
         const asset = await Promise.race([assetPromise, assetTimeout])
         
-        if (asset) {
+        if (asset?.playbackId) {
           assetInfo = {
             id: asset.id,
             playbackId: asset.playbackId,
             status: asset.status,
             sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
           }
-          console.log(`[Views API] Asset found:`, assetInfo)
+          playbackId = asset.playbackId
+          console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for ended stream views (matches Livepeer dashboard)`)
           
-          if (asset.playbackId) {
-            // Use asset playbackId for views (this matches what Livepeer dashboard shows)
-            // Even if asset is not "ready", the playbackId might still have views data
-            playbackId = asset.playbackId
-            console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for views (matches dashboard)`)
-            
-            // Log asset status for debugging
-            if (asset.status !== "ready") {
-              console.log(`[Views API] ⚠️ Asset status is "${asset.status}" but using playbackId for views (views may still be available)`)
-            }
-          } else {
-            console.warn(`[Views API] ⚠️ Asset found but has no playbackId, using stream playbackId`)
+          // Log asset status for debugging
+          if (asset.status !== "ready") {
+            console.log(`[Views API] ⚠️ Asset status is "${asset.status}" but using playbackId for views (views may still be available)`)
           }
+        } else if (asset) {
+          // Asset exists but no playbackId yet
+          console.warn(`[Views API] ⚠️ Asset found but has no playbackId yet (status: ${asset.status}). Asset may still be processing.`)
+          // Return null - don't use stream playbackId for ended streams
         } else {
-          console.log(`[Views API] No asset found for stream ${stream.livepeerStreamId}, using stream playbackId`)
+          // No asset found - might still be processing
+          console.warn(`[Views API] ⚠️ No asset found for ended stream ${stream.livepeerStreamId}. Asset may still be processing after stream ended.`)
+          // Return null - don't use stream playbackId for ended streams
         }
       } catch (assetError: any) {
-        // Handle timeout and other errors gracefully
+        // Handle timeout and other errors - but DON'T fall back to stream playbackId for ended streams
         if (assetError?.name === 'AbortError' || assetError?.message?.includes('timeout') || assetError?.message?.includes('aborted')) {
-          console.warn(`[Views API] Asset fetch timed out, using stream playbackId: ${stream.playbackId}`)
+          console.warn(`[Views API] Asset fetch timed out for ended stream. Cannot get views without asset playbackId.`)
         } else {
-          console.error(`[Views API] Error fetching asset:`, assetError?.message || assetError)
-          console.log(`[Views API] Falling back to stream playbackId: ${stream.playbackId}`)
+          console.error(`[Views API] Error fetching asset for ended stream:`, assetError?.message || assetError)
         }
+        // Don't fall back to stream playbackId - return null instead
+      }
+      
+      // If we don't have asset playbackId for ended stream, return null
+      if (!playbackId) {
+        console.log(`[Views API] No asset playbackId available for ended stream - views not available yet`)
+        return NextResponse.json({
+          streamId: params.id,
+          totalViews: null,
+          message: "Asset playbackId not available yet. Views will be available once the asset is processed.",
+          playbackId: null,
+          isAssetPlaybackId: false,
+        }, {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
+        })
+      }
+    } else if (!isEnded && stream.livepeerStreamId) {
+      // For live streams: Try to get asset playbackId if available (for recordings), but fall back to stream playbackId
+      // Live streams can have recordings/assets that are being created in real-time
+      try {
+        console.log(`[Views API] Stream is live - checking for asset playbackId (stream: ${stream.livepeerStreamId})`)
+        
+        // Shorter timeout for live streams (5 seconds)
+        const assetPromise = getStreamAsset(stream.livepeerStreamId)
+        const assetTimeout = new Promise<null>((resolve) => 
+          setTimeout(() => {
+            resolve(null)
+          }, 5000)
+        )
+        const asset = await Promise.race([assetPromise, assetTimeout])
+        
+        if (asset?.playbackId) {
+          assetInfo = {
+            id: asset.id,
+            playbackId: asset.playbackId,
+            status: asset.status,
+            sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
+          }
+          playbackId = asset.playbackId
+          console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for live stream views (recording available)`)
+        } else {
+          // For live streams, fall back to stream playbackId
+          playbackId = stream.playbackId
+          console.log(`[Views API] Using stream playbackId ${playbackId} for live stream views`)
+        }
+      } catch (assetError: any) {
+        // For live streams, fall back to stream playbackId on error
+        playbackId = stream.playbackId
+        console.log(`[Views API] Error fetching asset for live stream, using stream playbackId: ${playbackId}`)
+      }
+    } else {
+      // No livepeerStreamId - use stream playbackId if available
+      playbackId = stream.playbackId
+      if (playbackId) {
+        console.log(`[Views API] Using stream playbackId ${playbackId} (no livepeerStreamId available)`)
       }
     }
     
