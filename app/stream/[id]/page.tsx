@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Heart, Share2, MoreVertical, Trash2, Eye } from "lucide-react";
+import { formatRelativeTime } from "@/lib/utils";
 
 export default function StreamPage() {
   const params = useParams();
@@ -1066,7 +1067,7 @@ export default function StreamPage() {
                         </span>
                       ) : stream.endedAt ? (
                         <span className="inline-block px-2 py-1 bg-muted text-muted-foreground rounded text-xs sm:text-sm">
-                          Ended {new Date(stream.endedAt).toLocaleDateString()}
+                          Ended {formatRelativeTime(stream.endedAt)}
                         </span>
                       ) : null}
                     </div>
