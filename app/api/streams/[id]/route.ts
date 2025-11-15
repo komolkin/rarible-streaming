@@ -2,13 +2,28 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { streams, categories, chatMessages, streamLikes, streamViews } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
-import { getStreamStatus } from "@/lib/livepeer"
+import { getStreamStatus, getTotalViews as getLivepeerTotalViews } from "@/lib/livepeer"
 
 // Increase timeout for Vercel functions (max 60s on Pro, 10s on Hobby)
 export const maxDuration = 30
 
 // Helper function to calculate total views for a stream
-async function getTotalViews(streamId: string): Promise<number> {
+// Tries Livepeer API first (if available), then falls back to database count
+async function getTotalViews(streamId: string, playbackId?: string | null): Promise<number> {
+  // Try Livepeer API first if we have a playbackId
+  if (playbackId) {
+    try {
+      const livepeerTotalViews = await getLivepeerTotalViews(playbackId)
+      if (livepeerTotalViews !== null && livepeerTotalViews !== undefined) {
+        console.log(`[GET Stream ${streamId}] Using Livepeer total views: ${livepeerTotalViews}`)
+        return livepeerTotalViews
+      }
+    } catch (error) {
+      console.log(`[GET Stream ${streamId}] Livepeer total views not available, using database count`)
+    }
+  }
+  
+  // Fall back to database count
   try {
     const viewsResult = await db
       .select({
@@ -273,7 +288,7 @@ export async function GET(
           
           console.log(`[GET Stream ${params.id}] ✅ Stream updated with vodUrl`)
           
-          const totalViews = await getTotalViews(params.id)
+          const totalViews = await getTotalViews(params.id, updated.livepeerPlaybackId)
           return NextResponse.json({
             ...updated,
             category: updatedCategory,
@@ -291,7 +306,7 @@ export async function GET(
         // This ensures frontend gets the correct playbackId
         if (assetPlaybackId) {
           console.log(`[GET Stream ${params.id}] ✅ Returning with asset playbackId: ${assetPlaybackId}`)
-          const totalViews = await getTotalViews(params.id)
+          const totalViews = await getTotalViews(params.id, stream.livepeerPlaybackId)
           return NextResponse.json({
             ...stream,
             category: category,
@@ -338,7 +353,7 @@ export async function GET(
         if (!livepeerStreamData) {
           console.warn(`[Stream ${params.id}] Skipping status check due to timeout`)
           // Return stream as-is without status update
-          const totalViews = await getTotalViews(params.id)
+          const totalViews = await getTotalViews(params.id, stream.livepeerPlaybackId)
           return NextResponse.json({
             ...stream,
             category: category,
@@ -468,7 +483,7 @@ export async function GET(
               updatedCategory = categoryData || null
             }
             
-            const totalViews = await getTotalViews(params.id)
+            const totalViews = await getTotalViews(params.id, updatedStream.livepeerPlaybackId)
             return NextResponse.json({
               ...updatedStream,
               category: updatedCategory,
@@ -540,7 +555,7 @@ export async function GET(
               
               console.log(`[Stream ${params.id}] Successfully saved thumbnail: ${previewImageUrl}`)
               
-              const totalViews = await getTotalViews(params.id)
+              const totalViews = await getTotalViews(params.id, updated.livepeerPlaybackId)
               return NextResponse.json({
                 ...updated,
                 category: updatedCategory,
@@ -561,7 +576,7 @@ export async function GET(
     // Return stream with category and totalViews
     // Note: For ended streams, assetPlaybackId should already be returned earlier if found
     // This is the fallback return for all other cases
-    const totalViews = await getTotalViews(params.id)
+    const totalViews = await getTotalViews(params.id, stream.livepeerPlaybackId)
     return NextResponse.json({
       ...stream,
       category: category,
@@ -819,7 +834,7 @@ export async function DELETE(
           category = categoryData || null
         }
         
-        const totalViews = await getTotalViews(streamId)
+        const totalViews = await getTotalViews(streamId, finalUpdated.livepeerPlaybackId)
         return NextResponse.json({
           ...finalUpdated,
           category: category,
@@ -839,7 +854,7 @@ export async function DELETE(
       category = categoryData || null
     }
 
-    const totalViews = await getTotalViews(params.id)
+    const totalViews = await getTotalViews(params.id, updated.livepeerPlaybackId)
     return NextResponse.json({
       ...updated,
       category: category,

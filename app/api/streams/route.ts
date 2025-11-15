@@ -263,18 +263,47 @@ export async function GET(request: NextRequest) {
         }
         
         // Calculate total views (unique users)
+        // Try Livepeer API first if available, then fall back to database
         let totalViews = 0
-        try {
-          const viewsResult = await db
-            .select({
-              totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
-            })
-            .from(streamViews)
-            .where(eq(streamViews.streamId, stream.id))
-          
-          totalViews = viewsResult[0]?.totalViews || 0
-        } catch (error) {
-          console.warn(`[Streams API] Could not fetch total views for stream ${stream.id}:`, error)
+        if (stream.livepeerPlaybackId) {
+          try {
+            const { getTotalViews: getLivepeerTotalViews } = await import("@/lib/livepeer")
+            const livepeerTotalViews = await getLivepeerTotalViews(stream.livepeerPlaybackId)
+            if (livepeerTotalViews !== null && livepeerTotalViews !== undefined) {
+              totalViews = livepeerTotalViews
+            } else {
+              // Fall back to database count
+              throw new Error("Livepeer total views not available")
+            }
+          } catch (error) {
+            // Fall back to database count
+            try {
+              const viewsResult = await db
+                .select({
+                  totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
+                })
+                .from(streamViews)
+                .where(eq(streamViews.streamId, stream.id))
+              
+              totalViews = viewsResult[0]?.totalViews || 0
+            } catch (dbError) {
+              console.warn(`[Streams API] Could not fetch total views for stream ${stream.id}:`, dbError)
+            }
+          }
+        } else {
+          // No playbackId, use database count
+          try {
+            const viewsResult = await db
+              .select({
+                totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
+              })
+              .from(streamViews)
+              .where(eq(streamViews.streamId, stream.id))
+            
+            totalViews = viewsResult[0]?.totalViews || 0
+          } catch (error) {
+            console.warn(`[Streams API] Could not fetch total views for stream ${stream.id}:`, error)
+          }
         }
         
         return {

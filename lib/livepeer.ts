@@ -767,6 +767,229 @@ export async function getViewerCount(playbackId: string): Promise<number> {
 }
 
 /**
+ * Get historical view counts for a playbackId from Livepeer
+ * Uses Livepeer's Historical Views API (if available)
+ * 
+ * @param playbackId - The playback ID of the stream/asset
+ * @param options - Optional parameters for time range and granularity
+ * @returns Historical view data or null if endpoint doesn't exist
+ */
+export async function getHistoricalViews(
+  playbackId: string,
+  options?: {
+    from?: number // Unix timestamp in seconds
+    to?: number // Unix timestamp in seconds
+    granularity?: "hour" | "day" | "week" | "month"
+  }
+): Promise<{
+  playbackId: string
+  totalViews?: number
+  peakViewers?: number
+  data?: Array<{ timestamp: number; viewCount: number }>
+} | null> {
+  if (!LIVEPEER_API_KEY) {
+    throw new Error("LIVEPEER_API_KEY is not set")
+  }
+
+  if (!playbackId) {
+    return null
+  }
+
+  try {
+    const url = new URL("https://livepeer.studio/api/data/views")
+    url.searchParams.set("playbackId", playbackId)
+    
+    if (options?.from) {
+      url.searchParams.set("from", options.from.toString())
+    }
+    if (options?.to) {
+      url.searchParams.set("to", options.to.toString())
+    }
+    if (options?.granularity) {
+      url.searchParams.set("granularity", options.granularity)
+    }
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
+    })
+
+    if (!response.ok) {
+      // If endpoint doesn't exist (404) or not available, return null
+      if (response.status === 404 || response.status === 501) {
+        console.log(`[Historical Views] Endpoint not available for playbackId: ${playbackId}`)
+        return null
+      }
+      // For other errors, log and return null
+      console.warn(`[Historical Views] API error ${response.status} for playbackId: ${playbackId}`)
+      return null
+    }
+
+    const data = await response.json()
+    
+    // Handle different response formats
+    if (data && typeof data === "object") {
+      return {
+        playbackId,
+        totalViews: data.totalViews || data.total_views || data.total,
+        peakViewers: data.peakViewers || data.peak_viewers || data.peak,
+        data: data.data || data.views || data.history,
+      }
+    }
+    
+    return null
+  } catch (error) {
+    // Endpoint might not exist, return null gracefully
+    console.log(`[Historical Views] Endpoint may not be available: ${error}`)
+    return null
+  }
+}
+
+/**
+ * Get total lifetime views for a playbackId from Livepeer
+ * Uses historical views API if available, otherwise returns null
+ * 
+ * @param playbackId - The playback ID of the stream/asset
+ * @returns Total lifetime views or null if not available
+ */
+export async function getTotalViews(playbackId: string): Promise<number | null> {
+  if (!playbackId) {
+    return null
+  }
+
+  try {
+    const historicalData = await getHistoricalViews(playbackId)
+    if (historicalData?.totalViews !== undefined) {
+      return historicalData.totalViews
+    }
+    return null
+  } catch (error) {
+    console.log(`[Total Views] Could not fetch from Livepeer: ${error}`)
+    return null
+  }
+}
+
+/**
+ * Get peak concurrent viewers for a playbackId from Livepeer
+ * Uses historical views API if available, otherwise returns null
+ * 
+ * @param playbackId - The playback ID of the stream/asset
+ * @returns Peak concurrent viewers or null if not available
+ */
+export async function getPeakViewers(playbackId: string): Promise<number | null> {
+  if (!playbackId) {
+    return null
+  }
+
+  try {
+    const historicalData = await getHistoricalViews(playbackId)
+    if (historicalData?.peakViewers !== undefined) {
+      return historicalData.peakViewers
+    }
+    return null
+  } catch (error) {
+    console.log(`[Peak Viewers] Could not fetch from Livepeer: ${error}`)
+    return null
+  }
+}
+
+/**
+ * Get stream metrics from Livepeer (if available)
+ * 
+ * @param streamId - The Livepeer stream ID
+ * @returns Stream metrics or null if endpoint doesn't exist
+ */
+export async function getStreamMetrics(streamId: string): Promise<{
+  totalViews?: number
+  peakConcurrentViewers?: number
+  averageWatchTime?: number
+  totalWatchTime?: number
+  [key: string]: any
+} | null> {
+  if (!LIVEPEER_API_KEY) {
+    throw new Error("LIVEPEER_API_KEY is not set")
+  }
+
+  if (!streamId) {
+    return null
+  }
+
+  try {
+    const response = await fetch(`https://livepeer.studio/api/stream/${streamId}/metrics`, {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
+    })
+
+    if (!response.ok) {
+      // If endpoint doesn't exist (404) or not available, return null
+      if (response.status === 404 || response.status === 501) {
+        console.log(`[Stream Metrics] Endpoint not available for streamId: ${streamId}`)
+        return null
+      }
+      console.warn(`[Stream Metrics] API error ${response.status} for streamId: ${streamId}`)
+      return null
+    }
+
+    const data = await response.json()
+    return data || null
+  } catch (error) {
+    // Endpoint might not exist, return null gracefully
+    console.log(`[Stream Metrics] Endpoint may not be available: ${error}`)
+    return null
+  }
+}
+
+/**
+ * Get asset metrics from Livepeer (if available)
+ * Useful for VOD replay analytics
+ * 
+ * @param assetId - The Livepeer asset ID
+ * @returns Asset metrics or null if endpoint doesn't exist
+ */
+export async function getAssetMetrics(assetId: string): Promise<{
+  totalViews?: number
+  peakConcurrentViewers?: number
+  averageWatchTime?: number
+  totalWatchTime?: number
+  [key: string]: any
+} | null> {
+  if (!LIVEPEER_API_KEY) {
+    throw new Error("LIVEPEER_API_KEY is not set")
+  }
+
+  if (!assetId) {
+    return null
+  }
+
+  try {
+    const response = await fetch(`https://livepeer.studio/api/asset/${assetId}/metrics`, {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
+    })
+
+    if (!response.ok) {
+      // If endpoint doesn't exist (404) or not available, return null
+      if (response.status === 404 || response.status === 501) {
+        console.log(`[Asset Metrics] Endpoint not available for assetId: ${assetId}`)
+        return null
+      }
+      console.warn(`[Asset Metrics] API error ${response.status} for assetId: ${assetId}`)
+      return null
+    }
+
+    const data = await response.json()
+    return data || null
+  } catch (error) {
+    // Endpoint might not exist, return null gracefully
+    console.log(`[Asset Metrics] Endpoint may not be available: ${error}`)
+    return null
+  }
+}
+
+/**
  * List assets from Livepeer API
  * Can filter by source stream ID to find assets created from a specific stream
  * Handles pagination and different response formats
