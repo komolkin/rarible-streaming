@@ -241,7 +241,8 @@ export default function StreamPage() {
         );
       }
 
-      // Store asset playbackId if available (fetched dynamically, not from DB)
+      // Store asset playbackId if available (from database or fetched dynamically)
+      // asset_playback_id is different from livepeer_playback_id and is needed for VOD views
       if (data.assetPlaybackId) {
         setAssetPlaybackId(data.assetPlaybackId);
       }

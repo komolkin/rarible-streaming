@@ -28,6 +28,8 @@ export async function GET(
         playbackId: streams.livepeerPlaybackId,
         endedAt: streams.endedAt,
         livepeerStreamId: streams.livepeerStreamId,
+        assetPlaybackId: streams.assetPlaybackId,
+        assetId: streams.assetId,
       })
       .from(streams)
       .where(eq(streams.id, params.id))
@@ -56,7 +58,22 @@ export async function GET(
     // Reference: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
     // "The playbackId can be a canonical playback ID from a specific Livepeer asset or stream objects"
     // For ended streams, assets have their own playbackId which tracks views separately
+    // asset_playback_id is different from livepeer_playback_id
     
+    // Priority 1: Use stored asset playbackId from database (fastest, avoids API call)
+    if (!playbackId && stream.assetPlaybackId) {
+      playbackId = stream.assetPlaybackId
+      assetInfo = {
+        playbackId,
+        id: stream.assetId,
+        source: "database",
+      }
+      console.log(
+        `[Views API] ✅ Using stored asset playbackId ${playbackId} from database for stream ${params.id}`
+      )
+    }
+    
+    // Priority 2: For ended streams without stored asset playbackId, fetch from Livepeer API
     if (!playbackId && isEnded && stream.livepeerStreamId) {
       // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
       // This is critical because stream playbackId views don't match asset views for VOD
@@ -88,6 +105,23 @@ export async function GET(
             console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for ended stream views`)
             console.log(`[Views API] Asset ID: ${asset.id} (available if needed)`)
             console.log(`[Views API] Asset status: ${asset.status}`)
+            
+            // Store asset metadata in database for future use
+            if (asset.id && asset.playbackId) {
+              try {
+                await db
+                  .update(streams)
+                  .set({
+                    assetId: asset.id,
+                    assetPlaybackId: asset.playbackId,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(streams.id, params.id))
+                console.log(`[Views API] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+              } catch (dbError) {
+                console.warn(`[Views API] Failed to store asset metadata:`, dbError)
+              }
+            }
             
             // Log asset status for debugging
             if (asset.status !== "ready") {
@@ -157,6 +191,23 @@ export async function GET(
           }
           playbackId = asset.playbackId
           console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for live stream views (matches dashboard - recording available)`)
+          
+          // Store asset metadata in database for future use
+          if (asset.id && asset.playbackId) {
+            try {
+              await db
+                .update(streams)
+                .set({
+                  assetId: asset.id,
+                  assetPlaybackId: asset.playbackId,
+                  updatedAt: new Date(),
+                })
+                .where(eq(streams.id, params.id))
+              console.log(`[Views API] ✅ Stored asset metadata for live stream: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+            } catch (dbError) {
+              console.warn(`[Views API] Failed to store asset metadata:`, dbError)
+            }
+          }
         } else {
           // For live streams without asset, use stream playbackId
           playbackId = stream.playbackId

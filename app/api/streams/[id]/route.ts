@@ -20,14 +20,15 @@ async function getViewsPlaybackId(
 ): Promise<string | null> {
   const isEnded = !!endedAt
   
+  // Priority 1: Use cached asset playbackId from database (fastest, avoids API call)
   if (cachedAssetPlaybackId) {
     console.log(
-      `[Views] Using cached asset playbackId ${cachedAssetPlaybackId} from database for stream ${streamId}`
+      `[Views] ✅ Using stored asset playbackId ${cachedAssetPlaybackId} from database for stream ${streamId}`
     )
     return cachedAssetPlaybackId
   }
   
-  // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
+  // Priority 2: For ended streams, fetch asset playbackId from Livepeer API if not cached
   // This is critical because stream playbackId views don't match asset views for VOD
   if (isEnded && livepeerStreamId) {
     try {
@@ -35,6 +36,7 @@ async function getViewsPlaybackId(
       const asset = await getStreamAsset(livepeerStreamId)
       if (asset?.playbackId) {
         console.log(`[Views] ✅ Using asset playbackId ${asset.playbackId} for ended stream ${streamId} (matches Livepeer dashboard)`)
+        // Note: Asset metadata should be stored by the stream detail route, so this is a fallback
         return asset.playbackId
       } else {
         // Asset not ready yet - return null instead of falling back to stream playbackId
@@ -48,7 +50,7 @@ async function getViewsPlaybackId(
     }
   }
   
-  // For live streams, use stream playbackId (or try asset if available)
+  // Priority 3: For live streams, use stream playbackId (or try asset if available)
   if (!isEnded && livepeerStreamId) {
     try {
       const { getStreamAsset } = await import("@/lib/livepeer")
@@ -97,7 +99,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Fetch stream
+    // Fetch stream (including asset metadata)
     const [stream] = await db.select().from(streams).where(eq(streams.id, params.id))
 
     if (!stream) {
@@ -256,6 +258,23 @@ export async function GET(
               } else if (asset.playbackId) {
                 // Asset is ready - store the asset playbackId and ID for Player component
                 assetPlaybackId = asset.playbackId
+                // Store asset metadata in database for future use (especially for views)
+                // asset_playback_id is different from livepeer_playback_id and is needed for VOD views
+                if (asset.id && asset.playbackId) {
+                  try {
+                    await db
+                      .update(streams)
+                      .set({
+                        assetId: asset.id,
+                        assetPlaybackId: asset.playbackId,
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(streams.id, params.id))
+                    console.log(`[GET Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+                  } catch (dbError) {
+                    console.warn(`[GET Stream ${params.id}] Failed to store asset metadata:`, dbError)
+                  }
+                }
                 // Use the asset's playbackId to construct HLS URL for VOD
                 // This is the correct playbackId for VOD assets
                 const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
@@ -640,7 +659,7 @@ export async function GET(
       stream.livepeerPlaybackId,
       stream.endedAt,
       stream.livepeerStreamId,
-      null // assetPlaybackId is fetched dynamically, not stored in DB
+      stream.assetPlaybackId // Use stored asset playbackId from database if available
     )
     const totalViews = await getTotalViews(params.id, viewsPlaybackId)
     
