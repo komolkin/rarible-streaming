@@ -330,8 +330,13 @@ export default function StreamPage() {
             setStream((prev: any) => {
               if (!prev) return prev;
               // Only update if viewer count actually changed
-              if (typeof newViewerCount === "number" && newViewerCount !== prev.viewerCount) {
-                console.log(`[Real-time] Viewer count updated: ${prev.viewerCount} -> ${newViewerCount}`);
+              if (
+                typeof newViewerCount === "number" &&
+                newViewerCount !== prev.viewerCount
+              ) {
+                console.log(
+                  `[Real-time] Viewer count updated: ${prev.viewerCount} -> ${newViewerCount}`
+                );
                 return {
                   ...prev,
                   viewerCount: newViewerCount,
@@ -341,7 +346,10 @@ export default function StreamPage() {
                 };
               }
               // Still update other fields even if viewer count didn't change
-              if (payload.new.is_live !== undefined || payload.new.ended_at !== undefined) {
+              if (
+                payload.new.is_live !== undefined ||
+                payload.new.ended_at !== undefined
+              ) {
                 return {
                   ...prev,
                   isLive: payload.new.is_live ?? prev.isLive,
@@ -385,7 +393,6 @@ export default function StreamPage() {
     };
   }, [stream?.livepeerPlaybackId]);
 
-
   const handleStreamStatusChange = useCallback((isLive: boolean) => {
     if (playerOfflineTimeoutRef.current) {
       clearTimeout(playerOfflineTimeoutRef.current);
@@ -401,7 +408,6 @@ export default function StreamPage() {
       }, 10000);
     }
   }, []);
-
 
   useEffect(() => {
     try {
@@ -429,8 +435,13 @@ export default function StreamPage() {
       viewerCountCleanup();
       clearInterval(interval);
     };
-  }, [params.id, fetchStream, fetchChatMessages, subscribeToChat, subscribeToViewerCount]);
-
+  }, [
+    params.id,
+    fetchStream,
+    fetchChatMessages,
+    subscribeToChat,
+    subscribeToViewerCount,
+  ]);
 
   // Fetch asset playback ID when stream ends
   useEffect(() => {
@@ -775,7 +786,7 @@ export default function StreamPage() {
                           showTitle={false}
                           showPipButton={true}
                           objectFit="contain"
-                          showUploadingIndicator={false}
+                          showUploadingIndicator={true}
                         />
                       ) : streamJustEnded ? (
                         <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
@@ -809,7 +820,7 @@ export default function StreamPage() {
                           showPipButton={false}
                           objectFit="contain"
                           priority
-                          showUploadingIndicator={false}
+                          showUploadingIndicator={true}
                           onStreamStatusChange={handleStreamStatusChange}
                         />
                         {showOfflineOverlay && (
@@ -865,7 +876,7 @@ export default function StreamPage() {
                         showTitle={false}
                         showPipButton={false}
                         objectFit="contain"
-                        showUploadingIndicator={false}
+                        showUploadingIndicator={true}
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center text-white">
@@ -911,7 +922,7 @@ export default function StreamPage() {
                       showTitle={false}
                       showPipButton={true}
                       objectFit="contain"
-                      showUploadingIndicator={false}
+                      showUploadingIndicator={true}
                     />
                   ) : streamJustEnded ? (
                     <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
