@@ -118,7 +118,7 @@ export function Navbar() {
               Rarible
             </Link>
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-baseline space-x-4 ml-[40px]">
+            <div className="hidden md:flex items-baseline space-x-4 ml-[32px]">
               <Link href="/" className="text-sm font-medium hover:opacity-80 transition-opacity">
                 Home
               </Link>
@@ -163,13 +163,6 @@ export function Navbar() {
                         <span className="lg:hidden">Launch</span>
                       </Button>
                     </Link>
-                    <button
-                      disabled
-                      className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      aria-label="Notifications"
-                    >
-                      <Bell className="h-5 w-5" />
-                    </button>
                     <div
                       onMouseEnter={handleMouseEnter}
                       onMouseLeave={handleMouseLeave}

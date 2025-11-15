@@ -35,18 +35,18 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4">The best way to have fun onchain</h1>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground mb-3">
             We&apos;re currently in Private Access.{" "}
             <a 
               href="https://x.com/Rarible" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline"
+              className="text-blue-400 hover:text-blue-300"
             >
               Follow us for updates
             </a>
           </p>
-          <Button className="bg-white text-black hover:bg-gray-100 mt-6">
+          <Button className="bg-white text-black hover:bg-gray-100 mb-12">
             Join waitlist
           </Button>
         </div>
@@ -66,7 +66,7 @@ export default function Home() {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {recentStreams.map((stream) => (
                 <StreamPreviewCard key={stream.id} stream={stream} />
               ))}
