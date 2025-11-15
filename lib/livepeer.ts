@@ -848,23 +848,64 @@ export async function getHistoricalViews(
 
 /**
  * Get total lifetime views for a playbackId from Livepeer
- * Uses historical views API if available, otherwise returns null
+ * Uses the correct Livepeer API endpoint: /api/data/views/query/total/{playbackId}
  * 
  * @param playbackId - The playback ID of the stream/asset
  * @returns Total lifetime views or null if not available
  */
 export async function getTotalViews(playbackId: string): Promise<number | null> {
+  if (!LIVEPEER_API_KEY) {
+    throw new Error("LIVEPEER_API_KEY is not set")
+  }
+
   if (!playbackId) {
     return null
   }
 
   try {
-    const historicalData = await getHistoricalViews(playbackId)
-    if (historicalData?.totalViews !== undefined) {
-      return historicalData.totalViews
+    const url = `https://livepeer.studio/api/data/views/query/total/${playbackId}`
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
+    })
+
+    if (!response.ok) {
+      // If endpoint doesn't exist (404) or not available, return null
+      if (response.status === 404 || response.status === 501) {
+        console.log(`[Total Views] Endpoint not available for playbackId: ${playbackId}`)
+        return null
+      }
+      // For other errors, log and return null
+      console.warn(`[Total Views] API error ${response.status} for playbackId: ${playbackId}`)
+      return null
     }
+
+    const data = await response.json()
+    
+    // Handle response format from Livepeer API
+    // According to docs: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
+    if (data && typeof data === "object") {
+      // The API returns viewCount field
+      if (typeof data.viewCount === "number") {
+        return data.viewCount
+      }
+      // Fallback for other possible formats
+      if (typeof data.totalViews === "number") {
+        return data.totalViews
+      }
+      if (typeof data.total === "number") {
+        return data.total
+      }
+    } else if (typeof data === "number") {
+      // Direct number response (unlikely but handle it)
+      return data
+    }
+    
     return null
   } catch (error) {
+    // Endpoint might not exist or network error, return null gracefully
     console.log(`[Total Views] Could not fetch from Livepeer: ${error}`)
     return null
   }
