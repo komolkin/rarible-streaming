@@ -76,7 +76,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold mb-6">Recent Streams</h2>
           {loading ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground">Loading streams...</p>
+              <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
             </div>
           ) : recentStreams.length === 0 ? (
             <div className="text-center py-12">
