@@ -7,6 +7,38 @@ import { getStreamStatus, getTotalViews as getLivepeerTotalViews } from "@/lib/l
 // Increase timeout for Vercel functions (max 60s on Pro, 10s on Hobby)
 export const maxDuration = 30
 
+// Helper function to get the correct playbackId for views
+// For ended streams, uses asset playbackId (matches Livepeer dashboard)
+// For live streams, uses stream playbackId
+async function getViewsPlaybackId(
+  streamId: string,
+  streamPlaybackId: string | null | undefined,
+  endedAt: Date | null | undefined,
+  livepeerStreamId: string | null | undefined
+): Promise<string | null> {
+  // For live streams, use stream playbackId
+  if (!endedAt) {
+    return streamPlaybackId || null
+  }
+  
+  // For ended streams, try to get asset playbackId
+  if (endedAt && livepeerStreamId) {
+    try {
+      const { getStreamAsset } = await import("@/lib/livepeer")
+      const asset = await getStreamAsset(livepeerStreamId)
+      if (asset?.playbackId) {
+        console.log(`[Views] Using asset playbackId ${asset.playbackId} for ended stream ${streamId}`)
+        return asset.playbackId
+      }
+    } catch (error) {
+      console.warn(`[Views] Could not fetch asset for ended stream ${streamId}, using stream playbackId`)
+    }
+  }
+  
+  // Fallback to stream playbackId
+  return streamPlaybackId || null
+}
+
 // Helper function to get total views from Livepeer API only
 async function getTotalViews(streamId: string, playbackId?: string | null): Promise<number | null> {
   if (!playbackId) {
@@ -16,7 +48,7 @@ async function getTotalViews(streamId: string, playbackId?: string | null): Prom
   try {
     const livepeerTotalViews = await getLivepeerTotalViews(playbackId)
     if (livepeerTotalViews !== null && livepeerTotalViews !== undefined) {
-      console.log(`[GET Stream ${streamId}] Using Livepeer total views: ${livepeerTotalViews}`)
+      console.log(`[GET Stream ${streamId}] Using Livepeer total views: ${livepeerTotalViews} for playbackId: ${playbackId}`)
       return livepeerTotalViews
     }
   } catch (error) {
@@ -279,7 +311,10 @@ export async function GET(
           
           console.log(`[GET Stream ${params.id}] ✅ Stream updated with vodUrl`)
           
-          const totalViews = await getTotalViews(params.id, updated.livepeerPlaybackId)
+          // For ended streams, use asset playbackId for views (matches Livepeer dashboard)
+          const viewsPlaybackId = assetPlaybackId || updated.livepeerPlaybackId
+          const totalViews = await getTotalViews(params.id, viewsPlaybackId)
+          console.log(`[GET Stream ${params.id}] Using playbackId ${viewsPlaybackId} for views: ${totalViews}`)
           return NextResponse.json({
             ...updated,
             category: updatedCategory,
@@ -297,7 +332,9 @@ export async function GET(
         // This ensures frontend gets the correct playbackId
         if (assetPlaybackId) {
           console.log(`[GET Stream ${params.id}] ✅ Returning with asset playbackId: ${assetPlaybackId}`)
-          const totalViews = await getTotalViews(params.id, stream.livepeerPlaybackId)
+          // For ended streams, use asset playbackId for views (matches Livepeer dashboard)
+          const totalViews = await getTotalViews(params.id, assetPlaybackId)
+          console.log(`[GET Stream ${params.id}] Using asset playbackId ${assetPlaybackId} for views: ${totalViews}`)
           return NextResponse.json({
             ...stream,
             category: category,
@@ -567,7 +604,14 @@ export async function GET(
     // Return stream with category and totalViews
     // Note: For ended streams, assetPlaybackId should already be returned earlier if found
     // This is the fallback return for all other cases
-    const totalViews = await getTotalViews(params.id, stream.livepeerPlaybackId)
+    // For ended streams, use asset playbackId for views (matches Livepeer dashboard)
+    const viewsPlaybackId = await getViewsPlaybackId(
+      params.id,
+      stream.livepeerPlaybackId,
+      stream.endedAt,
+      stream.livepeerStreamId
+    )
+    const totalViews = await getTotalViews(params.id, viewsPlaybackId)
     return NextResponse.json(
       {
         ...stream,
