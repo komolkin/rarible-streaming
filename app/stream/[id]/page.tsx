@@ -936,7 +936,7 @@ export default function StreamPage() {
   if (!stream) {
     return (
       <div className="min-h-screen pt-24 flex items-center justify-center">
-        <div>Loading stream data...</div>
+        <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -949,27 +949,19 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {stream.livepeerPlaybackId ||
-                (stream.endedAt &&
-                  (assetPlaybackId || stream.livepeerStreamId)) ? (
+                {stream.livepeerPlaybackId || stream.vodUrl ? (
                   <>
-                    {stream.endedAt ? (
-                      assetPlaybackUrl || assetPlaybackId ? (
-                        <Player
-                          src={assetPlaybackUrl || undefined}
-                          playbackId={
-                            assetPlaybackUrl
-                              ? undefined
-                              : assetPlaybackId || undefined
-                          }
-                          autoPlay
-                          muted={false}
-                          showTitle={false}
-                          showPipButton={true}
-                          objectFit="contain"
-                          showUploadingIndicator={true}
-                        />
-                      ) : streamJustEnded ? (
+                    {stream.endedAt && stream.vodUrl ? (
+                      <Player
+                        src={stream.vodUrl}
+                        autoPlay
+                        muted={false}
+                        showTitle={false}
+                        showPipButton={true}
+                        objectFit="contain"
+                        showUploadingIndicator={true}
+                      />
+                    ) : stream.endedAt && !stream.vodUrl ? (
                         <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                           <div className="text-center max-w-md px-4">
                             <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
@@ -1089,23 +1081,17 @@ export default function StreamPage() {
                       </div>
                     )}
                   </>
-                ) : stream.endedAt ? (
-                  assetPlaybackUrl || assetPlaybackId ? (
-                    <Player
-                      src={assetPlaybackUrl || undefined}
-                      playbackId={
-                        assetPlaybackUrl
-                          ? undefined
-                          : assetPlaybackId || undefined
-                      }
-                      autoPlay
-                      muted={false}
-                      showTitle={false}
-                      showPipButton={true}
-                      objectFit="contain"
-                      showUploadingIndicator={true}
-                    />
-                  ) : streamJustEnded ? (
+                ) : stream.endedAt && stream.vodUrl ? (
+                  <Player
+                    src={stream.vodUrl}
+                    autoPlay
+                    muted={false}
+                    showTitle={false}
+                    showPipButton={true}
+                    objectFit="contain"
+                    showUploadingIndicator={true}
+                  />
+                ) : stream.endedAt && !stream.vodUrl ? (
                     <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                       <div className="text-center max-w-md px-4">
                         <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
@@ -1243,51 +1229,6 @@ export default function StreamPage() {
                         </span>
                       ) : null}
                     </div>
-                    {/* Playback IDs Information */}
-                    {(stream.livepeerPlaybackId ||
-                      assetPlaybackId ||
-                      stream.assetPlaybackId) && (
-                      <div className="mt-3 p-2 bg-muted/50 rounded text-xs text-muted-foreground space-y-1">
-                        {stream.livepeerPlaybackId && (
-                          <div>
-                            <span className="font-semibold">
-                              Stream Playback ID:
-                            </span>{" "}
-                            <span className="font-mono break-all">
-                              {stream.livepeerPlaybackId}
-                            </span>
-                            <span className="ml-1 text-[10px]">
-                              (for live stream)
-                            </span>
-                          </div>
-                        )}
-                        {(assetPlaybackId || stream.assetPlaybackId) &&
-                          (assetPlaybackId || stream.assetPlaybackId) !==
-                            stream.livepeerPlaybackId && (
-                            <div>
-                              <span className="font-semibold">
-                                Asset Playback ID:
-                              </span>{" "}
-                              <span className="font-mono break-all">
-                                {assetPlaybackId || stream.assetPlaybackId}
-                              </span>
-                              <span className="ml-1 text-[10px]">
-                                (for video recording/VOD)
-                              </span>
-                            </div>
-                          )}
-                        {(assetPlaybackId || stream.assetPlaybackId) &&
-                          (assetPlaybackId || stream.assetPlaybackId) ===
-                            stream.livepeerPlaybackId && (
-                            <div className="text-yellow-600 dark:text-yellow-400">
-                              <span className="font-semibold">
-                                ⚠️ Asset Playback ID:
-                              </span>{" "}
-                              Not available yet (asset still processing)
-                            </div>
-                          )}
-                      </div>
-                    )}
                   </div>
                   <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
                     <div className="flex flex-row flex-wrap gap-1.5 sm:gap-2">

@@ -67,7 +67,7 @@ export default function EditProfilePage() {
   if (!ready) {
     return (
       <div className="min-h-screen pt-24 flex items-center justify-center">
-        <div>Loading...</div>
+        <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
       </div>
     )
   }
@@ -105,7 +105,7 @@ export default function EditProfilePage() {
   if (profileLoading) {
     return (
       <div className="min-h-screen pt-24 flex items-center justify-center">
-        <div>Loading profile...</div>
+        <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
       </div>
     )
   }

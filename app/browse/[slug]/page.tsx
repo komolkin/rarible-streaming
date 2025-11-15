@@ -77,7 +77,7 @@ export default function CategoryPage() {
       <main className="min-h-screen pt-24 pb-8 px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
-            <p className="text-muted-foreground">Loading...</p>
+            <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
           </div>
         </div>
       </main>

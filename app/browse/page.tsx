@@ -41,7 +41,7 @@ export default function BrowsePage() {
         <h1 className="text-4xl font-bold mb-8 text-center">Browse Categories</h1>
         {loading ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">Loading categories...</p>
+            <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
           </div>
         ) : categories.length === 0 ? (
           <div className="text-center py-12">
