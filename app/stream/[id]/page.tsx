@@ -223,10 +223,18 @@ export default function StreamPage() {
       // Set total views from stream data
       if (typeof data.totalViews === "number") {
         setTotalViews(data.totalViews);
-        console.log(`[Views] Updated total views: ${data.totalViews}`);
+        console.log(`[Views] Updated total views: ${data.totalViews}`, {
+          playbackIdUsed: data.playbackId,
+          isAssetPlaybackId: data.isAssetPlaybackId,
+        });
       } else if (data.totalViews === null) {
         // If null, keep current value or set to 0
         console.log(`[Views] No views data available yet`);
+      }
+
+      // Store asset playbackId if available (for direct Livepeer API calls)
+      if (data.assetPlaybackId) {
+        setAssetPlaybackId(data.assetPlaybackId);
       }
 
       // Log stream status for debugging
@@ -443,8 +451,9 @@ export default function StreamPage() {
 
     // Also poll for views specifically every 60 seconds to ensure fresh data
     // Livepeer updates views every 5 minutes, but we check more frequently to catch updates
+    // Note: This uses the backend API which correctly identifies asset playbackId for ended streams
     const viewsInterval = setInterval(() => {
-      // Always fetch views - the API will handle missing playbackId gracefully
+      // Fetch views from our backend API (which handles asset detection and uses correct playbackId)
       fetch(`/api/streams/${params.id}/views?t=${Date.now()}`, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" },
@@ -461,7 +470,11 @@ export default function StreamPage() {
               // Only update if the value actually changed
               if (prevViews !== data.totalViews) {
                 console.log(
-                  `[Views Poll] Updated views: ${prevViews} -> ${data.totalViews}`
+                  `[Views Poll] Updated views: ${prevViews} -> ${data.totalViews}`,
+                  {
+                    playbackIdUsed: data.playbackId,
+                    isAssetPlaybackId: data.isAssetPlaybackId,
+                  }
                 );
                 return data.totalViews;
               }

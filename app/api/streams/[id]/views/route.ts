@@ -35,9 +35,10 @@ export async function GET(
     let playbackId = stream.playbackId
     let assetInfo: any = null
     
-    // CRITICAL: For ended streams (and live streams with recordings), use asset playbackId
+    // CRITICAL: Always try to get asset playbackId for views
     // The Livepeer dashboard shows views for the asset (VOD), not the stream
-    // Always try to get asset for accurate view counts
+    // Even for live streams, if there's a recording/asset, the dashboard shows asset views
+    // This ensures we match what the Livepeer dashboard displays
     if (stream.livepeerStreamId) {
       try {
         console.log(`[Views API] Fetching asset for stream ${stream.livepeerStreamId} (ended: ${!!stream.endedAt})`)
