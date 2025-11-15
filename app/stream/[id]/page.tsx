@@ -949,139 +949,7 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {stream.livepeerPlaybackId || stream.vodUrl ? (
-                  <>
-                    {stream.endedAt && stream.vodUrl ? (
-                      <Player
-                        src={stream.vodUrl}
-                        autoPlay
-                        muted={false}
-                        showTitle={false}
-                        showPipButton={true}
-                        objectFit="contain"
-                        showUploadingIndicator={true}
-                      />
-                    ) : stream.endedAt && !stream.vodUrl ? (
-                        <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                          <div className="text-center max-w-md px-4">
-                            <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
-                              ⏳
-                            </div>
-                            <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
-                              Recording Processing
-                            </h3>
-                            <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                              Your recording will be available shortly. Please
-                              check back in a few minutes.
-                            </p>
-                            <p className="text-xs sm:text-sm text-muted-foreground px-2">
-                              The recording is being processed and will appear
-                              here once ready.
-                            </p>
-                          </div>
-                        </div>
-                      ) : null
-                    ) : showLivePlayer ? (
-                      // LIVE STREAM - Show live player
-                      <>
-                        <Player
-                          key={`live-${stream.livepeerPlaybackId}`}
-                          playbackId={stream.livepeerPlaybackId}
-                          autoPlay
-                          muted
-                          showTitle={false}
-                          showPipButton={false}
-                          objectFit="contain"
-                          priority
-                          showUploadingIndicator={true}
-                          onStreamStatusChange={handleStreamStatusChange}
-                        />
-                        {showOfflineOverlay && (
-                          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
-                            <div className="font-bold mb-1 text-[10px] sm:text-sm">
-                              ⚠️ Stream Offline
-                            </div>
-                            {stream.livepeerStreamKey ? (
-                              <>
-                                <div className="text-[10px] sm:text-xs mt-1">
-                                  <div className="font-semibold hidden sm:block">
-                                    OBS Settings:
-                                  </div>
-                                  <div className="bg-black/20 p-1 rounded mt-1 font-mono text-[9px] sm:text-[10px] break-all">
-                                    <div className="hidden sm:block">
-                                      Server: rtmp://ingest.livepeer.studio/live
-                                    </div>
-                                    <div>
-                                      Key:{" "}
-                                      {stream.livepeerStreamKey.slice(0, 20)}...
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-[10px] sm:text-xs mt-2 opacity-90 hidden sm:block">
-                                  <div>1. Go to OBS → Settings → Stream</div>
-                                  <div>
-                                    2. Set Service to &quot;Custom&quot;
-                                  </div>
-                                  <div>
-                                    3. Paste Server and Stream Key above
-                                  </div>
-                                  <div>
-                                    4. Click &quot;Start Streaming&quot;
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="text-[10px] sm:text-xs mt-1">
-                                Stream ID:{" "}
-                                {stream.livepeerStreamId?.slice(0, 20)}...
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    ) : stream.livepeerPlaybackId ? (
-                      // SCHEDULED/NON-LIVE STREAM - Use Player component
-                      <Player
-                        key={`scheduled-${stream.livepeerPlaybackId}`}
-                        playbackId={stream.livepeerPlaybackId}
-                        autoPlay={false}
-                        muted
-                        showTitle={false}
-                        showPipButton={false}
-                        objectFit="contain"
-                        showUploadingIndicator={true}
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-white">
-                        <div className="text-center px-4">
-                          <p className="text-base sm:text-lg mb-2">
-                            Stream offline
-                          </p>
-                          {stream.livepeerStreamKey ? (
-                            <>
-                              <p className="text-xs sm:text-sm text-muted-foreground mb-3">
-                                Make sure OBS is connected with the settings
-                                below:
-                              </p>
-                              <div className="text-[10px] sm:text-xs text-left space-y-2 font-mono bg-black/40 p-2 sm:p-3 rounded max-w-full overflow-hidden">
-                                <div className="break-all">
-                                  Server: rtmp://ingest.livepeer.studio/live
-                                </div>
-                                <div className="break-all">
-                                  Stream Key: {stream.livepeerStreamKey}
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-xs sm:text-sm text-muted-foreground">
-                              Waiting for the creator to start streaming...
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : stream.endedAt && stream.vodUrl ? (
+                {stream.endedAt && stream.vodUrl ? (
                   <Player
                     src={stream.vodUrl}
                     autoPlay
@@ -1092,25 +960,94 @@ export default function StreamPage() {
                     showUploadingIndicator={true}
                   />
                 ) : stream.endedAt && !stream.vodUrl ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                      <div className="text-center max-w-md px-4">
-                        <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
-                          ⏳
-                        </div>
-                        <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
-                          Recording Processing
-                        </h3>
-                        <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                          Your recording will be available shortly. Please check
-                          back in a few minutes.
-                        </p>
-                        <p className="text-xs sm:text-sm text-muted-foreground px-2">
-                          The recording is being processed and will appear here
-                          once ready.
-                        </p>
+                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                    <div className="text-center max-w-md px-4">
+                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                        ⏳
                       </div>
+                      <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
+                        Recording Processing
+                      </h3>
+                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
+                        Your recording will be available shortly. Please
+                        check back in a few minutes.
+                      </p>
+                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
+                        The recording is being processed and will appear
+                        here once ready.
+                      </p>
                     </div>
-                  ) : null
+                  </div>
+                ) : showLivePlayer ? (
+                  // LIVE STREAM - Show live player
+                  <>
+                    <Player
+                      key={`live-${stream.livepeerPlaybackId}`}
+                      playbackId={stream.livepeerPlaybackId}
+                      autoPlay
+                      muted
+                      showTitle={false}
+                      showPipButton={false}
+                      objectFit="contain"
+                      priority
+                      showUploadingIndicator={true}
+                      onStreamStatusChange={handleStreamStatusChange}
+                    />
+                    {showOfflineOverlay && (
+                      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
+                        <div className="font-bold mb-1 text-[10px] sm:text-sm">
+                          ⚠️ Stream Offline
+                        </div>
+                        {stream.livepeerStreamKey ? (
+                          <>
+                            <div className="text-[10px] sm:text-xs mt-1">
+                              <div className="font-semibold hidden sm:block">
+                                OBS Settings:
+                              </div>
+                              <div className="bg-black/20 p-1 rounded mt-1 font-mono text-[9px] sm:text-[10px] break-all">
+                                <div className="hidden sm:block">
+                                  Server: rtmp://ingest.livepeer.studio/live
+                                </div>
+                                <div>
+                                  Key:{" "}
+                                  {stream.livepeerStreamKey.slice(0, 20)}...
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-[10px] sm:text-xs mt-2 opacity-90 hidden sm:block">
+                              <div>1. Go to OBS → Settings → Stream</div>
+                              <div>
+                                2. Set Service to &quot;Custom&quot;
+                              </div>
+                              <div>
+                                3. Paste Server and Stream Key above
+                              </div>
+                              <div>
+                                4. Click &quot;Start Streaming&quot;
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-[10px] sm:text-xs mt-1">
+                            Stream ID:{" "}
+                            {stream.livepeerStreamId?.slice(0, 20)}...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : stream.livepeerPlaybackId ? (
+                  // SCHEDULED/NON-LIVE STREAM - Use Player component
+                  <Player
+                    key={`scheduled-${stream.livepeerPlaybackId}`}
+                    playbackId={stream.livepeerPlaybackId}
+                    autoPlay={false}
+                    muted
+                    showTitle={false}
+                    showPipButton={false}
+                    objectFit="contain"
+                    showUploadingIndicator={true}
+                  />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
                     <div className="text-center px-4">
@@ -1120,7 +1057,8 @@ export default function StreamPage() {
                       {stream.livepeerStreamKey ? (
                         <>
                           <p className="text-xs sm:text-sm text-muted-foreground mb-3">
-                            Make sure OBS is connected with the settings below:
+                            Make sure OBS is connected with the settings
+                            below:
                           </p>
                           <div className="text-[10px] sm:text-xs text-left space-y-2 font-mono bg-black/40 p-2 sm:p-3 rounded max-w-full overflow-hidden">
                             <div className="break-all">
