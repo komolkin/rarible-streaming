@@ -45,6 +45,8 @@ export const streams = pgTable("streams", {
   categoryId: uuid("category_id").references(() => categories.id),
   livepeerStreamId: text("livepeer_stream_id"),
   livepeerPlaybackId: text("livepeer_playback_id"),
+  assetId: text("asset_id"),
+  assetPlaybackId: text("asset_playback_id"),
   livepeerStreamKey: text("livepeer_stream_key"),
   isLive: boolean("is_live").default(false).notNull(),
   viewerCount: integer("viewer_count").default(0).notNull(),
