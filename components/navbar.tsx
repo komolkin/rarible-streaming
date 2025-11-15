@@ -49,13 +49,12 @@ export function Navbar() {
   }, [])
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-background border-b">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-background">
       <div className="w-full px-3 sm:px-4 lg:px-8">
         <div className="flex justify-between items-center h-14 sm:h-16 gap-2 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/" className="text-lg sm:text-xl font-bold whitespace-nowrap">
-              <span className="hidden sm:inline">Rarible Streaming</span>
-              <span className="sm:hidden">Rarible</span>
+              Rarible
             </Link>
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-baseline space-x-4 ml-2 sm:ml-10">
