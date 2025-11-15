@@ -54,9 +54,15 @@ const config = {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        none: "0px",
+        sm: "calc(var(--radius) - 4px)", // 0.5rem - 4px = 4px, doubled = 8px
+        DEFAULT: "calc(var(--radius) * 0.5)", // 0.5rem, doubled = 1rem
+        md: "calc(var(--radius) - 2px)", // 0.5rem - 2px = 6px, doubled = 12px
+        lg: "var(--radius)", // 1rem (already doubled)
+        xl: "calc(var(--radius) * 1.5)", // 1.5rem
+        "2xl": "calc(var(--radius) * 2)", // 2rem
+        "3xl": "calc(var(--radius) * 3)", // 3rem
+        full: "9999px", // Keep full as is (circular)
       },
       keyframes: {
         "accordion-down": {
