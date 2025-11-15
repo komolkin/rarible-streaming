@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { Player } from "@livepeer/react";
+import { Player, usePlaybackInfo } from "@livepeer/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,83 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Heart, Share2, MoreVertical, Trash2, Eye } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
+
+// Component to handle playback with usePlaybackInfo hook
+// Following Livepeer docs: https://docs.livepeer.org/sdks/react/migration/3.x/playback/usePlaybackInfo
+function StreamPlayer({ 
+  playbackId, 
+  isEnded, 
+  onStreamStatusChange 
+}: { 
+  playbackId: string | null | undefined
+  isEnded: boolean
+  onStreamStatusChange?: (isLive: boolean) => void
+}) {
+  const { data: playbackInfo, error, isLoading } = usePlaybackInfo({
+    playbackId: playbackId || undefined,
+  });
+
+  if (!playbackId) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+        <div className="text-center max-w-md px-4">
+          <p className="text-sm text-muted-foreground">
+            No playback ID available
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+        <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    console.error("Playback info error:", error);
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+        <div className="text-center max-w-md px-4">
+          <p className="text-sm text-red-400 mb-2">Failed to load playback</p>
+          <p className="text-xs text-muted-foreground">
+            {error instanceof Error ? error.message : "Unknown error"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!playbackInfo) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+        <div className="text-center max-w-md px-4">
+          <p className="text-sm text-muted-foreground">
+            Playback info not available
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Player
+      playbackId={playbackId}
+      playRecording={!isEnded}
+      autoPlay
+      muted={!isEnded}
+      showTitle={false}
+      showPipButton={isEnded}
+      objectFit="contain"
+      priority={!isEnded}
+      showUploadingIndicator={true}
+      onStreamStatusChange={onStreamStatusChange}
+    />
+  );
+}
 
 export default function StreamPage() {
   const params = useParams();
@@ -959,20 +1036,13 @@ export default function StreamPage() {
                 */}
                 {stream.livepeerPlaybackId || assetPlaybackId || stream.assetPlaybackId ? (
                   <>
-                    <Player
+                    <StreamPlayer
                       playbackId={
                         stream.endedAt
                           ? assetPlaybackId || stream.assetPlaybackId || stream.livepeerPlaybackId
                           : stream.livepeerPlaybackId
                       }
-                      playRecording={!stream.endedAt}
-                      autoPlay
-                      muted={!stream.endedAt}
-                      showTitle={false}
-                      showPipButton={stream.endedAt}
-                      objectFit="contain"
-                      priority={!stream.endedAt}
-                      showUploadingIndicator={true}
+                      isEnded={!!stream.endedAt}
                       onStreamStatusChange={!stream.endedAt ? handleStreamStatusChange : undefined}
                     />
                     {!stream.endedAt && showOfflineOverlay && (
