@@ -72,7 +72,7 @@ export async function GET(
         `[Views API] ✅ Using stored asset playbackId ${playbackId} from database for stream ${params.id}`
       )
     }
-    
+
     // Priority 2: For ended streams without stored asset playbackId, fetch from Livepeer API
     if (!playbackId && isEnded && stream.livepeerStreamId) {
       // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
@@ -112,10 +112,10 @@ export async function GET(
                 await db
                   .update(streams)
                   .set({
-                    assetId: asset.id,
-                    assetPlaybackId: asset.playbackId,
+              assetId: asset.id,
+              assetPlaybackId: asset.playbackId,
                     updatedAt: new Date(),
-                  })
+            })
                   .where(eq(streams.id, params.id))
                 console.log(`[Views API] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
               } catch (dbError) {
@@ -198,10 +198,10 @@ export async function GET(
               await db
                 .update(streams)
                 .set({
-                  assetId: asset.id,
-                  assetPlaybackId: asset.playbackId,
+            assetId: asset.id,
+            assetPlaybackId: asset.playbackId,
                   updatedAt: new Date(),
-                })
+          })
                 .where(eq(streams.id, params.id))
               console.log(`[Views API] ✅ Stored asset metadata for live stream: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
             } catch (dbError) {

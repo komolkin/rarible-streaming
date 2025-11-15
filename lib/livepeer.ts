@@ -1178,9 +1178,57 @@ export async function getStreamAsset(streamId: string) {
   }
 
   try {
-    console.log(`[getStreamAsset] Fetching assets for stream ${streamId}`)
+    console.log(`[getStreamAsset] Fetching asset for stream ${streamId}`)
     
-    // First, try to get assets filtered by source stream ID
+    // Priority 1: Try direct endpoint /api/stream/{streamId}/asset (preferred method)
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000)
+      
+      const response = await fetch(`https://livepeer.studio/api/stream/${streamId}/asset`, {
+        headers: {
+          Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+        },
+        signal: controller.signal,
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (response.ok) {
+        const asset = await response.json()
+        
+        // Verify asset belongs to this stream
+        const assetSourceStreamId = asset.sourceStreamId || asset.source?.streamId || asset.source?.id
+        if (assetSourceStreamId && assetSourceStreamId !== streamId) {
+          console.warn(`[getStreamAsset] Asset ${asset.id} from /stream/${streamId}/asset has mismatched sourceStreamId: ${assetSourceStreamId} (expected ${streamId})`)
+        }
+        
+        // Only return ready assets to prevent format errors
+        if (asset.status === "ready" && asset.playbackId) {
+          console.log(`[getStreamAsset] ✅ Found ready asset via /stream/${streamId}/asset: ${asset.playbackId}`)
+          return asset
+        } else if (asset.playbackId) {
+          console.log(`[getStreamAsset] Asset found via /stream/${streamId}/asset but not ready (status: ${asset.status}). Will not use for playback yet.`)
+          // Return null for unready assets to prevent format errors
+          return null
+        } else {
+          console.log(`[getStreamAsset] Asset found via /stream/${streamId}/asset but no playbackId yet`)
+        }
+      } else if (response.status === 404) {
+        console.log(`[getStreamAsset] No asset found via /stream/${streamId}/asset (404) - asset may not exist yet`)
+      } else {
+        console.warn(`[getStreamAsset] Error fetching /stream/${streamId}/asset: ${response.status}`)
+      }
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        console.warn(`[getStreamAsset] Timeout fetching /stream/${streamId}/asset, falling back to listAssets`)
+      } else {
+        console.warn(`[getStreamAsset] Error fetching /stream/${streamId}/asset:`, error?.message || error)
+      }
+      // Continue to fallback method
+    }
+    
+    // Priority 2: Fallback to listing assets filtered by source stream ID
     let allAssets: any[] = []
     try {
       allAssets = await listAssets(streamId)

@@ -33,10 +33,10 @@ async function resolveViewsPlaybackId(stream: StreamRecord) {
             await db
               .update(streams)
               .set({
-                assetId: asset.id,
-                assetPlaybackId: asset.playbackId,
+          assetId: asset.id,
+          assetPlaybackId: asset.playbackId,
                 updatedAt: new Date(),
-              })
+        })
               .where(eq(streams.id, stream.id))
             console.log(`[Streams API] ✅ Stored asset metadata for stream ${stream.id}`)
           } catch (dbError) {
@@ -46,16 +46,16 @@ async function resolveViewsPlaybackId(stream: StreamRecord) {
         return { playbackId: asset.playbackId, isAssetPlaybackId: true }
       }
 
-      console.warn(
-        `[Streams API] Asset found for ended stream ${stream.id} but playbackId missing - views unavailable until asset is ready`
-      )
-      return { playbackId: null, isAssetPlaybackId: false }
+        console.warn(
+          `[Streams API] Asset found for ended stream ${stream.id} but playbackId missing - views unavailable until asset is ready`
+        )
+        return { playbackId: null, isAssetPlaybackId: false }
     } catch (error: any) {
       const message = error?.message || error
-      console.warn(
-        `[Streams API] Could not fetch asset for ended stream ${stream.id}: ${message}`
-      )
-      return { playbackId: null, isAssetPlaybackId: false }
+        console.warn(
+          `[Streams API] Could not fetch asset for ended stream ${stream.id}: ${message}`
+        )
+        return { playbackId: null, isAssetPlaybackId: false }
     }
   }
 
@@ -157,10 +157,10 @@ export async function GET(request: NextRequest) {
                       await db
                         .update(streams)
                         .set({
-                          assetId: asset.id,
-                          assetPlaybackId: asset.playbackId,
+                    assetId: asset.id,
+                    assetPlaybackId: asset.playbackId,
                           updatedAt: new Date(),
-                        })
+                  })
                         .where(eq(streams.id, stream.id))
                       console.log(`[Streams API] ✅ Stored asset metadata for stream ${stream.id}`)
                     } catch (dbError) {
