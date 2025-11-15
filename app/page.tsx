@@ -35,13 +35,23 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4">The best way to have fun onchain</h1>
+          <p className="text-muted-foreground mb-6">
+            We're currently in Private Access.{" "}
+            <a 
+              href="https://x.com/Rarible" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              Follow us for updates
+            </a>
+          </p>
           <Button className="bg-white text-black hover:bg-gray-100 mt-6">
             Join waitlist
           </Button>
         </div>
 
         <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">Recent Streams</h2>
           {loading ? (
             <div className="text-center py-12">
               <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
