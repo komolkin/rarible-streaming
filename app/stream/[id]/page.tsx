@@ -38,10 +38,6 @@ export default function StreamPage() {
   const [playerIsStreaming, setPlayerIsStreaming] = useState<boolean>(false);
   const playerOfflineTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const streamLiveStatusRef = useRef<boolean>(false);
-  const [liveViewerCount, setLiveViewerCount] = useState<number | null>(null);
-  const [viewerCountError, setViewerCountError] = useState<string | null>(null);
-  const [hasRealtimeViewerData, setHasRealtimeViewerData] =
-    useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [totalViews, setTotalViews] = useState<number | null>(null);
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null);
@@ -246,43 +242,6 @@ export default function StreamPage() {
     }
   }, [params.id, authenticated, user?.wallet?.address]);
 
-  const fetchLiveViewerCount = useCallback(async () => {
-    if (!stream?.livepeerPlaybackId || !stream) {
-      console.log("[Viewer Count] No playbackId available yet");
-      return;
-    }
-    try {
-      console.log(
-        `[Viewer Count] Fetching from /api/streams/${params.id}/viewers for playbackId: ${stream.livepeerPlaybackId}`
-      );
-      const response = await fetch(`/api/streams/${params.id}/viewers`);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(
-          `[Viewer Count] API error ${response.status}:`,
-          errorData
-        );
-        throw new Error(
-          errorData.error || `Viewer API error ${response.status}`
-        );
-      }
-      const data = await response.json();
-      console.log("[Viewer Count] API response:", data);
-      if (typeof data.viewerCount === "number") {
-        console.log(
-          `[Viewer Count] Setting viewer count to ${data.viewerCount}`
-        );
-        setLiveViewerCount(data.viewerCount);
-        setViewerCountError(null);
-      } else {
-        console.warn("[Viewer Count] No viewerCount in response:", data);
-      }
-    } catch (error: any) {
-      console.error("[Viewer Count] Failed to fetch:", error?.message || error);
-      setViewerCountError(error?.message || "Viewer count unavailable");
-    }
-  }, [params.id, stream?.livepeerPlaybackId]);
-
   const subscribeToChat = useCallback(() => {
     if (!params.id) return () => {};
 
@@ -362,58 +321,6 @@ export default function StreamPage() {
     };
   }, [stream?.livepeerPlaybackId]);
 
-  useEffect(() => {
-    // Reset realtime viewer data flag when stream goes offline
-    if (stream && !stream.isLive) {
-      setHasRealtimeViewerData(false);
-    }
-  }, [stream]);
-
-  useEffect(() => {
-    if (!stream?.livepeerPlaybackId) {
-      setLiveViewerCount(null);
-      return;
-    }
-
-    const shouldPoll =
-      !hasRealtimeViewerData &&
-      (stream?.isLive ||
-        playerIsStreaming ||
-        (!stream?.endedAt && stream?.livepeerStreamId));
-
-    if (!shouldPoll) {
-      return;
-    }
-
-    fetchLiveViewerCount();
-    const interval = setInterval(fetchLiveViewerCount, 5000);
-    return () => clearInterval(interval);
-  }, [
-    stream?.livepeerPlaybackId,
-    stream?.isLive,
-    stream?.endedAt,
-    stream?.livepeerStreamId,
-    playerIsStreaming,
-    hasRealtimeViewerData,
-    fetchLiveViewerCount,
-  ]);
-
-  const handlePlaybackStatusUpdate = useCallback((status: any) => {
-    // Extract viewer count from Livepeer's player status
-    const viewerCount =
-      typeof status?.viewerCount === "number"
-        ? status.viewerCount
-        : typeof status?.metrics?.viewCount === "number"
-        ? status.metrics.viewCount
-        : undefined;
-
-    if (typeof viewerCount === "number") {
-      console.log(`[Viewer Count] Player reports ${viewerCount} viewers`);
-      setLiveViewerCount(viewerCount);
-      setViewerCountError(null);
-      setHasRealtimeViewerData(true);
-    }
-  }, []);
 
   const handleStreamStatusChange = useCallback((isLive: boolean) => {
     if (playerOfflineTimeoutRef.current) {
@@ -750,7 +657,6 @@ export default function StreamPage() {
     () => showLivePlayer && !stream?.isLive && !playerIsStreaming,
     [showLivePlayer, stream?.isLive, playerIsStreaming]
   );
-  const effectiveViewerCount = liveViewerCount ?? stream?.viewerCount ?? 0;
 
   if (pageError) {
     return (
@@ -837,7 +743,6 @@ export default function StreamPage() {
                           objectFit="contain"
                           priority
                           showUploadingIndicator={false}
-                          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
                           onStreamStatusChange={handleStreamStatusChange}
                         />
                         {showOfflineOverlay && (
@@ -1082,36 +987,6 @@ export default function StreamPage() {
                   </div>
                   <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
                     <div className="flex flex-row flex-wrap gap-1.5 sm:gap-2">
-                      {/* Live Viewers counter */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        className="flex items-center gap-1 sm:gap-2 cursor-default hover:bg-muted h-8 sm:h-9 px-2 sm:px-3"
-                        title={
-                          viewerCountError ||
-                          `Live viewers: ${effectiveViewerCount}`
-                        }
-                      >
-                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        <span className="text-xs sm:text-sm">
-                          {effectiveViewerCount}
-                        </span>
-                        <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">
-                          live
-                        </span>
-                        {viewerCountError && (
-                          <span
-                            className="text-[10px] text-destructive ml-0.5 sm:ml-1"
-                            title={viewerCountError}
-                          >
-                            ⚠
-                          </span>
-                        )}
-                      </Button>
                       {/* Total Views counter */}
                       <Button
                         variant="outline"
@@ -1128,7 +1003,7 @@ export default function StreamPage() {
                           {totalViews ?? 0}
                         </span>
                         <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">
-                          total
+                          views
                         </span>
                       </Button>
                       <Button
