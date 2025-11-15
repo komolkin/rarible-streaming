@@ -1080,9 +1080,6 @@ export default function StreamPage() {
                         <span className="text-xs sm:text-sm">
                           {totalViews ?? 0}
                         </span>
-                        <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">
-                          views
-                        </span>
                       </Button>
                       <Button
                         variant={isLiked ? "default" : "outline"}
