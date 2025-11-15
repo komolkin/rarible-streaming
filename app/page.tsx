@@ -55,10 +55,10 @@ export default function Home() {
     <main className="min-h-screen pt-24 pb-8 px-8">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">Rarible Streaming</h1>
-          <p className="text-muted-foreground mb-8">
-            Onchain livestreaming platform with NFT minting
-          </p>
+          <h1 className="text-4xl font-bold mb-4">The best way to have fun onchain</h1>
+          <Button className="bg-white text-black hover:bg-gray-100 mt-6">
+            Join waitlist
+          </Button>
         </div>
 
         <div className="mb-8">

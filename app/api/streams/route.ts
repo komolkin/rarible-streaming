@@ -7,18 +7,25 @@ import { eq, and, isNotNull, desc, sql } from "drizzle-orm"
 type StreamRecord = typeof streams.$inferSelect
 
 async function resolveViewsPlaybackId(stream: StreamRecord) {
-  // Priority 1: Use stored asset playbackId from database (fastest, avoids API call)
-  // asset_playback_id is different from livepeer_playback_id and is needed for VOD views
+  // Priority 1: If we have assetId, fetch asset playbackId from Livepeer API
   const isEnded = !!stream.endedAt
 
-  if (isEnded && stream.assetPlaybackId) {
-    console.log(
-      `[Streams API] ✅ Using stored asset playbackId ${stream.assetPlaybackId} from database for ended stream ${stream.id}`
-    )
-    return { playbackId: stream.assetPlaybackId, isAssetPlaybackId: true }
+  if (isEnded && stream.assetId) {
+    try {
+      const { getAsset } = await import("@/lib/livepeer")
+      const asset = await getAsset(stream.assetId)
+      if (asset?.playbackId) {
+        console.log(
+          `[Streams API] ✅ Fetched asset playbackId ${asset.playbackId} from Livepeer API for ended stream ${stream.id}`
+        )
+        return { playbackId: asset.playbackId, isAssetPlaybackId: true }
+      }
+    } catch (error) {
+      console.warn(`[Streams API] Failed to fetch asset by ID ${stream.assetId}:`, error)
+    }
   }
 
-  // Priority 2: For ended streams without stored asset playbackId, fetch from Livepeer API
+  // Priority 2: For ended streams without assetId, fetch from Livepeer API
   if (isEnded && stream.livepeerStreamId) {
     try {
       const { getStreamAsset } = await import("@/lib/livepeer")
@@ -28,15 +35,14 @@ async function resolveViewsPlaybackId(stream: StreamRecord) {
           `[Streams API] ✅ Fetched asset playbackId ${asset.playbackId} from Livepeer API for ended stream ${stream.id}`
         )
         // Store asset metadata in database for future use
-        if (asset.id && asset.playbackId) {
+        if (asset.id) {
           try {
             await db
               .update(streams)
               .set({
-          assetId: asset.id,
-          assetPlaybackId: asset.playbackId,
+                assetId: asset.id,
                 updatedAt: new Date(),
-        })
+              })
               .where(eq(streams.id, stream.id))
             console.log(`[Streams API] ✅ Stored asset metadata for stream ${stream.id}`)
           } catch (dbError) {
@@ -152,15 +158,14 @@ export async function GET(request: NextRequest) {
                 
                 if (asset?.playbackId) {
                   // Store asset metadata in database for future use (especially for views)
-                  if (asset.id && asset.playbackId) {
+                  if (asset.id) {
                     try {
                       await db
                         .update(streams)
                         .set({
-                    assetId: asset.id,
-                    assetPlaybackId: asset.playbackId,
+                          assetId: asset.id,
                           updatedAt: new Date(),
-                  })
+                        })
                         .where(eq(streams.id, stream.id))
                       console.log(`[Streams API] ✅ Stored asset metadata for stream ${stream.id}`)
                     } catch (dbError) {

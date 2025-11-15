@@ -28,7 +28,6 @@ export async function GET(
         playbackId: streams.livepeerPlaybackId,
         endedAt: streams.endedAt,
         livepeerStreamId: streams.livepeerStreamId,
-        assetPlaybackId: streams.assetPlaybackId,
         assetId: streams.assetId,
       })
       .from(streams)
@@ -60,17 +59,25 @@ export async function GET(
     // For ended streams, assets have their own playbackId which tracks views separately
     // asset_playback_id is different from livepeer_playback_id
     
-    // Priority 1: Use stored asset playbackId from database (fastest, avoids API call)
-    if (!playbackId && stream.assetPlaybackId) {
-      playbackId = stream.assetPlaybackId
-      assetInfo = {
-        playbackId,
-        id: stream.assetId,
-        source: "database",
+    // Priority 1: If we have assetId, fetch asset playbackId from Livepeer API
+    if (!playbackId && stream.assetId) {
+      try {
+        const { getAsset } = await import("@/lib/livepeer")
+        const asset = await getAsset(stream.assetId)
+        if (asset?.playbackId) {
+          playbackId = asset.playbackId
+          assetInfo = {
+            playbackId,
+            id: stream.assetId,
+            source: "livepeer_api",
+          }
+          console.log(
+            `[Views API] ✅ Fetched asset playbackId ${playbackId} from Livepeer API for stream ${params.id}`
+          )
+        }
+      } catch (error) {
+        console.warn(`[Views API] Failed to fetch asset by ID ${stream.assetId}:`, error)
       }
-      console.log(
-        `[Views API] ✅ Using stored asset playbackId ${playbackId} from database for stream ${params.id}`
-      )
     }
 
     // Priority 2: For ended streams without stored asset playbackId, fetch from Livepeer API
@@ -107,17 +114,16 @@ export async function GET(
             console.log(`[Views API] Asset status: ${asset.status}`)
             
             // Store asset metadata in database for future use
-            if (asset.id && asset.playbackId) {
+            if (asset.id) {
               try {
                 await db
                   .update(streams)
                   .set({
-              assetId: asset.id,
-              assetPlaybackId: asset.playbackId,
+                    assetId: asset.id,
                     updatedAt: new Date(),
-            })
+                  })
                   .where(eq(streams.id, params.id))
-                console.log(`[Views API] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+                console.log(`[Views API] ✅ Stored asset metadata: assetId=${asset.id}`)
               } catch (dbError) {
                 console.warn(`[Views API] Failed to store asset metadata:`, dbError)
               }
@@ -192,17 +198,16 @@ export async function GET(
           console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for live stream views (from Assets API)`)
           
           // Store asset metadata in database for future use
-          if (asset.id && asset.playbackId) {
+          if (asset.id) {
             try {
               await db
                 .update(streams)
                 .set({
-            assetId: asset.id,
-            assetPlaybackId: asset.playbackId,
+                  assetId: asset.id,
                   updatedAt: new Date(),
-          })
+                })
                 .where(eq(streams.id, params.id))
-              console.log(`[Views API] ✅ Stored asset metadata for live stream: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+              console.log(`[Views API] ✅ Stored asset metadata for live stream: assetId=${asset.id}`)
             } catch (dbError) {
               console.warn(`[Views API] Failed to store asset metadata:`, dbError)
             }

@@ -17,20 +17,11 @@ async function getViewsPlaybackId(
   streamPlaybackId: string | null | undefined,
   endedAt: Date | null | undefined,
   livepeerStreamId: string | null | undefined,
-  cachedAssetPlaybackId?: string | null | undefined,
   cachedAssetId?: string | null | undefined
 ): Promise<string | null> {
   const isEnded = !!endedAt
   
-  // Priority 1: Use cached asset playbackId from database (fastest, avoids API call)
-  if (cachedAssetPlaybackId) {
-    console.log(
-      `[Views] ✅ Using stored asset playbackId ${cachedAssetPlaybackId} from database for stream ${streamId}`
-    )
-    return cachedAssetPlaybackId
-  }
-  
-  // Priority 2: For ended streams, fetch asset playbackId from Livepeer API if not cached
+  // Priority 1: For ended streams, fetch asset playbackId from Livepeer API
   // Following Livepeer docs: If we have assetId, directly call /api/asset/{assetId} to get playbackId
   // This is critical because stream playbackId views don't match asset views for VOD
   if (isEnded && livepeerStreamId) {
@@ -333,10 +324,9 @@ export async function GET(
                   updatedAt: new Date(),
                 }
                 
-                // Store playbackId even if not ready (so frontend knows it exists)
+                // Set local variable for API response (not stored in DB)
                 if (asset.playbackId) {
-                  updateData.assetPlaybackId = asset.playbackId
-                  assetPlaybackId = asset.playbackId // Set it so we can return it
+                  assetPlaybackId = asset.playbackId
                 }
                 
                 try {
@@ -344,7 +334,7 @@ export async function GET(
                     .update(streams)
                     .set(updateData)
                     .where(eq(streams.id, params.id))
-                  console.log(`[GET Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId || 'none'}`)
+                  console.log(`[GET Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}`)
                 } catch (dbError) {
                   console.warn(`[GET Stream ${params.id}] Failed to store asset metadata:`, dbError)
                 }
@@ -523,11 +513,6 @@ export async function GET(
             totalViews: totalViews,
           }
           
-          // Include assetPlaybackId if it exists
-          if (stream.assetPlaybackId) {
-            timeoutResponse.assetPlaybackId = stream.assetPlaybackId
-          }
-          
           return NextResponse.json(timeoutResponse)
         }
         
@@ -638,7 +623,7 @@ export async function GET(
           // When stream ends naturally, fetch and store asset metadata for VOD playback and views
           // According to Livepeer docs: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
           // For ended streams, we need to use the asset's playbackId to get view counts
-          if (streamEndedNaturally && stream.livepeerStreamId && !stream.assetPlaybackId) {
+          if (streamEndedNaturally && stream.livepeerStreamId && !stream.assetId) {
             console.log(`[Stream ${params.id}] Stream ended naturally - fetching asset metadata for VOD playback and views`)
             try {
               const { getStreamAsset } = await import("@/lib/livepeer")
@@ -659,11 +644,10 @@ export async function GET(
                   .update(streams)
                   .set({
                     assetId: asset.id,
-                    assetPlaybackId: asset.playbackId,
                     updatedAt: new Date(),
                   })
                   .where(eq(streams.id, params.id))
-                console.log(`[Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+                console.log(`[Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}`)
               } else if (asset && asset.status !== "ready") {
                 console.log(`[Stream ${params.id}] Asset found but not ready yet (status: ${asset.status}). Will be fetched when ready.`)
               } else {
@@ -693,7 +677,6 @@ export async function GET(
               updatedStream.livepeerPlaybackId,
               updatedStream.endedAt,
               updatedStream.livepeerStreamId,
-              updatedStream.assetPlaybackId,
               updatedStream.assetId
             )
             const totalViews = await getTotalViews(params.id, viewsPlaybackId)
@@ -714,11 +697,6 @@ export async function GET(
               category: updatedCategory,
               totalViews: totalViews,
               viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
-            }
-            
-            // Include assetPlaybackId if it exists (for recordings during live streams)
-            if (updatedStream.assetPlaybackId) {
-              liveStreamResponse.assetPlaybackId = updatedStream.assetPlaybackId
             }
             
             return NextResponse.json(liveStreamResponse)
@@ -748,20 +726,18 @@ export async function GET(
                 // Store asset metadata in database for VOD playback and views
                 // According to Livepeer docs: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
                 // For ended streams, we need to use the asset's playbackId to get view counts
-                if (!stream.assetPlaybackId) {
+                if (!stream.assetId) {
                   try {
                     await db
                       .update(streams)
                       .set({
                         assetId: asset.id,
-                        assetPlaybackId: asset.playbackId,
                         updatedAt: new Date(),
                       })
                       .where(eq(streams.id, params.id))
-                    console.log(`[Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+                    console.log(`[Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}`)
                     // Update stream object for this response
                     stream.assetId = asset.id
-                    stream.assetPlaybackId = asset.playbackId
                   } catch (dbError) {
                     console.warn(`[Stream ${params.id}] Failed to store asset metadata:`, dbError)
                   }
@@ -832,7 +808,7 @@ export async function GET(
     // For ended streams without asset metadata, fetch and store it for VOD playback and views
     // According to Livepeer docs: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
     // For ended streams, we need to use the asset's playbackId to get view counts
-    if (stream.endedAt && stream.livepeerStreamId && !stream.assetPlaybackId) {
+    if (stream.endedAt && stream.livepeerStreamId && !stream.assetId) {
       console.log(`[Stream ${params.id}] Ended stream missing asset metadata - fetching from Livepeer API`)
       try {
         const { getStreamAsset } = await import("@/lib/livepeer")
@@ -853,15 +829,13 @@ export async function GET(
             .update(streams)
             .set({
               assetId: asset.id,
-              assetPlaybackId: asset.playbackId,
               updatedAt: new Date(),
             })
             .where(eq(streams.id, params.id))
-          console.log(`[Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
+          console.log(`[Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}`)
           
           // Update stream object with new asset metadata for this response
           stream.assetId = asset.id
-          stream.assetPlaybackId = asset.playbackId
         } else if (asset && asset.status !== "ready") {
           console.log(`[Stream ${params.id}] Asset found but not ready yet (status: ${asset.status}). Will be fetched when ready.`)
         } else {
@@ -883,7 +857,6 @@ export async function GET(
       stream.livepeerPlaybackId,
       stream.endedAt,
       stream.livepeerStreamId,
-      stream.assetPlaybackId, // Use stored asset playbackId from database if available
       stream.assetId // Use stored assetId to directly fetch asset if needed (follows Livepeer docs)
     )
     const totalViews = await getTotalViews(params.id, viewsPlaybackId)
@@ -899,18 +872,11 @@ export async function GET(
       }
     }
     
-    // Ensure assetPlaybackId is included in response if it exists in database
-    // This is critical for the frontend to use the correct playbackId for VOD
     const responseData: any = {
       ...stream,
       category: category,
       totalViews: totalViews,
       viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
-    }
-    
-    // Explicitly include assetPlaybackId if it exists (don't include null/undefined)
-    if (stream.assetPlaybackId) {
-      responseData.assetPlaybackId = stream.assetPlaybackId
     }
     
     return NextResponse.json(
