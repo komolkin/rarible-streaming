@@ -1363,81 +1363,11 @@ export async function getStreamAsset(streamId: string) {
       return null
     }
 
-    // If no assets found by source stream ID, try alternative methods
-    console.log(`[getStreamAsset] No assets found via sourceStreamId filter, trying alternative methods...`)
-    
-    // Method 1: Use sessions endpoint for immediate recordings
-    const sessionRecording = await getStreamRecording(streamId)
-    if (sessionRecording?.recordingUrl || sessionRecording?.playbackUrl) {
-      console.log(`[getStreamAsset] Using session recording for stream ${streamId}`)
-      return {
-        id: sessionRecording.id || streamId,
-        playbackUrl: sessionRecording.recordingUrl || sessionRecording.playbackUrl,
-        playbackId: sessionRecording.playbackId,
-        status: "ready",
-        sourceStreamId: streamId,
-      }
-    }
-    
-    // Method 2: Check the stream's metadata for recordings as fallback
-    try {
-      const stream = await getStream(streamId)
-      
-      if (stream?.recordings && Array.isArray(stream.recordings) && stream.recordings.length > 0) {
-        const recording = stream.recordings[0]
-        console.log(`[getStreamAsset] Found recording in stream.recordings`)
-        return {
-          id: recording.id || streamId,
-          playbackUrl: recording.recordingUrl || recording.playbackUrl,
-          playbackId: recording.playbackId || stream.playbackId,
-          status: "ready",
-          sourceStreamId: streamId,
-        }
-      }
-      
-      if (stream?.sessions && Array.isArray(stream.sessions)) {
-        console.log(`[getStreamAsset] Checking ${stream.sessions.length} sessions for recording info from stream payload`)
-        for (const session of stream.sessions) {
-          if (session.record && (session.recordingUrl || session.playbackUrl)) {
-            console.log(`[getStreamAsset] Found recording in session ${session.id}`)
-            return {
-              id: session.id,
-              playbackUrl: session.recordingUrl || session.playbackUrl,
-              playbackId: stream.playbackId,
-              status: "ready",
-              sourceStreamId: streamId,
-            }
-          }
-        }
-      }
-    } catch (streamError: any) {
-      console.warn(`[getStreamAsset] Error checking stream metadata:`, streamError?.message)
-    }
-    
-    // Method 3: If we listed all assets earlier, check if any match by checking all possible fields
-    if (allAssets.length > 0) {
-      console.log(`[getStreamAsset] Re-checking ${allAssets.length} assets with relaxed matching...`)
-      for (const asset of allAssets) {
-        // Check all possible source stream ID fields
-        const possibleSourceIds = [
-          asset.sourceStreamId,
-          asset.source?.streamId,
-          asset.source?.id,
-          asset.sourceId,
-          asset.sourceStream?.id,
-          asset.streamId,
-        ]
-        
-        if (possibleSourceIds.includes(streamId)) {
-          console.log(`[getStreamAsset] Found matching asset ${asset.id} with relaxed matching`)
-          if (asset.status === "ready" && asset.playbackId) {
-            return asset
-          }
-        }
-      }
-    }
-
-    console.warn(`[getStreamAsset] No assets found for stream ${streamId} after all attempts`)
+    // CRITICAL: Only use Assets API - do NOT fall back to sessions or stream recordings
+    // Views must come from Assets, not sessions
+    // If no assets found, return null (don't use sessions as fallback)
+    console.warn(`[getStreamAsset] No assets found for stream ${streamId} via Assets API`)
+    console.warn(`[getStreamAsset] CRITICAL: Not using sessions as fallback - views must come from Assets API`)
     return null
   } catch (error) {
     console.error("Error fetching stream asset:", error)
