@@ -6,24 +6,56 @@ import { eq, and, isNotNull, desc, sql } from "drizzle-orm"
 
 type StreamRecord = typeof streams.$inferSelect
 
+async function persistAssetMetadata(
+  streamId: string,
+  metadata: { assetId?: string | null; assetPlaybackId?: string | null }
+) {
+  const updates: Record<string, any> = {}
+  if (metadata.assetId !== undefined) {
+    updates.assetId = metadata.assetId
+  }
+  if (metadata.assetPlaybackId !== undefined) {
+    updates.assetPlaybackId = metadata.assetPlaybackId
+  }
+  if (Object.keys(updates).length === 0) {
+    return
+  }
+  updates.updatedAt = new Date()
+  try {
+    await db
+      .update(streams)
+      .set(updates)
+      .where(eq(streams.id, streamId))
+  } catch (error: any) {
+    console.warn(
+      `[Streams API] Failed to persist asset metadata for stream ${streamId}:`,
+      error?.message || error
+    )
+  }
+}
+
 async function resolveViewsPlaybackId(stream: StreamRecord) {
   const isEnded = !!stream.endedAt
+
+  if (stream.assetPlaybackId) {
+    console.log(
+      `[Streams API] Using cached asset playbackId ${stream.assetPlaybackId} for stream ${stream.id}`
+    )
+    return { playbackId: stream.assetPlaybackId, isAssetPlaybackId: true }
+  }
 
   if (stream.livepeerStreamId) {
     try {
       const { getStreamAsset } = await import("@/lib/livepeer")
       const asset = await getStreamAsset(stream.livepeerStreamId)
       if (asset?.playbackId) {
-        if (isEnded) {
-          console.log(
-            `[Streams API] ✅ Using asset playbackId ${asset.playbackId} for ended stream ${stream.id}`
-          )
-          return { playbackId: asset.playbackId, isAssetPlaybackId: true }
-        }
-
         console.log(
-          `[Streams API] Using asset playbackId ${asset.playbackId} for live stream ${stream.id} (recording available)`
+          `[Streams API] ✅ Using asset playbackId ${asset.playbackId} for stream ${stream.id}`
         )
+        await persistAssetMetadata(stream.id, {
+          assetId: asset.id,
+          assetPlaybackId: asset.playbackId,
+        })
         return { playbackId: asset.playbackId, isAssetPlaybackId: true }
       }
 
@@ -139,6 +171,10 @@ export async function GET(request: NextRequest) {
                 })
                 
                 if (asset?.playbackId) {
+                  await persistAssetMetadata(stream.id, {
+                    assetId: asset.id,
+                    assetPlaybackId: asset.playbackId,
+                  })
                   // Use asset playbackId for VOD thumbnail (better quality)
                   console.log(`[Streams API] 🎬 Generating VOD thumbnail using asset playbackId: ${asset.playbackId}`)
                   thumbnailUrl = await generateAndVerifyThumbnail(asset.playbackId, {

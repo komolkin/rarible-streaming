@@ -15,9 +15,17 @@ async function getViewsPlaybackId(
   streamId: string,
   streamPlaybackId: string | null | undefined,
   endedAt: Date | null | undefined,
-  livepeerStreamId: string | null | undefined
+  livepeerStreamId: string | null | undefined,
+  cachedAssetPlaybackId?: string | null | undefined
 ): Promise<string | null> {
   const isEnded = !!endedAt
+  
+  if (cachedAssetPlaybackId) {
+    console.log(
+      `[Views] Using cached asset playbackId ${cachedAssetPlaybackId} from database for stream ${streamId}`
+    )
+    return cachedAssetPlaybackId
+  }
   
   // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
   // This is critical because stream playbackId views don't match asset views for VOD
@@ -58,6 +66,34 @@ async function getViewsPlaybackId(
   
   // Fallback to stream playbackId (for live streams or when no livepeerStreamId)
   return streamPlaybackId || null
+}
+
+async function persistAssetMetadata(
+  streamId: string,
+  metadata: { assetId?: string | null; assetPlaybackId?: string | null }
+) {
+  const updates: Record<string, any> = {}
+  if (metadata.assetId !== undefined) {
+    updates.assetId = metadata.assetId
+  }
+  if (metadata.assetPlaybackId !== undefined) {
+    updates.assetPlaybackId = metadata.assetPlaybackId
+  }
+  if (Object.keys(updates).length === 0) {
+    return
+  }
+  updates.updatedAt = new Date()
+  try {
+    await db
+      .update(streams)
+      .set(updates)
+      .where(eq(streams.id, streamId))
+  } catch (error: any) {
+    console.warn(
+      `[GET Stream ${streamId}] Failed to persist asset metadata:`,
+      error?.message || error
+    )
+  }
 }
 
 // Helper function to get total views from Livepeer API only
@@ -267,6 +303,13 @@ export async function GET(
                 console.warn(`[GET Stream ${params.id}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
               }
               
+              if (assetId || assetPlaybackId) {
+                await persistAssetMetadata(stream.id, {
+                  assetId: assetId ?? undefined,
+                  assetPlaybackId: assetPlaybackId ?? undefined,
+                })
+              }
+              
               // Only generate thumbnail if user hasn't uploaded a cover image
               // Skip thumbnail generation if we're running low on time (non-blocking)
               if (!previewImageUrl && asset.playbackId) {
@@ -318,6 +361,8 @@ export async function GET(
             .set({
               vodUrl: vodUrl,
               previewImageUrl: previewImageUrl || stream.previewImageUrl,
+              assetPlaybackId: assetPlaybackId || stream.assetPlaybackId,
+              assetId: assetId || stream.assetId,
               updatedAt: new Date(),
             })
             .where(eq(streams.id, params.id))
@@ -630,7 +675,8 @@ export async function GET(
       params.id,
       stream.livepeerPlaybackId,
       stream.endedAt,
-      stream.livepeerStreamId
+      stream.livepeerStreamId,
+      stream.assetPlaybackId
     )
     const totalViews = await getTotalViews(params.id, viewsPlaybackId)
     return NextResponse.json(
