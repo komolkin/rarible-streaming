@@ -315,7 +315,7 @@ export async function GET(request: NextRequest) {
     )
 
     // Batch fetch creator profiles for all streams (much faster than individual requests)
-    const uniqueCreatorAddresses = [...new Set(streamsWithViewerCounts.map(s => s.creatorAddress.toLowerCase()))]
+    const uniqueCreatorAddresses = Array.from(new Set(streamsWithViewerCounts.map(s => s.creatorAddress.toLowerCase())))
     const creatorProfilesMap = new Map<string, any>()
     
     if (uniqueCreatorAddresses.length > 0) {
