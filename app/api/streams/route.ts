@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { streams, categories } from "@/lib/db/schema"
+import { streams, categories, streamViews } from "@/lib/db/schema"
 import { createStream, getStream } from "@/lib/livepeer"
 import { eq, and, isNotNull, desc, sql } from "drizzle-orm"
 
@@ -245,32 +245,42 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    // Fetch categories for all streams and attach them
+    // Fetch categories and total views for all streams
     const streamsWithCategories = await Promise.all(
       streamsWithViewerCounts.map(async (stream) => {
+        // Fetch category
+        let category = null
         if (stream.categoryId) {
           try {
             const [categoryData] = await db
               .select()
               .from(categories)
               .where(eq(categories.id, stream.categoryId))
-            
-            return {
-              ...stream,
-              category: categoryData || null,
-            }
+            category = categoryData || null
           } catch (error) {
             console.warn(`[Streams API] Could not fetch category for stream ${stream.id}:`, error)
-            return {
-              ...stream,
-              category: null,
-            }
           }
+        }
+        
+        // Calculate total views (unique users)
+        let totalViews = 0
+        try {
+          const viewsResult = await db
+            .select({
+              totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
+            })
+            .from(streamViews)
+            .where(eq(streamViews.streamId, stream.id))
+          
+          totalViews = viewsResult[0]?.totalViews || 0
+        } catch (error) {
+          console.warn(`[Streams API] Could not fetch total views for stream ${stream.id}:`, error)
         }
         
         return {
           ...stream,
-          category: null,
+          category: category,
+          totalViews: totalViews,
         }
       })
     )

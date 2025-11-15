@@ -80,3 +80,10 @@ export const streamLikes = pgTable("stream_likes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
+export const streamViews = pgTable("stream_views", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  streamId: uuid("stream_id").references(() => streams.id).notNull(),
+  userAddress: text("user_address").notNull(),
+  viewedAt: timestamp("viewed_at").defaultNow().notNull(),
+})
+

@@ -1,11 +1,28 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { streams, categories, chatMessages, streamLikes } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { streams, categories, chatMessages, streamLikes, streamViews } from "@/lib/db/schema"
+import { eq, sql } from "drizzle-orm"
 import { getStreamStatus } from "@/lib/livepeer"
 
 // Increase timeout for Vercel functions (max 60s on Pro, 10s on Hobby)
 export const maxDuration = 30
+
+// Helper function to calculate total views for a stream
+async function getTotalViews(streamId: string): Promise<number> {
+  try {
+    const viewsResult = await db
+      .select({
+        totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
+      })
+      .from(streamViews)
+      .where(eq(streamViews.streamId, streamId))
+    
+    return viewsResult[0]?.totalViews || 0
+  } catch (error) {
+    console.warn(`[GET Stream ${streamId}] Could not fetch total views:`, error)
+    return 0
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -256,11 +273,13 @@ export async function GET(
           
           console.log(`[GET Stream ${params.id}] ✅ Stream updated with vodUrl`)
           
+          const totalViews = await getTotalViews(params.id)
           return NextResponse.json({
             ...updated,
             category: updatedCategory,
             assetPlaybackId: assetPlaybackId, // Include asset playbackId for Player component
             assetId: assetId, // Include asset ID for direct asset fetching
+            totalViews: totalViews,
           })
           } catch (dbError: any) {
             console.error(`[GET Stream ${params.id}] Database update error:`, dbError?.message)
@@ -272,11 +291,13 @@ export async function GET(
         // This ensures frontend gets the correct playbackId
         if (assetPlaybackId) {
           console.log(`[GET Stream ${params.id}] ✅ Returning with asset playbackId: ${assetPlaybackId}`)
+          const totalViews = await getTotalViews(params.id)
           return NextResponse.json({
             ...stream,
             category: category,
             assetPlaybackId: assetPlaybackId,
             assetId: assetId,
+            totalViews: totalViews,
           })
         }
         
@@ -317,9 +338,11 @@ export async function GET(
         if (!livepeerStreamData) {
           console.warn(`[Stream ${params.id}] Skipping status check due to timeout`)
           // Return stream as-is without status update
+          const totalViews = await getTotalViews(params.id)
           return NextResponse.json({
             ...stream,
             category: category,
+            totalViews: totalViews,
           })
         }
         
@@ -445,9 +468,11 @@ export async function GET(
               updatedCategory = categoryData || null
             }
             
+            const totalViews = await getTotalViews(params.id)
             return NextResponse.json({
               ...updatedStream,
               category: updatedCategory,
+              totalViews: totalViews,
             })
           }
         }
@@ -515,9 +540,11 @@ export async function GET(
               
               console.log(`[Stream ${params.id}] Successfully saved thumbnail: ${previewImageUrl}`)
               
+              const totalViews = await getTotalViews(params.id)
               return NextResponse.json({
                 ...updated,
                 category: updatedCategory,
+                totalViews: totalViews,
               })
             }
           }
@@ -531,12 +558,14 @@ export async function GET(
       console.log(`[Stream ${params.id}] No livepeerStreamId found`)
     }
 
-    // Return stream with category
+    // Return stream with category and totalViews
     // Note: For ended streams, assetPlaybackId should already be returned earlier if found
     // This is the fallback return for all other cases
+    const totalViews = await getTotalViews(params.id)
     return NextResponse.json({
       ...stream,
       category: category,
+      totalViews: totalViews,
     })
   } catch (error) {
     console.error("Error fetching stream:", error)
@@ -790,9 +819,11 @@ export async function DELETE(
           category = categoryData || null
         }
         
+        const totalViews = await getTotalViews(streamId)
         return NextResponse.json({
           ...finalUpdated,
           category: category,
+          totalViews: totalViews,
         })
       } catch (error: any) {
         console.error(`[DELETE Stream ${streamId}] Error preparing recording and preview:`, error?.message || error)
@@ -808,9 +839,11 @@ export async function DELETE(
       category = categoryData || null
     }
 
+    const totalViews = await getTotalViews(params.id)
     return NextResponse.json({
       ...updated,
       category: category,
+      totalViews: totalViews,
     })
   } catch (error) {
     console.error("Error ending stream:", error)
