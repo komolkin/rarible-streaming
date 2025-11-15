@@ -118,7 +118,7 @@ export function Navbar() {
               Rarible
             </Link>
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-baseline space-x-4 ml-2 sm:ml-10">
+            <div className="hidden md:flex items-baseline space-x-4 ml-[40px]">
               <Link href="/" className="text-sm font-medium hover:opacity-80 transition-opacity">
                 Home
               </Link>

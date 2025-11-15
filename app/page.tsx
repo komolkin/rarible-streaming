@@ -36,7 +36,7 @@ export default function Home() {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4">The best way to have fun onchain</h1>
           <p className="text-muted-foreground mb-6">
-            We're currently in Private Access.{" "}
+            We&apos;re currently in Private Access.{" "}
             <a 
               href="https://x.com/Rarible" 
               target="_blank" 
