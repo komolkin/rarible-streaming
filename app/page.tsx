@@ -18,30 +18,9 @@ export default function Home() {
       const response = await fetch("/api/streams?limit=12");
       if (response.ok) {
         const streams = await response.json();
-
-        // Show streams immediately without waiting for creator profiles
+        // Creator profiles are now included in the API response
         setRecentStreams(streams);
         setLoading(false);
-
-        // Fetch creator profiles in background and update
-        Promise.all(
-          streams.map(async (stream: any) => {
-            try {
-              const creatorResponse = await fetch(
-                `/api/profiles?wallet=${stream.creatorAddress}`
-              );
-              if (creatorResponse.ok) {
-                const creator = await creatorResponse.json();
-                return { ...stream, creator };
-              }
-            } catch (error) {
-              // Silently fail - stream will show without creator info
-            }
-            return stream;
-          })
-        ).then((streamsWithCreators) => {
-          setRecentStreams(streamsWithCreators);
-        });
       } else {
         setLoading(false);
       }

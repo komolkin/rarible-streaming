@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { streams, categories } from "@/lib/db/schema"
+import { streams, categories, users } from "@/lib/db/schema"
 import { createStream, getStream } from "@/lib/livepeer"
-import { eq, and, isNotNull, desc, sql } from "drizzle-orm"
+import { eq, and, isNotNull, desc, sql, inArray, or } from "drizzle-orm"
 
 type StreamRecord = typeof streams.$inferSelect
 
@@ -314,7 +314,40 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    // Fetch categories and total views for all streams
+    // Batch fetch creator profiles for all streams (much faster than individual requests)
+    const uniqueCreatorAddresses = [...new Set(streamsWithViewerCounts.map(s => s.creatorAddress.toLowerCase()))]
+    const creatorProfilesMap = new Map<string, any>()
+    
+    if (uniqueCreatorAddresses.length > 0) {
+      try {
+        // Batch fetch creator profiles with case-insensitive comparison
+        const creatorProfiles = await db
+          .select({
+            walletAddress: users.walletAddress,
+            displayName: users.displayName,
+            username: users.username,
+            avatarUrl: users.avatarUrl,
+          })
+          .from(users)
+          .where(sql`LOWER(${users.walletAddress}) = ANY(ARRAY[${sql.join(
+            uniqueCreatorAddresses.map(addr => sql`${addr}`),
+            sql`, `
+          )}])`)
+        
+        // Create a map for O(1) lookup
+        creatorProfiles.forEach(profile => {
+          creatorProfilesMap.set(profile.walletAddress.toLowerCase(), {
+            displayName: profile.displayName,
+            username: profile.username,
+            avatarUrl: profile.avatarUrl,
+          })
+        })
+      } catch (error) {
+        console.warn(`[Streams API] Could not batch fetch creator profiles:`, error)
+      }
+    }
+
+    // Fetch categories and total views for all streams, and attach creator data
     const streamsWithCategories = await Promise.all(
       streamsWithViewerCounts.map(async (stream) => {
         // Fetch category
@@ -330,6 +363,9 @@ export async function GET(request: NextRequest) {
             console.warn(`[Streams API] Could not fetch category for stream ${stream.id}:`, error)
           }
         }
+        
+        // Get creator profile from map (already fetched in batch)
+        const creator = creatorProfilesMap.get(stream.creatorAddress.toLowerCase()) || null
         
         // Get total views from Livepeer API
         let totalViews: number | null = null
@@ -357,6 +393,7 @@ export async function GET(request: NextRequest) {
         return {
           ...stream,
           category: category,
+          creator: creator,
           totalViews: totalViews,
           totalViewsPlaybackId,
         }
