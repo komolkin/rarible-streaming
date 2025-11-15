@@ -949,41 +949,70 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {stream.endedAt && stream.vodUrl ? (
-                  <Player
-                    src={stream.vodUrl}
-                    autoPlay
-                    muted={false}
-                    showTitle={false}
-                    showPipButton={true}
-                    objectFit="contain"
-                    showUploadingIndicator={true}
-                  />
-                ) : stream.endedAt && !stream.vodUrl ? (
-                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                    <div className="text-center max-w-md px-4">
-                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
-                        ⏳
+                {stream.endedAt ? (
+                  // ENDED STREAM - Use VOD playback
+                  stream.vodUrl ? (
+                    // Priority 1: Use vodUrl if available (direct HLS URL)
+                    <Player
+                      src={stream.vodUrl}
+                      autoPlay
+                      muted={false}
+                      showTitle={false}
+                      showPipButton={true}
+                      objectFit="contain"
+                      showUploadingIndicator={true}
+                    />
+                  ) : (assetPlaybackId || stream.assetPlaybackId) ? (
+                    // Priority 2: Use asset playbackId if available
+                    <Player
+                      playbackId={assetPlaybackId || stream.assetPlaybackId}
+                      autoPlay
+                      muted={false}
+                      showTitle={false}
+                      showPipButton={true}
+                      objectFit="contain"
+                      showUploadingIndicator={true}
+                    />
+                  ) : stream.livepeerPlaybackId ? (
+                    // Priority 3: Use stream playbackId with playRecording prop for seamless transition
+                    <Player
+                      playbackId={stream.livepeerPlaybackId}
+                      playRecording
+                      autoPlay
+                      muted={false}
+                      showTitle={false}
+                      showPipButton={true}
+                      objectFit="contain"
+                      showUploadingIndicator={true}
+                    />
+                  ) : (
+                    // No playbackId available - show processing message
+                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                      <div className="text-center max-w-md px-4">
+                        <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                          ⏳
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
+                          Recording Processing
+                        </h3>
+                        <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
+                          Your recording will be available shortly. Please
+                          check back in a few minutes.
+                        </p>
+                        <p className="text-xs sm:text-sm text-muted-foreground px-2">
+                          The recording is being processed and will appear
+                          here once ready.
+                        </p>
                       </div>
-                      <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
-                        Recording Processing
-                      </h3>
-                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                        Your recording will be available shortly. Please
-                        check back in a few minutes.
-                      </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
-                        The recording is being processed and will appear
-                        here once ready.
-                      </p>
                     </div>
-                  </div>
+                  )
                 ) : showLivePlayer ? (
-                  // LIVE STREAM - Show live player
+                  // LIVE STREAM - Show live player with playRecording for seamless transition
                   <>
                     <Player
                       key={`live-${stream.livepeerPlaybackId}`}
                       playbackId={stream.livepeerPlaybackId}
+                      playRecording
                       autoPlay
                       muted
                       showTitle={false}
