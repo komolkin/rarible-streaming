@@ -45,7 +45,10 @@ export function Navbar() {
     if (authenticated && user?.wallet?.address) {
       const fetchUserProfile = async () => {
         try {
-          const response = await fetch(`/api/profiles?wallet=${user.wallet.address}`)
+          const walletAddress = user?.wallet?.address
+          if (!walletAddress) return
+          
+          const response = await fetch(`/api/profiles?wallet=${walletAddress}`)
           if (response.ok) {
             const profile = await response.json()
             setUserAvatarUrl(profile.avatarUrl || null)
@@ -64,7 +67,10 @@ export function Navbar() {
   useEffect(() => {
     const refreshAvatar = () => {
       if (authenticated && user?.wallet?.address) {
-        fetch(`/api/profiles?wallet=${user.wallet.address}`)
+        const walletAddress = user?.wallet?.address
+        if (!walletAddress) return
+        
+        fetch(`/api/profiles?wallet=${walletAddress}`)
           .then(res => res.ok ? res.json() : null)
           .then(profile => {
             if (profile) {
