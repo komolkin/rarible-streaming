@@ -18,6 +18,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const searchParams = request.nextUrl.searchParams
+    const providedPlaybackId = searchParams.get("playbackId")
+
     const [stream] = await db
       .select({
         id: streams.id,
@@ -32,9 +35,20 @@ export async function GET(
       return NextResponse.json({ error: "Stream not found" }, { status: 404 })
     }
 
-    let playbackId: string | null = null
-    let assetInfo: any = null
+    let playbackId: string | null = providedPlaybackId
+    let assetInfo: any = providedPlaybackId
+      ? {
+          playbackId: providedPlaybackId,
+          providedByClient: true,
+        }
+      : null
     const isEnded = !!stream.endedAt
+
+    if (providedPlaybackId) {
+      console.log(
+        `[Views API] ✅ Using playbackId provided by client: ${providedPlaybackId} (stream ${params.id})`
+      )
+    }
     
     // CRITICAL: According to Livepeer docs, for ended streams we MUST use asset playbackId
     // The Livepeer dashboard shows views for the asset (VOD), not the stream playbackId
@@ -42,7 +56,7 @@ export async function GET(
     // "The playbackId can be a canonical playback ID from a specific Livepeer asset or stream objects"
     // For ended streams, assets have their own playbackId which tracks views separately
     
-    if (isEnded && stream.livepeerStreamId) {
+    if (!playbackId && isEnded && stream.livepeerStreamId) {
       // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
       // This is critical because stream playbackId views don't match asset views for VOD
       try {
@@ -115,7 +129,7 @@ export async function GET(
           },
         })
       }
-    } else if (!isEnded && stream.livepeerStreamId) {
+    } else if (!playbackId && !isEnded && stream.livepeerStreamId) {
       // For live streams: ALWAYS try to get asset playbackId first if available
       // The Livepeer dashboard shows views for assets/recordings, not stream playbackId
       // Even for live streams, if there's a recording, the dashboard shows asset views
@@ -154,7 +168,7 @@ export async function GET(
         console.log(`[Views API] Error fetching asset for live stream, using stream playbackId: ${playbackId}`)
         console.log(`[Views API] Error details:`, assetError?.message || assetError)
       }
-    } else {
+    } else if (!playbackId) {
       // No livepeerStreamId - use stream playbackId if available
       playbackId = stream.playbackId
       if (playbackId) {

@@ -451,9 +451,18 @@ export default function StreamPage() {
   // Function to fetch views - extracted to avoid closure issues
   const fetchViews = useCallback(async () => {
     const timestamp = Date.now();
+    const playbackOverride =
+      assetPlaybackId || stream?.livepeerPlaybackId || null;
+    const query = new URLSearchParams({
+      _: timestamp.toString(),
+    });
+    if (playbackOverride) {
+      query.set("playbackId", playbackOverride);
+    }
+
     try {
       const response = await fetch(
-        `/api/streams/${params.id}/views?_=${timestamp}`,
+        `/api/streams/${params.id}/views?${query.toString()}`,
         {
           cache: "no-store",
           headers: {
@@ -508,7 +517,7 @@ export default function StreamPage() {
       console.error(`[Views] Error fetching views:`, error?.message || error);
       // Don't clear totalViews on error - keep showing last known value
     }
-  }, [params.id]);
+  }, [params.id, assetPlaybackId, stream?.livepeerPlaybackId]);
 
   useEffect(() => {
     try {
@@ -564,6 +573,12 @@ export default function StreamPage() {
       fetchViews();
     }
   }, [stream?.endedAt, assetPlaybackId, fetchAssetPlaybackId, fetchViews]);
+
+  useEffect(() => {
+    if (assetPlaybackId) {
+      fetchViews();
+    }
+  }, [assetPlaybackId, fetchViews]);
 
   // Debug: log stream data when it changes
   useEffect(() => {
