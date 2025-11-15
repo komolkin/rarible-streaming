@@ -852,8 +852,7 @@ export async function getHistoricalViews(
  * Get total lifetime views for a playbackId from Livepeer
  * Uses the Livepeer SDK: livepeer.metrics.getPublicViewership()
  * 
- * According to Livepeer SDK reference, response format:
- * { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
+ * Response format: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
  * 
  * @param playbackId - The playback ID of the stream/asset
  * @returns Total lifetime views (0 if no views yet) or null if endpoint unavailable/error
@@ -868,118 +867,27 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
   }
 
   try {
-    // Use Livepeer SDK for metrics
-    // Reference: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
-    // The SDK automatically adds "Bearer" prefix to the API key in Authorization header
-    if (!LIVEPEER_API_KEY || LIVEPEER_API_KEY.trim() === '') {
-      throw new Error("LIVEPEER_API_KEY is empty or not set")
-    }
-    
     const livepeer = new Livepeer({
       apiKey: LIVEPEER_API_KEY,
     })
+
+    const result = await livepeer.metrics.getPublicViewership(playbackId)
     
-    console.log(`[Total Views] Calling Livepeer SDK getPublicViewership for playbackId: ${playbackId}`)
-    console.log(`[Total Views] API Key configured: ${LIVEPEER_API_KEY.substring(0, 10)}... (Bearer token will be added automatically by SDK)`)
-    
-    // Add timeout to prevent hanging requests (10 seconds max)
-    const timeoutPromise = new Promise<null>((resolve) => 
-      setTimeout(() => {
-        console.warn(`[Total Views] Request timeout for playbackId: ${playbackId}`)
-        resolve(null)
-      }, 10000)
-    )
-    
-    // Wrap the SDK call to handle errors
-    // Note: SDK method signature is getPublicViewership(playbackId: string)
-    // According to docs, playbackId can be from assets or streams
-    const metricsPromise = livepeer.metrics.getPublicViewership(playbackId).catch((error: any) => {
-      // Log detailed error for debugging
-      console.error(`[Total Views] SDK call failed for playbackId ${playbackId}:`, {
-        message: error?.message,
-        status: error?.status,
-        statusCode: error?.statusCode,
-        response: error?.response,
-      })
-      // Re-throw to be caught by outer try-catch
-      throw error
-    })
-    
-    const result = await Promise.race([metricsPromise, timeoutPromise])
-    
-    if (!result) {
-      // Timeout occurred
-      return null
-    }
-    
-    // Log the full result for debugging
-    console.log(`[Total Views] Raw SDK response for playbackId ${playbackId}:`, JSON.stringify(result, null, 2))
-    
-    // Handle response format from Livepeer SDK
-    // SDK may return the data directly or wrapped in a response object
-    // Expected format: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
-    
-    // Check if result is wrapped (some SDKs wrap responses)
-    // Try multiple possible structures
-    let data: any = null
-    
+    // Handle the result - extract viewCount directly
     if (result && typeof result === "object") {
-      // Check if it's already the data object
-      if ('viewCount' in result && typeof (result as any).viewCount === 'number') {
-        data = result
-      } 
-      // Check if wrapped in 'data' property
-      else if ('data' in result && result.data && typeof result.data === 'object') {
-        data = result.data
+      // Check if result has viewCount directly
+      if (typeof result.viewCount === "number") {
+        return result.viewCount
       }
-      // Check if wrapped in 'result' property
-      else if ('result' in result && result.result && typeof result.result === 'object') {
-        data = result.result
-      }
-      // Check if wrapped in 'body' property
-      else if ('body' in result && result.body && typeof result.body === 'object') {
-        data = result.body
-      }
-      // Use result directly
-      else {
-        data = result
+      
+      // Check if wrapped in data property
+      if (result.data && typeof result.data.viewCount === "number") {
+        return result.data.viewCount
       }
     }
     
-    if (data && typeof data === "object") {
-      // Log all available fields for debugging
-      console.log(`[Total Views] Extracted data object for playbackId ${playbackId}. Available fields:`, Object.keys(data))
-      
-      // Check for viewCount field (primary field per SDK)
-      if (typeof data.viewCount === "number") {
-        const viewCount = data.viewCount
-        console.log(`[Total Views] ✅ Found viewCount: ${viewCount} for playbackId: ${playbackId}`)
-        // Return 0 if viewCount is 0 (valid value, not an error)
-        return viewCount >= 0 ? viewCount : 0
-      }
-      
-      // Check if viewCount exists but is null/undefined
-      if (data.viewCount === null || data.viewCount === undefined) {
-        console.log(`[Total Views] viewCount is null/undefined for playbackId: ${playbackId}, returning 0`)
-        return 0
-      }
-      
-      // Log what fields are available for debugging
-      console.warn(`[Total Views] ⚠️ Unexpected response format for playbackId ${playbackId}. Available fields:`, Object.keys(data))
-      console.warn(`[Total Views] Full response structure:`, JSON.stringify(data, null, 2))
-      return null
-    }
-    
-    console.warn(`[Total Views] ⚠️ Unexpected response type for playbackId: ${playbackId}`)
-    console.warn(`[Total Views] Response type: ${typeof result}, value:`, result)
     return null
   } catch (error: any) {
-    // Handle SDK errors gracefully
-    if (error?.message?.includes('timeout') || error?.message?.includes('aborted')) {
-      console.warn(`[Total Views] Request timeout for playbackId: ${playbackId}`)
-      return null
-    }
-    
     // Handle specific error cases
     if (error?.status === 404) {
       console.log(`[Total Views] 404 for playbackId: ${playbackId} - views may not be available yet`)
@@ -991,13 +899,7 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
       return null
     }
     
-    if (error?.status === 429) {
-      console.warn(`[Total Views] Rate limited (429) for playbackId: ${playbackId}`)
-      return null
-    }
-    
-    // Log other errors but don't throw
-    console.error(`[Total Views] Error fetching from Livepeer SDK for playbackId ${playbackId}:`, error?.message || error)
+    console.error(`[Total Views] Error fetching views for playbackId ${playbackId}:`, error?.message || error)
     return null
   }
 }

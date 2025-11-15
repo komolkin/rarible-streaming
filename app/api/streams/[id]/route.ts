@@ -32,7 +32,7 @@ async function getViewsPlaybackId(
         // Asset not ready yet - return null instead of falling back to stream playbackId
         console.warn(`[Views] Asset not ready for ended stream ${streamId} - views not available yet`)
         return null
-      }
+  }
     } catch (error) {
       // Don't fall back to stream playbackId for ended streams
       console.warn(`[Views] Could not fetch asset for ended stream ${streamId} - views not available yet`)
