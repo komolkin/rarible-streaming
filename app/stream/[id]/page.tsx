@@ -949,69 +949,33 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {stream.endedAt ? (
-                  // ENDED STREAM - Use VOD playback with asset playbackId
-                  // According to Livepeer docs: https://docs.livepeer.org/developers/guides/playback-an-asset
-                  // Use playbackId prop directly for assets
-                  (assetPlaybackId || stream.assetPlaybackId) ? (
-                    <Player
-                      playbackId={assetPlaybackId || stream.assetPlaybackId}
-                      autoPlay
-                      muted={false}
-                      showTitle={false}
-                      showPipButton={true}
-                      objectFit="contain"
-                      showUploadingIndicator={true}
-                    />
-                  ) : stream.livepeerPlaybackId ? (
-                    // Fallback: Use stream playbackId (may work for VOD if asset not ready)
-                    <Player
-                      playbackId={stream.livepeerPlaybackId}
-                      autoPlay
-                      muted={false}
-                      showTitle={false}
-                      showPipButton={true}
-                      objectFit="contain"
-                      showUploadingIndicator={true}
-                    />
-                  ) : (
-                    // No playbackId available - show processing message
-                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                      <div className="text-center max-w-md px-4">
-                        <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
-                          ⏳
-                        </div>
-                        <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
-                          Recording Processing
-                        </h3>
-                        <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                          Your recording will be available shortly. Please
-                          check back in a few minutes.
-                        </p>
-                        <p className="text-xs sm:text-sm text-muted-foreground px-2">
-                          The recording is being processed and will appear
-                          here once ready.
-                        </p>
-                      </div>
-                    </div>
-                  )
-                ) : showLivePlayer ? (
-                  // LIVE STREAM - Show live player with playRecording for seamless transition
+                {/* 
+                  Player implementation following Livepeer docs:
+                  https://docs.livepeer.org/developers/guides/playback-a-livestream
+                  
+                  The Player component uses playbackId prop for both live streams and VOD assets.
+                  For ended streams: Use asset playbackId if available, otherwise stream playbackId
+                  For live streams: Use stream playbackId with playRecording for seamless transition
+                */}
+                {stream.livepeerPlaybackId || assetPlaybackId || stream.assetPlaybackId ? (
                   <>
                     <Player
-                      key={`live-${stream.livepeerPlaybackId}`}
-                      playbackId={stream.livepeerPlaybackId}
-                      playRecording
+                      playbackId={
+                        stream.endedAt
+                          ? assetPlaybackId || stream.assetPlaybackId || stream.livepeerPlaybackId
+                          : stream.livepeerPlaybackId
+                      }
+                      playRecording={!stream.endedAt}
                       autoPlay
-                      muted
+                      muted={!stream.endedAt}
                       showTitle={false}
-                      showPipButton={false}
+                      showPipButton={stream.endedAt}
                       objectFit="contain"
-                      priority
+                      priority={!stream.endedAt}
                       showUploadingIndicator={true}
-                      onStreamStatusChange={handleStreamStatusChange}
+                      onStreamStatusChange={!stream.endedAt ? handleStreamStatusChange : undefined}
                     />
-                    {showOfflineOverlay && (
+                    {!stream.endedAt && showOfflineOverlay && (
                       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
                         <div className="font-bold mb-1 text-[10px] sm:text-sm">
                           ⚠️ Stream Offline
@@ -1054,18 +1018,26 @@ export default function StreamPage() {
                       </div>
                     )}
                   </>
-                ) : stream.livepeerPlaybackId ? (
-                  // SCHEDULED/NON-LIVE STREAM - Use Player component
-                  <Player
-                    key={`scheduled-${stream.livepeerPlaybackId}`}
-                    playbackId={stream.livepeerPlaybackId}
-                    autoPlay={false}
-                    muted
-                    showTitle={false}
-                    showPipButton={false}
-                    objectFit="contain"
-                    showUploadingIndicator={true}
-                  />
+                ) : stream.endedAt ? (
+                  // No playbackId available - show processing message
+                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                    <div className="text-center max-w-md px-4">
+                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                        ⏳
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
+                        Recording Processing
+                      </h3>
+                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
+                        Your recording will be available shortly. Please
+                        check back in a few minutes.
+                      </p>
+                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
+                        The recording is being processed and will appear
+                        here once ready.
+                      </p>
+                    </div>
+                  </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
                     <div className="text-center px-4">
