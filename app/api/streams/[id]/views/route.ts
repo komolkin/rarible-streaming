@@ -4,6 +4,10 @@ import { streams } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getTotalViews } from "@/lib/livepeer"
 
+// Disable caching for this route to ensure fresh view counts
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 /**
  * GET /api/streams/[id]/views
  * Get total views count from Livepeer API (if available)
@@ -37,10 +41,19 @@ export async function GET(
     // Try to get total views from Livepeer API
     const totalViews = await getTotalViews(playbackId)
 
-    return NextResponse.json({
-      streamId: params.id,
-      totalViews: totalViews ?? null,
-    })
+    return NextResponse.json(
+      {
+        streamId: params.id,
+        totalViews: totalViews ?? null,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    )
   } catch (error: any) {
     console.error(`[Views API] Error fetching total views for stream ${params.id}:`, error)
     return NextResponse.json(

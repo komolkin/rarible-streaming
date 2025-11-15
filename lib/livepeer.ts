@@ -863,12 +863,18 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
   }
 
   try {
-    const url = `https://livepeer.studio/api/data/views/query/total/${playbackId}`
+    // Add timestamp to prevent caching and ensure we get latest data
+    const timestamp = Date.now()
+    const url = `https://livepeer.studio/api/data/views/query/total/${playbackId}?t=${timestamp}`
     
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
+      cache: 'no-store', // Prevent Next.js fetch caching
     })
 
     if (!response.ok) {

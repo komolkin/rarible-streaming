@@ -26,6 +26,10 @@ async function getTotalViews(streamId: string, playbackId?: string | null): Prom
   return null
 }
 
+// Disable caching for this route to ensure fresh view counts
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -564,11 +568,20 @@ export async function GET(
     // Note: For ended streams, assetPlaybackId should already be returned earlier if found
     // This is the fallback return for all other cases
     const totalViews = await getTotalViews(params.id, stream.livepeerPlaybackId)
-    return NextResponse.json({
-      ...stream,
-      category: category,
-      totalViews: totalViews,
-    })
+    return NextResponse.json(
+      {
+        ...stream,
+        category: category,
+        totalViews: totalViews,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    )
   } catch (error) {
     console.error("Error fetching stream:", error)
     return NextResponse.json({ error: "Failed to fetch stream" }, { status: 500 })

@@ -100,9 +100,16 @@ export default function StreamPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(`/api/streams/${params.id}`, {
-        signal: controller.signal,
-      }).finally(() => {
+      const response = await fetch(
+        `/api/streams/${params.id}?t=${Date.now()}`,
+        {
+          signal: controller.signal,
+          cache: "no-store", // Prevent caching to get fresh view counts
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        }
+      ).finally(() => {
         clearTimeout(timeoutId);
       });
 
@@ -216,6 +223,10 @@ export default function StreamPage() {
       // Set total views from stream data
       if (typeof data.totalViews === "number") {
         setTotalViews(data.totalViews);
+        console.log(`[Views] Updated total views: ${data.totalViews}`);
+      } else if (data.totalViews === null) {
+        // If null, keep current value or set to 0
+        console.log(`[Views] No views data available yet`);
       }
 
       // Log stream status for debugging
@@ -423,17 +434,51 @@ export default function StreamPage() {
     const viewerCountCleanup = subscribeToViewerCount();
 
     // Poll for stream status updates every 30 seconds (reduced frequency since we have WebSocket)
-    // This serves as a fallback and updates other stream metadata
+    // This serves as a fallback and updates other stream metadata including views
     const interval = setInterval(() => {
       fetchStream().catch((error) => {
         console.error("Error during poll:", error);
       });
     }, 30000);
 
+    // Also poll for views specifically every 60 seconds to ensure fresh data
+    // Livepeer updates views every 5 minutes, but we check more frequently to catch updates
+    const viewsInterval = setInterval(() => {
+      // Always fetch views - the API will handle missing playbackId gracefully
+      fetch(`/api/streams/${params.id}/views?t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (typeof data.totalViews === "number") {
+            setTotalViews((prevViews) => {
+              // Only update if the value actually changed
+              if (prevViews !== data.totalViews) {
+                console.log(
+                  `[Views Poll] Updated views: ${prevViews} -> ${data.totalViews}`
+                );
+                return data.totalViews;
+              }
+              return prevViews;
+            });
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching views:", error);
+        });
+    }, 60000); // Check every minute
+
     return () => {
       chatCleanup();
       viewerCountCleanup();
       clearInterval(interval);
+      clearInterval(viewsInterval);
     };
   }, [
     params.id,
