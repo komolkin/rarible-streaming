@@ -985,9 +985,12 @@ export default function StreamPage() {
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-0">
                   <div className="flex-1 min-w-0">
                     {stream.category && (
-                      <div className="text-xs sm:text-sm text-blue-400 mb-2">
+                      <Link
+                        href={`/browse/${stream.category.slug}`}
+                        className="text-xs sm:text-sm text-blue-400 mb-2 hover:underline inline-block"
+                      >
                         {stream.category.name}
-                      </div>
+                      </Link>
                     )}
                     <h1 className="text-lg sm:text-xl lg:text-2xl font-bold mb-2 sm:mb-3 break-words">
                       {stream.title}

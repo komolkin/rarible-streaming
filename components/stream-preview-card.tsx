@@ -26,6 +26,7 @@ interface StreamPreviewCardProps {
     viewerCount?: number
     category?: {
       name: string
+      slug: string
     } | null
   }
   showCreator?: boolean
@@ -164,9 +165,13 @@ export function StreamPreviewCard({
         </div>
         <CardHeader className="p-3 pb-2">
           {stream.category && (
-            <div className="text-xs text-blue-400 mb-1">
+            <Link 
+              href={`/browse/${stream.category.slug}`}
+              className="text-xs text-blue-400 mb-1 hover:underline inline-block"
+              onClick={(e) => e.stopPropagation()}
+            >
               {stream.category.name}
-            </div>
+            </Link>
           )}
           <CardTitle className="line-clamp-2 text-sm font-semibold">
             {stream.title}
