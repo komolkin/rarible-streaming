@@ -58,24 +58,31 @@ export async function GET(
         )
         const asset = await Promise.race([assetPromise, assetTimeout])
         
-        if (asset?.playbackId) {
+        if (asset) {
           assetInfo = {
             id: asset.id,
             playbackId: asset.playbackId,
             status: asset.status,
             sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
           }
-          playbackId = asset.playbackId
-          console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for ended stream views (matches Livepeer dashboard)`)
           
-          // Log asset status for debugging
-          if (asset.status !== "ready") {
-            console.log(`[Views API] ⚠️ Asset status is "${asset.status}" but using playbackId for views (views may still be available)`)
+          // CRITICAL: Try asset playbackId first (per SDK docs, getPublicViewership takes playbackId)
+          // But also log asset ID in case we need to use it
+          if (asset.playbackId) {
+            playbackId = asset.playbackId
+            console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for ended stream views`)
+            console.log(`[Views API] Asset ID: ${asset.id} (available if needed)`)
+            console.log(`[Views API] Asset status: ${asset.status}`)
+            
+            // Log asset status for debugging
+            if (asset.status !== "ready") {
+              console.log(`[Views API] ⚠️ Asset status is "${asset.status}" but using playbackId for views (views may still be available)`)
+            }
+          } else {
+            // Asset exists but no playbackId yet
+            console.warn(`[Views API] ⚠️ Asset found but has no playbackId yet (status: ${asset.status}). Asset may still be processing.`)
+            // Return null - don't use stream playbackId for ended streams
           }
-        } else if (asset) {
-          // Asset exists but no playbackId yet
-          console.warn(`[Views API] ⚠️ Asset found but has no playbackId yet (status: ${asset.status}). Asset may still be processing.`)
-          // Return null - don't use stream playbackId for ended streams
         } else {
           // No asset found - might still be processing
           console.warn(`[Views API] ⚠️ No asset found for ended stream ${stream.livepeerStreamId}. Asset may still be processing after stream ended.`)
@@ -169,12 +176,33 @@ export async function GET(
     console.log(`[Views API] Stream ID: ${params.id}`)
     console.log(`[Views API] Stream ended: ${isEnded}`)
     console.log(`[Views API] Stream playbackId: ${stream.playbackId}`)
+    console.log(`[Views API] Asset ID: ${assetInfo?.id || 'N/A'}`)
     console.log(`[Views API] Asset playbackId: ${assetInfo?.playbackId || 'N/A'}`)
     console.log(`[Views API] Using playbackId for views: ${playbackId}`)
     console.log(`[Views API] Is asset playbackId: ${assetInfo?.playbackId === playbackId}`)
     console.log(`[Views API] ====================================`)
     
-    const totalViews = await getTotalViews(playbackId)
+    // Try with asset playbackId first (per SDK docs, getPublicViewership takes playbackId)
+    let totalViews = await getTotalViews(playbackId)
+    
+    // EXPERIMENTAL: If we got a suspiciously low number and have asset ID, try asset ID as fallback
+    // The SDK docs say it takes playbackId, but maybe it can also accept asset ID?
+    // This is experimental - we'll log both results
+    if (totalViews !== null && assetInfo?.id && isEnded && assetInfo.id !== playbackId) {
+      console.log(`[Views API] 🔍 Experimental: Trying asset ID ${assetInfo.id} as fallback (got ${totalViews} views with playbackId ${playbackId})`)
+      try {
+        const assetIdViews = await getTotalViews(assetInfo.id)
+        if (assetIdViews !== null && assetIdViews > totalViews) {
+          console.log(`[Views API] ✅ Asset ID returned higher view count: ${assetIdViews} vs ${totalViews}`)
+          totalViews = assetIdViews
+          playbackId = assetInfo.id // Update playbackId used for logging
+        } else {
+          console.log(`[Views API] Asset ID returned: ${assetIdViews} (not better than ${totalViews})`)
+        }
+      } catch (error: any) {
+        console.log(`[Views API] Asset ID test failed (expected if SDK only accepts playbackId):`, error?.message)
+      }
+    }
     
     // totalViews can be:
     // - number (including 0): valid view count from Livepeer
@@ -185,12 +213,16 @@ export async function GET(
     
     console.log(`[Views API] ========== VIEWS RESULT ==========`)
     console.log(`[Views API] Stream ID: ${params.id}`)
-    console.log(`[Views API] PlaybackId used: ${playbackId}`)
-    console.log(`[Views API] Is asset playbackId: ${assetInfo?.playbackId === playbackId}`)
+    console.log(`[Views API] Stream ended: ${isEnded}`)
+    console.log(`[Views API] Stream playbackId: ${stream.playbackId}`)
     console.log(`[Views API] Asset ID: ${assetInfo?.id || 'N/A'}`)
+    console.log(`[Views API] Asset playbackId: ${assetInfo?.playbackId || 'N/A'}`)
+    console.log(`[Views API] PlaybackId used for API call: ${playbackId}`)
+    console.log(`[Views API] Is using asset playbackId: ${assetInfo?.playbackId === playbackId}`)
     console.log(`[Views API] Asset status: ${assetInfo?.status || 'N/A'}`)
     console.log(`[Views API] Total views returned: ${responseTotalViews}`)
     console.log(`[Views API] Raw totalViews: ${totalViews}`)
+    console.log(`[Views API] ⚠️ If views don't match dashboard, check which playbackId dashboard uses`)
     console.log(`[Views API] ====================================`)
 
     return NextResponse.json(

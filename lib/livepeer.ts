@@ -891,7 +891,16 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
     )
     
     // Wrap the SDK call to handle errors
+    // Note: SDK method signature is getPublicViewership(playbackId: string)
+    // According to docs, playbackId can be from assets or streams
     const metricsPromise = livepeer.metrics.getPublicViewership(playbackId).catch((error: any) => {
+      // Log detailed error for debugging
+      console.error(`[Total Views] SDK call failed for playbackId ${playbackId}:`, {
+        message: error?.message,
+        status: error?.status,
+        statusCode: error?.statusCode,
+        response: error?.response,
+      })
       // Re-throw to be caught by outer try-catch
       throw error
     })
