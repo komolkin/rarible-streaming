@@ -863,28 +863,47 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
   }
 
   try {
-    // Add timestamp to prevent caching and ensure we get latest data
-    const timestamp = Date.now()
-    const url = `https://livepeer.studio/api/data/views/query/total/${playbackId}?t=${timestamp}`
+    // Use the exact endpoint format from Livepeer API reference
+    // GET /data/views/query/total/{playbackId}
+    // No query parameters needed - playbackId is a path parameter
+    const url = `https://livepeer.studio/api/data/views/query/total/${playbackId}`
+    
+    console.log(`[Total Views] Calling Livepeer API: ${url}`)
     
     const response = await fetch(url, {
+      method: 'GET',
       headers: {
         Authorization: `Bearer ${LIVEPEER_API_KEY}`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'no-cache, no-store, must-revalidate, proxy-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
+        'X-Requested-With': 'XMLHttpRequest', // Prevent some CDN caching
       },
       cache: 'no-store', // Prevent Next.js fetch caching
     })
 
     if (!response.ok) {
+      // Log the full error response for debugging
+      let errorText = ''
+      try {
+        errorText = await response.text()
+      } catch (e) {
+        errorText = 'Unable to read error response'
+      }
+      
+      console.error(`[Total Views] API error ${response.status} for playbackId: ${playbackId}`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+        url: url,
+      })
+      
       // If endpoint doesn't exist (404) or not available, return null
       if (response.status === 404 || response.status === 501) {
         console.log(`[Total Views] Endpoint not available for playbackId: ${playbackId}`)
         return null
       }
-      // For other errors, log and return null
-      console.warn(`[Total Views] API error ${response.status} for playbackId: ${playbackId}`)
+      // For other errors, return null but log details
       return null
     }
 
@@ -894,24 +913,34 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
     console.log(`[Total Views] Raw API response for playbackId ${playbackId}:`, JSON.stringify(data, null, 2))
     
     // Handle response format from Livepeer API
-    // According to docs: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
+    // According to API reference: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
+    // Reference: https://docs.livepeer.org/api-reference/viewership/get-public-total-views
     if (data && typeof data === "object") {
-      // The API returns viewCount field
+      // The API reference shows viewCount is the field name
       if (typeof data.viewCount === "number") {
         console.log(`[Total Views] ✅ Found viewCount: ${data.viewCount} for playbackId: ${playbackId}`)
         return data.viewCount
       }
-      // Fallback for other possible formats
+      
+      // Check if viewCount exists but is null/undefined (might mean no views yet)
+      if (data.viewCount === null || data.viewCount === undefined) {
+        console.log(`[Total Views] viewCount is null/undefined for playbackId: ${playbackId}, returning 0`)
+        return 0
+      }
+      
+      // Fallback for other possible formats (shouldn't happen per API reference, but handle it)
       if (typeof data.totalViews === "number") {
-        console.log(`[Total Views] ✅ Found totalViews: ${data.totalViews} for playbackId: ${playbackId}`)
+        console.log(`[Total Views] ⚠️ Using fallback totalViews: ${data.totalViews} for playbackId: ${playbackId}`)
         return data.totalViews
       }
       if (typeof data.total === "number") {
-        console.log(`[Total Views] ✅ Found total: ${data.total} for playbackId: ${playbackId}`)
+        console.log(`[Total Views] ⚠️ Using fallback total: ${data.total} for playbackId: ${playbackId}`)
         return data.total
       }
-      // Log what fields are available
+      
+      // Log what fields are available for debugging
       console.warn(`[Total Views] ⚠️ Unexpected response format for playbackId ${playbackId}. Available fields:`, Object.keys(data))
+      console.warn(`[Total Views] Full response:`, data)
     } else if (typeof data === "number") {
       // Direct number response (unlikely but handle it)
       console.log(`[Total Views] ✅ Direct number response: ${data} for playbackId: ${playbackId}`)
@@ -919,6 +948,7 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
     }
     
     console.warn(`[Total Views] ⚠️ Could not extract view count from response for playbackId: ${playbackId}`)
+    console.warn(`[Total Views] Response type: ${typeof data}, value:`, data)
     return null
   } catch (error) {
     // Endpoint might not exist or network error, return null gracefully

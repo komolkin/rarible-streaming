@@ -449,14 +449,19 @@ export default function StreamPage() {
       });
     }, 30000);
 
-    // Also poll for views specifically every 60 seconds to ensure fresh data
-    // Livepeer updates views every 5 minutes, but we check more frequently to catch updates
+    // Poll for views every 30 seconds to ensure we get latest data
+    // Livepeer updates views every 5 minutes, but we check frequently to catch updates quickly
     // Note: This uses the backend API which correctly identifies asset playbackId for ended streams
     const viewsInterval = setInterval(() => {
       // Fetch views from our backend API (which handles asset detection and uses correct playbackId)
-      fetch(`/api/streams/${params.id}/views?t=${Date.now()}`, {
+      // Use timestamp in URL to prevent any caching
+      const timestamp = Date.now();
+      fetch(`/api/streams/${params.id}/views?_=${timestamp}`, {
         cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
       })
         .then((res) => {
           if (!res.ok) {
@@ -465,27 +470,34 @@ export default function StreamPage() {
           return res.json();
         })
         .then((data) => {
+          // Always update views if we get a number (including 0)
+          // This ensures we show the latest count even if it's 0
           if (typeof data.totalViews === "number") {
             setTotalViews((prevViews) => {
-              // Only update if the value actually changed
+              // Always update to ensure we have the latest value
+              // Even if it's the same, we want to ensure freshness
               if (prevViews !== data.totalViews) {
                 console.log(
                   `[Views Poll] Updated views: ${prevViews} -> ${data.totalViews}`,
                   {
                     playbackIdUsed: data.playbackId,
                     isAssetPlaybackId: data.isAssetPlaybackId,
+                    timestamp: new Date().toISOString(),
                   }
                 );
-                return data.totalViews;
               }
-              return prevViews;
+              return data.totalViews;
             });
+          } else if (data.totalViews === null) {
+            // If API returns null, it means views aren't available yet
+            // Don't update, keep current value
+            console.log(`[Views Poll] Views not available yet (null response)`);
           }
         })
         .catch((error) => {
           console.error("Error fetching views:", error);
         });
-    }, 60000); // Check every minute
+    }, 30000); // Check every 30 seconds for faster updates
 
     return () => {
       chatCleanup();
