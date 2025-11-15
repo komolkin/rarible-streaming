@@ -304,6 +304,70 @@ export default function StreamPage() {
     };
   }, [params.id]);
 
+  // Subscribe to real-time viewer count updates via WebSocket
+  const subscribeToViewerCount = useCallback(() => {
+    if (!params.id) return () => {};
+
+    const channel = supabase
+      .channel(`stream-viewers:${params.id}`, {
+        config: {
+          broadcast: { self: true },
+        },
+      })
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "streams",
+          filter: `id=eq.${params.id}`,
+        },
+        (payload) => {
+          console.log("Stream update received:", payload);
+          if (payload.new) {
+            // Update viewer count in real-time
+            const newViewerCount = payload.new.viewer_count;
+            setStream((prev: any) => {
+              if (!prev) return prev;
+              // Only update if viewer count actually changed
+              if (typeof newViewerCount === "number" && newViewerCount !== prev.viewerCount) {
+                console.log(`[Real-time] Viewer count updated: ${prev.viewerCount} -> ${newViewerCount}`);
+                return {
+                  ...prev,
+                  viewerCount: newViewerCount,
+                  // Also update other fields that might have changed
+                  isLive: payload.new.is_live ?? prev.isLive,
+                  endedAt: payload.new.ended_at ?? prev.endedAt,
+                };
+              }
+              // Still update other fields even if viewer count didn't change
+              if (payload.new.is_live !== undefined || payload.new.ended_at !== undefined) {
+                return {
+                  ...prev,
+                  isLive: payload.new.is_live ?? prev.isLive,
+                  endedAt: payload.new.ended_at ?? prev.endedAt,
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log("Viewer count subscription status:", status);
+        if (status === "SUBSCRIBED") {
+          console.log("Successfully subscribed to viewer count updates");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("Viewer count subscription error");
+        }
+      });
+
+    return () => {
+      console.log("Unsubscribing from viewer count channel");
+      supabase.removeChannel(channel);
+    };
+  }, [params.id]);
+
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
     if (playerOfflineTimeoutRef.current) {
@@ -348,21 +412,24 @@ export default function StreamPage() {
       setPageError(error?.message || "Failed to load stream");
     }
 
-    // Set up real-time subscription for chat
-    const cleanup = subscribeToChat();
+    // Set up real-time subscriptions
+    const chatCleanup = subscribeToChat();
+    const viewerCountCleanup = subscribeToViewerCount();
 
-    // Poll for stream status updates every 10 seconds (reduced from 5s to minimize re-renders)
+    // Poll for stream status updates every 30 seconds (reduced frequency since we have WebSocket)
+    // This serves as a fallback and updates other stream metadata
     const interval = setInterval(() => {
       fetchStream().catch((error) => {
         console.error("Error during poll:", error);
       });
-    }, 10000);
+    }, 30000);
 
     return () => {
-      cleanup();
+      chatCleanup();
+      viewerCountCleanup();
       clearInterval(interval);
     };
-  }, [params.id, fetchStream, fetchChatMessages, subscribeToChat]);
+  }, [params.id, fetchStream, fetchChatMessages, subscribeToChat, subscribeToViewerCount]);
 
 
   // Fetch asset playback ID when stream ends
