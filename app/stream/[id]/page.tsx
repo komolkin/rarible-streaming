@@ -40,9 +40,6 @@ export default function StreamPage() {
   const streamLiveStatusRef = useRef<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [totalViews, setTotalViews] = useState<number | null>(null);
-  const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null);
-  const [assetPlaybackUrl, setAssetPlaybackUrl] = useState<string | null>(null);
-  const [streamJustEnded, setStreamJustEnded] = useState<boolean>(false);
 
   const fetchChatMessages = useCallback(async () => {
     const response = await fetch(`/api/chat/${params.id}`);
@@ -52,63 +49,6 @@ export default function StreamPage() {
     }
   }, [params.id]);
 
-  // Fetch asset playback ID when stream ends
-  // CRITICAL: Asset playbackId must come from Assets API, not sessions or stream metadata
-  // Asset playbackId is different from stream playbackId - they serve different purposes
-  const fetchAssetPlaybackId = useCallback(async () => {
-    if (!stream?.endedAt || assetPlaybackId) return;
-
-    const livepeerStreamId = stream?.livepeerStreamId;
-
-    if (!livepeerStreamId) return;
-
-    try {
-      // Use the stream detail API which fetches from Assets API
-      // This ensures we get the correct asset playbackId (not stream playbackId)
-      const url = `/api/streams/${params.id}?t=${Date.now()}`;
-
-      const response = await fetch(url, {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-
-        // CRITICAL: Only use assetPlaybackId if it's different from stream playbackId
-        if (
-          data.assetPlaybackId &&
-          data.assetPlaybackId !== data.livepeerPlaybackId
-        ) {
-          console.log(
-            `[StreamPage] ✅ Fetched asset playbackId from Assets API: ${data.assetPlaybackId} (stream playbackId: ${data.livepeerPlaybackId})`
-          );
-          setAssetPlaybackId(data.assetPlaybackId);
-          setStreamJustEnded(false); // Recording is available
-
-          // Also set playback URL if available
-          if (data.vodUrl) {
-            setAssetPlaybackUrl(data.vodUrl);
-          }
-        } else if (data.assetPlaybackId === data.livepeerPlaybackId) {
-          console.warn(
-            `[StreamPage] ⚠️ Asset playbackId matches stream playbackId - this is incorrect! Not setting asset playbackId.`
-          );
-          console.warn(
-            `[StreamPage] This indicates the asset hasn't been created yet or the API returned incorrect data.`
-          );
-        } else {
-          console.log(
-            `[StreamPage] Asset playbackId not available yet - asset may still be processing`
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching asset playback ID:", error);
-    }
-  }, [stream?.endedAt, stream?.livepeerStreamId, params.id, assetPlaybackId]);
 
   const fetchStream = useCallback(async () => {
     try {
@@ -237,60 +177,10 @@ export default function StreamPage() {
       }
 
       // Set total views from stream data
-      // Always use the value from API to ensure we have the latest data
       if (typeof data.totalViews === "number") {
-        setTotalViews((prevViews) => {
-          const newViews = data.totalViews;
-          if (prevViews !== newViews) {
-            console.log(
-              `[Views] Updated total views: ${
-                prevViews ?? "null"
-              } -> ${newViews}`,
-              {
-                playbackIdUsed: data.playbackId,
-                isAssetPlaybackId: data.isAssetPlaybackId,
-                source: "initial fetch",
-              }
-            );
-          }
-          return newViews;
-        });
-      } else if (data.totalViews === null) {
-        // If null, views aren't available yet - keep current value or leave as null
-        console.log(`[Views] No views data available yet (null response)`);
-        // Don't update state - keep current value (might be from previous page load or polling)
-      } else {
-        // Unexpected format - log but don't update
-        console.warn(
-          `[Views] Unexpected totalViews format:`,
-          typeof data.totalViews,
-          data.totalViews
-        );
+        setTotalViews(data.totalViews);
       }
 
-      // Store asset playbackId if available (from database or fetched dynamically)
-      // CRITICAL: asset_playback_id is different from livepeer_playback_id and is needed for VOD views
-      // The asset playbackId comes from the Assets API and is different from the stream playbackId
-      if (data.assetPlaybackId) {
-        // Verify it's different from stream playbackId (they should never be the same)
-        if (data.assetPlaybackId === data.livepeerPlaybackId) {
-          console.warn(
-            `[StreamPage] ⚠️ Asset playbackId matches stream playbackId - this is incorrect! Asset: ${data.assetPlaybackId}, Stream: ${data.livepeerPlaybackId}`
-          );
-          // Don't set it if they're the same - this indicates an error
-        } else {
-          console.log(
-            `[StreamPage] ✅ Setting asset playbackId: ${data.assetPlaybackId} (different from stream playbackId: ${data.livepeerPlaybackId})`
-          );
-          setAssetPlaybackId(data.assetPlaybackId);
-        }
-      }
-
-      // Log stream status for debugging
-      if (data.livepeerPlaybackId) {
-        console.log("Stream playback ID:", data.livepeerPlaybackId);
-        console.log("Stream is live:", data.isLive);
-      }
     } catch (error: any) {
       console.error("Error fetching stream:", error);
       // Handle timeout/abort errors gracefully
@@ -484,21 +374,11 @@ export default function StreamPage() {
     }
   }, []);
 
-  // Function to fetch views - extracted to avoid closure issues
+  // Function to fetch views
   const fetchViews = useCallback(async () => {
-    const timestamp = Date.now();
-    const playbackOverride =
-      assetPlaybackId || stream?.livepeerPlaybackId || null;
-    const query = new URLSearchParams({
-      _: timestamp.toString(),
-    });
-    if (playbackOverride) {
-      query.set("playbackId", playbackOverride);
-    }
-
     try {
       const response = await fetch(
-        `/api/streams/${params.id}/views?${query.toString()}`,
+        `/api/streams/${params.id}/views?_=${Date.now()}`,
         {
           cache: "no-store",
           headers: {
@@ -509,51 +389,18 @@ export default function StreamPage() {
       );
 
       if (!response.ok) {
-        if (response.status === 404) {
-          console.log(
-            `[Views] Stream not found (404) - keeping current view count`
-          );
-          return;
-        }
+        if (response.status === 404) return;
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data = await response.json();
-      if (!data) {
-        return;
-      }
-
-      // Always update views if we get a number (including 0)
       if (typeof data.totalViews === "number") {
-        setTotalViews((prevViews) => {
-          const newViews = data.totalViews;
-
-          // Always update to ensure we have the latest value from API
-          if (prevViews !== newViews) {
-            console.log(
-              `[Views] Updated views: ${prevViews ?? "null"} -> ${newViews}`,
-              {
-                playbackIdUsed: data.playbackId,
-                isAssetPlaybackId: data.isAssetPlaybackId,
-                timestamp: new Date().toISOString(),
-              }
-            );
-          }
-
-          // Always return the new value to ensure state is fresh
-          return newViews;
-        });
-      } else if (data.totalViews === null) {
-        // If API returns null, views aren't available yet
-        console.log(`[Views] Views not available yet (null response)`);
-      } else {
-        console.warn(`[Views] Unexpected response format:`, data);
+        setTotalViews(data.totalViews);
       }
     } catch (error: any) {
       console.error(`[Views] Error fetching views:`, error?.message || error);
-      // Don't clear totalViews on error - keep showing last known value
     }
-  }, [params.id, assetPlaybackId, stream?.livepeerPlaybackId]);
+  }, [params.id]);
 
   useEffect(() => {
     try {
@@ -617,51 +464,7 @@ export default function StreamPage() {
     stream?.endedAt,
   ]);
 
-  // Fetch asset playback ID when stream ends and refresh views
-  useEffect(() => {
-    if (stream?.endedAt && !assetPlaybackId) {
-      fetchAssetPlaybackId();
-      // When stream ends, fetch views immediately to get asset views
-      // Asset playbackId becomes available after stream ends
-      fetchViews();
-    }
-  }, [stream?.endedAt, assetPlaybackId, fetchAssetPlaybackId, fetchViews]);
 
-  useEffect(() => {
-    if (assetPlaybackId) {
-      fetchViews();
-    }
-  }, [assetPlaybackId, fetchViews]);
-
-  // Debug: log stream data when it changes
-  useEffect(() => {
-    if (stream) {
-      console.log("Stream data:", {
-        id: stream.id,
-        livepeerStreamId: stream.livepeerStreamId,
-        livepeerPlaybackId: stream.livepeerPlaybackId,
-        livepeerStreamKey: stream.livepeerStreamKey,
-        isLive: stream.isLive,
-        hasPlaybackId: !!stream.livepeerPlaybackId,
-        vodUrl: stream.vodUrl,
-        endedAt: stream.endedAt,
-        title: stream.title,
-      });
-
-      // For ended streams: According to Livepeer docs, Player handles VOD automatically
-      // with the stream playbackId - no need for complex logic here
-      if (stream.endedAt && stream.livepeerPlaybackId) {
-        console.log(
-          "✅ Stream ended - Player will handle VOD playback with playbackId:",
-          stream.livepeerPlaybackId
-        );
-      }
-
-      if (stream.livepeerStreamId && !stream.livepeerPlaybackId) {
-        console.warn("Stream missing playbackId, will be fetched on next poll");
-      }
-    }
-  }, [stream]);
 
   const handleFollow = async () => {
     if (!authenticated || !user?.wallet?.address || !stream?.creatorAddress)
@@ -857,7 +660,6 @@ export default function StreamPage() {
 
       const updatedStream = await response.json();
       setStream(updatedStream);
-      setStreamJustEnded(true);
     } catch (error: any) {
       console.error("Error ending stream:", error);
       alert(error?.message || "Failed to end stream");
@@ -950,10 +752,7 @@ export default function StreamPage() {
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
                 {stream.livepeerPlaybackId ? (
-                  // Use playbackId with playRecording prop for seamless transition
-                  // The Player automatically switches from live to recorded when stream ends
-                  <>
-                    <Player
+                  <Player
                       playbackId={stream.livepeerPlaybackId}
                       playRecording
                       autoPlay
@@ -1007,7 +806,6 @@ export default function StreamPage() {
                         )}
                       </div>
                     )}
-                  </>
                 ) : stream.endedAt ? (
                   // No playbackId available - show processing message
                   <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
