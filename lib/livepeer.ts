@@ -873,22 +873,20 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
 
     const result = await livepeer.metrics.getPublicViewership(playbackId)
     
-    // Handle the result - extract viewCount directly
+    // According to Livepeer docs, response format is:
+    // { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
     // TypeScript types may not expose viewCount, but it exists at runtime
     const resultAny = result as any
     
-    if (resultAny && typeof resultAny === "object") {
-      // Check if result has viewCount directly
-      if (typeof resultAny.viewCount === "number") {
-        return resultAny.viewCount
-      }
-      
-      // Check if wrapped in data property
-      if (resultAny.data && typeof resultAny.data.viewCount === "number") {
-        return resultAny.data.viewCount
-      }
+    // Extract viewCount directly from the result
+    const viewCount = resultAny?.viewCount
+    
+    if (typeof viewCount === "number") {
+      // Return the viewCount (including 0 if no views yet)
+      return viewCount
     }
     
+    // If viewCount is not a number, return null
     return null
   } catch (error: any) {
     // Handle specific error cases
