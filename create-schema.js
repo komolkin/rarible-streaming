@@ -67,8 +67,6 @@ async function createSchema() {
         category_id UUID REFERENCES categories(id),
         livepeer_stream_id TEXT,
         livepeer_playback_id TEXT,
-        asset_id TEXT,
-        asset_playback_id TEXT,
         livepeer_stream_key TEXT,
         is_live BOOLEAN DEFAULT FALSE NOT NULL,
         viewer_count INTEGER DEFAULT 0 NOT NULL,

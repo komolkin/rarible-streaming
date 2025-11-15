@@ -68,33 +68,6 @@ async function getViewsPlaybackId(
   return streamPlaybackId || null
 }
 
-async function persistAssetMetadata(
-  streamId: string,
-  metadata: { assetId?: string | null; assetPlaybackId?: string | null }
-) {
-  const updates: Record<string, any> = {}
-  if (metadata.assetId !== undefined) {
-    updates.assetId = metadata.assetId
-  }
-  if (metadata.assetPlaybackId !== undefined) {
-    updates.assetPlaybackId = metadata.assetPlaybackId
-  }
-  if (Object.keys(updates).length === 0) {
-    return
-  }
-  updates.updatedAt = new Date()
-  try {
-    await db
-      .update(streams)
-      .set(updates)
-      .where(eq(streams.id, streamId))
-  } catch (error: any) {
-    console.warn(
-      `[GET Stream ${streamId}] Failed to persist asset metadata:`,
-      error?.message || error
-    )
-  }
-}
 
 // Helper function to get total views from Livepeer API only
 async function getTotalViews(streamId: string, playbackId?: string | null): Promise<number | null> {
@@ -158,8 +131,7 @@ export async function GET(
     if (isManuallyEnded && stream.livepeerStreamId) {
       let vodUrl = stream.vodUrl || null
       let previewImageUrl = stream.previewImageUrl || null
-      let assetPlaybackId = null // Track asset playbackId separately for Player component
-      let assetId = null // Track asset ID for direct asset fetching
+      let assetPlaybackId = null // Track asset playbackId for Player component (not stored in DB)
       
       try {
         const { getStream, getStreamAsset, getStreamRecording, getStreamSessions } = await import("@/lib/livepeer")
@@ -284,7 +256,6 @@ export async function GET(
               } else if (asset.playbackId) {
                 // Asset is ready - store the asset playbackId and ID for Player component
                 assetPlaybackId = asset.playbackId
-                assetId = asset.id
                 // Use the asset's playbackId to construct HLS URL for VOD
                 // This is the correct playbackId for VOD assets
                 const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
@@ -303,12 +274,6 @@ export async function GET(
                 console.warn(`[GET Stream ${params.id}] Asset ${asset.id} has no playbackId or playbackUrl. Status: ${asset.status}`)
               }
               
-              if (assetId || assetPlaybackId) {
-                await persistAssetMetadata(stream.id, {
-                  assetId: assetId ?? undefined,
-                  assetPlaybackId: assetPlaybackId ?? undefined,
-                })
-              }
               
               // Only generate thumbnail if user hasn't uploaded a cover image
               // Skip thumbnail generation if we're running low on time (non-blocking)
@@ -361,8 +326,6 @@ export async function GET(
             .set({
               vodUrl: vodUrl,
               previewImageUrl: previewImageUrl || stream.previewImageUrl,
-              assetPlaybackId: assetPlaybackId || stream.assetPlaybackId,
-              assetId: assetId || stream.assetId,
               updatedAt: new Date(),
             })
             .where(eq(streams.id, params.id))
@@ -385,12 +348,10 @@ export async function GET(
             ...updated,
             category: updatedCategory,
             assetPlaybackId: assetPlaybackId, // Include asset playbackId for Player component
-            assetId: assetId, // Include asset ID for direct asset fetching
             totalViews: totalViews,
           })
           } catch (dbError: any) {
             console.error(`[GET Stream ${params.id}] Database update error:`, dbError?.message)
-            // Continue to return stream with assetPlaybackId even if DB update fails
           }
         }
         
@@ -405,7 +366,6 @@ export async function GET(
             ...stream,
             category: category,
             assetPlaybackId: assetPlaybackId,
-            assetId: assetId,
             totalViews: totalViews,
           })
         }
@@ -668,7 +628,6 @@ export async function GET(
     }
 
     // Return stream with category and totalViews
-    // Note: For ended streams, assetPlaybackId should already be returned earlier if found
     // This is the fallback return for all other cases
     // For ended streams, use asset playbackId for views (matches Livepeer dashboard)
     const viewsPlaybackId = await getViewsPlaybackId(
@@ -676,7 +635,7 @@ export async function GET(
       stream.livepeerPlaybackId,
       stream.endedAt,
       stream.livepeerStreamId,
-      stream.assetPlaybackId
+      null // assetPlaybackId is fetched dynamically, not stored in DB
     )
     const totalViews = await getTotalViews(params.id, viewsPlaybackId)
     return NextResponse.json(

@@ -4,33 +4,6 @@ import { streams } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getTotalViews, getStreamAsset } from "@/lib/livepeer"
 
-async function persistAssetMetadata(
-  streamId: string,
-  metadata: { assetId?: string | null; assetPlaybackId?: string | null }
-) {
-  const updates: Record<string, any> = {}
-  if (metadata.assetId !== undefined) {
-    updates.assetId = metadata.assetId
-  }
-  if (metadata.assetPlaybackId !== undefined) {
-    updates.assetPlaybackId = metadata.assetPlaybackId
-  }
-  if (Object.keys(updates).length === 0) {
-    return
-  }
-  updates.updatedAt = new Date()
-  try {
-    await db
-      .update(streams)
-      .set(updates)
-      .where(eq(streams.id, streamId))
-  } catch (error: any) {
-    console.warn(
-      `[Views API] Failed to persist asset metadata for stream ${streamId}:`,
-      error?.message || error
-    )
-  }
-}
 
 // Disable caching for this route to ensure fresh view counts
 export const dynamic = 'force-dynamic'
@@ -55,8 +28,6 @@ export async function GET(
         playbackId: streams.livepeerPlaybackId,
         endedAt: streams.endedAt,
         livepeerStreamId: streams.livepeerStreamId,
-        assetPlaybackId: streams.assetPlaybackId,
-        assetId: streams.assetId,
       })
       .from(streams)
       .where(eq(streams.id, params.id))
@@ -86,18 +57,6 @@ export async function GET(
     // "The playbackId can be a canonical playback ID from a specific Livepeer asset or stream objects"
     // For ended streams, assets have their own playbackId which tracks views separately
     
-    if (!playbackId && stream.assetPlaybackId) {
-      playbackId = stream.assetPlaybackId
-      assetInfo = {
-        playbackId,
-        id: stream.assetId,
-        source: "database",
-      }
-      console.log(
-        `[Views API] ✅ Using stored asset playbackId ${playbackId} from database for stream ${params.id}`
-      )
-    }
-
     if (!playbackId && isEnded && stream.livepeerStreamId) {
       // For ended streams: ONLY use asset playbackId, don't fall back to stream playbackId
       // This is critical because stream playbackId views don't match asset views for VOD
@@ -129,10 +88,6 @@ export async function GET(
             console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for ended stream views`)
             console.log(`[Views API] Asset ID: ${asset.id} (available if needed)`)
             console.log(`[Views API] Asset status: ${asset.status}`)
-            await persistAssetMetadata(stream.id, {
-              assetId: asset.id,
-              assetPlaybackId: asset.playbackId,
-            })
             
             // Log asset status for debugging
             if (asset.status !== "ready") {
@@ -202,10 +157,6 @@ export async function GET(
           }
           playbackId = asset.playbackId
           console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for live stream views (matches dashboard - recording available)`)
-          await persistAssetMetadata(stream.id, {
-            assetId: asset.id,
-            assetPlaybackId: asset.playbackId,
-          })
         } else {
           // For live streams without asset, use stream playbackId
           playbackId = stream.playbackId
@@ -248,25 +199,6 @@ export async function GET(
     
     // Try with asset playbackId first (per SDK docs, getPublicViewership takes playbackId)
     let totalViews = await getTotalViews(playbackId)
-    
-    // EXPERIMENTAL: If we got a suspiciously low number and have asset ID, try asset ID as fallback
-    // The SDK docs say it takes playbackId, but maybe it can also accept asset ID?
-    // This is experimental - we'll log both results
-    if (totalViews !== null && assetInfo?.id && isEnded && assetInfo.id !== playbackId) {
-      console.log(`[Views API] 🔍 Experimental: Trying asset ID ${assetInfo.id} as fallback (got ${totalViews} views with playbackId ${playbackId})`)
-      try {
-        const assetIdViews = await getTotalViews(assetInfo.id)
-        if (assetIdViews !== null && assetIdViews > totalViews) {
-          console.log(`[Views API] ✅ Asset ID returned higher view count: ${assetIdViews} vs ${totalViews}`)
-          totalViews = assetIdViews
-          playbackId = assetInfo.id // Update playbackId used for logging
-        } else {
-          console.log(`[Views API] Asset ID returned: ${assetIdViews} (not better than ${totalViews})`)
-        }
-      } catch (error: any) {
-        console.log(`[Views API] Asset ID test failed (expected if SDK only accepts playbackId):`, error?.message)
-      }
-    }
     
     // totalViews can be:
     // - number (including 0): valid view count from Livepeer

@@ -56,17 +56,12 @@ export default function StreamPage() {
   const fetchAssetPlaybackId = useCallback(async () => {
     if (!stream?.endedAt || assetPlaybackId) return;
 
-    const assetId = stream?.assetId;
     const livepeerStreamId = stream?.livepeerStreamId;
 
-    if (!assetId && !livepeerStreamId) return;
+    if (!livepeerStreamId) return;
 
     try {
-      const url = assetId
-        ? `/api/streams/${params.id}/recording?assetId=${encodeURIComponent(
-            assetId
-          )}`
-        : `/api/streams/${params.id}/recording`;
+      const url = `/api/streams/${params.id}/recording`;
 
       const response = await fetch(url);
 
@@ -86,13 +81,7 @@ export default function StreamPage() {
     } catch (error) {
       console.error("Error fetching asset playback ID:", error);
     }
-  }, [
-    stream?.endedAt,
-    stream?.assetId,
-    stream?.livepeerStreamId,
-    params.id,
-    assetPlaybackId,
-  ]);
+  }, [stream?.endedAt, stream?.livepeerStreamId, params.id, assetPlaybackId]);
 
   const fetchStream = useCallback(async () => {
     try {
@@ -252,7 +241,7 @@ export default function StreamPage() {
         );
       }
 
-      // Store asset playbackId if available (for direct Livepeer API calls)
+      // Store asset playbackId if available (fetched dynamically, not from DB)
       if (data.assetPlaybackId) {
         setAssetPlaybackId(data.assetPlaybackId);
       }
@@ -898,9 +887,7 @@ export default function StreamPage() {
               <div className="w-full aspect-video bg-black relative">
                 {stream.livepeerPlaybackId ||
                 (stream.endedAt &&
-                  (assetPlaybackId ||
-                    stream.assetId ||
-                    stream.livepeerStreamId)) ? (
+                  (assetPlaybackId || stream.livepeerStreamId)) ? (
                   <>
                     {stream.endedAt ? (
                       assetPlaybackUrl || assetPlaybackId ? (

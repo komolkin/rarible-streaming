@@ -6,68 +6,19 @@ import { eq, and, isNotNull, desc, sql } from "drizzle-orm"
 
 type StreamRecord = typeof streams.$inferSelect
 
-async function persistAssetMetadata(
-  streamId: string,
-  metadata: { assetId?: string | null; assetPlaybackId?: string | null }
-) {
-  const updates: Record<string, any> = {}
-  if (metadata.assetId !== undefined) {
-    updates.assetId = metadata.assetId
-  }
-  if (metadata.assetPlaybackId !== undefined) {
-    updates.assetPlaybackId = metadata.assetPlaybackId
-  }
-  if (Object.keys(updates).length === 0) {
-    return
-  }
-  updates.updatedAt = new Date()
-  try {
-    await db
-      .update(streams)
-      .set(updates)
-      .where(eq(streams.id, streamId))
-  } catch (error: any) {
-    console.warn(
-      `[Streams API] Failed to persist asset metadata for stream ${streamId}:`,
-      error?.message || error
-    )
-  }
-}
-
 async function resolveViewsPlaybackId(stream: StreamRecord) {
+  // For ended streams, try to fetch asset playbackId from Livepeer API
+  // For live streams, use stream playbackId
   const isEnded = !!stream.endedAt
 
-  // Priority 1: Use assetPlaybackId from database (for ended streams with VOD)
-  if (stream.assetPlaybackId) {
-    console.log(
-      `[Streams API] ✅ Using asset playbackId from database: ${stream.assetPlaybackId} for stream ${stream.id}`
-    )
-    return { playbackId: stream.assetPlaybackId, isAssetPlaybackId: true }
-  }
-
-  // Priority 2: Use livepeerPlaybackId from database (for live streams or streams without asset)
-  if (stream.livepeerPlaybackId && !isEnded) {
-    console.log(
-      `[Streams API] ✅ Using stream playbackId from database: ${stream.livepeerPlaybackId} for live stream ${stream.id}`
-    )
-    return { playbackId: stream.livepeerPlaybackId, isAssetPlaybackId: false }
-  }
-
-  // Priority 3: For ended streams, try to fetch asset playbackId from Livepeer API
-  // (only if not already in database)
-  if (stream.livepeerStreamId && isEnded) {
+  if (isEnded && stream.livepeerStreamId) {
     try {
       const { getStreamAsset } = await import("@/lib/livepeer")
       const asset = await getStreamAsset(stream.livepeerStreamId)
       if (asset?.playbackId) {
         console.log(
-          `[Streams API] ✅ Fetched asset playbackId from Livepeer API: ${asset.playbackId} for stream ${stream.id}`
+          `[Streams API] ✅ Using asset playbackId ${asset.playbackId} for ended stream ${stream.id}`
         )
-        // Save to database for future use
-        await persistAssetMetadata(stream.id, {
-          assetId: asset.id,
-          assetPlaybackId: asset.playbackId,
-        })
         return { playbackId: asset.playbackId, isAssetPlaybackId: true }
       }
 
@@ -84,19 +35,8 @@ async function resolveViewsPlaybackId(stream: StreamRecord) {
     }
   }
 
-  // Priority 4: For live streams without asset, use stream playbackId from database
-  if (stream.livepeerPlaybackId) {
-    console.log(
-      `[Streams API] ✅ Using stream playbackId from database: ${stream.livepeerPlaybackId} for stream ${stream.id}`
-    )
-    return { playbackId: stream.livepeerPlaybackId, isAssetPlaybackId: false }
-  }
-
-  // No playbackId available
-  console.log(
-    `[Streams API] ⚠️ No playbackId available in database for stream ${stream.id}`
-  )
-  return { playbackId: null, isAssetPlaybackId: false }
+  // For live streams or when no asset available, use stream playbackId
+  return { playbackId: stream.livepeerPlaybackId || null, isAssetPlaybackId: false }
 }
 
 export async function GET(request: NextRequest) {
@@ -187,10 +127,6 @@ export async function GET(request: NextRequest) {
                 })
                 
                 if (asset?.playbackId) {
-                  await persistAssetMetadata(stream.id, {
-                    assetId: asset.id,
-                    assetPlaybackId: asset.playbackId,
-                  })
                   // Use asset playbackId for VOD thumbnail (better quality)
                   console.log(`[Streams API] 🎬 Generating VOD thumbnail using asset playbackId: ${asset.playbackId}`)
                   thumbnailUrl = await generateAndVerifyThumbnail(asset.playbackId, {
@@ -361,43 +297,26 @@ export async function GET(request: NextRequest) {
           }
         }
         
-        // Get total views from Livepeer API using playbackId from database
-        // Priority: assetPlaybackId (for ended streams) > livepeerPlaybackId (for live streams)
+        // Get total views from Livepeer API
         let totalViews: number | null = null
         let totalViewsPlaybackId: string | null = null
-        let isAssetPlaybackId = false
         
         try {
-          // Resolve which playbackId to use (prefers database values first)
-          const { playbackId: viewsPlaybackId, isAssetPlaybackId: isAsset } = await resolveViewsPlaybackId(stream)
+          const { playbackId: viewsPlaybackId, isAssetPlaybackId } = await resolveViewsPlaybackId(stream)
           totalViewsPlaybackId = viewsPlaybackId
-          isAssetPlaybackId = isAsset
 
           if (viewsPlaybackId) {
-            console.log(
-              `[Streams API] Fetching views for stream ${stream.id} using playbackId: ${viewsPlaybackId} (${isAsset ? 'asset' : 'stream'})`
-            )
             const { getTotalViews: getLivepeerTotalViews } = await import("@/lib/livepeer")
             totalViews = await getLivepeerTotalViews(viewsPlaybackId)
-            
-            if (totalViews !== null) {
-              console.log(
-                `[Streams API] ✅ Fetched ${totalViews} views for stream ${stream.id} (playbackId: ${viewsPlaybackId})`
-              )
-            } else {
-              console.log(
-                `[Streams API] ⚠️ Views not available yet for stream ${stream.id} (playbackId: ${viewsPlaybackId})`
-              )
-            }
           } else {
             console.log(
-              `[Streams API] ⚠️ No playbackId available for total views (stream ${stream.id}). Asset may not be ready yet.`
+              `[Streams API] No playbackId available for total views (stream ${stream.id}). Asset may not be ready yet.`
             )
           }
-        } catch (error: any) {
+        } catch (error) {
           console.warn(
-            `[Streams API] Could not fetch views for stream ${stream.id}:`,
-            error?.message || error
+            `[Streams API] Could not resolve total views playbackId for stream ${stream.id}:`,
+            error
           )
         }
         
@@ -406,7 +325,6 @@ export async function GET(request: NextRequest) {
           category: category,
           totalViews: totalViews,
           totalViewsPlaybackId,
-          isAssetPlaybackId,
         }
       })
     )
