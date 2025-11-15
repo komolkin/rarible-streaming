@@ -435,10 +435,20 @@ export default function StreamPage() {
   // Track view when user watches the stream
   const trackView = useCallback(async () => {
     if (!authenticated || !user?.wallet?.address || hasTrackedView) {
+      if (!authenticated) {
+        console.log("[View Tracking] Skipping - user not authenticated");
+      }
+      if (!user?.wallet?.address) {
+        console.log("[View Tracking] Skipping - no wallet address");
+      }
+      if (hasTrackedView) {
+        console.log("[View Tracking] Skipping - view already tracked");
+      }
       return;
     }
 
     try {
+      console.log(`[View Tracking] Tracking view for stream ${params.id} by user ${user.wallet.address}`);
       const response = await fetch(`/api/streams/${params.id}/views`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -447,21 +457,58 @@ export default function StreamPage() {
         }),
       });
 
-      if (response.ok) {
-        setHasTrackedView(true);
-        // Refresh total views count
-        const viewsResponse = await fetch(`/api/streams/${params.id}/views`);
-        if (viewsResponse.ok) {
-          const viewsData = await viewsResponse.json();
-          if (typeof viewsData.totalViews === "number") {
-            setTotalViews(viewsData.totalViews);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`[View Tracking] POST failed with status ${response.status}:`, errorData);
+        // Don't set hasTrackedView to true so it can retry
+        return;
+      }
+
+      const postData = await response.json();
+      console.log("[View Tracking] POST response:", postData);
+      
+      // Update view count from POST response if available
+      if (typeof postData.totalViews === "number") {
+        console.log(`[View Tracking] Updated view count from POST response: ${postData.totalViews}`);
+        setTotalViews(postData.totalViews);
+      }
+      
+      // Set hasTrackedView to true after successful POST
+      // (even if view wasn't recorded due to spam prevention, we don't want to retry)
+      setHasTrackedView(true);
+      
+      if (postData.viewRecorded === false) {
+        console.log("[View Tracking] View not recorded - user viewed recently (within last hour)");
+      } else if (postData.viewRecorded === true) {
+        console.log("[View Tracking] View recorded successfully");
+      }
+
+      // If POST response doesn't include totalViews, fetch it separately
+      if (typeof postData.totalViews !== "number") {
+        try {
+          const viewsResponse = await fetch(`/api/streams/${params.id}/views`);
+          if (viewsResponse.ok) {
+            const viewsData = await viewsResponse.json();
+            console.log("[View Tracking] Fetched updated view count:", viewsData);
+            if (typeof viewsData.totalViews === "number") {
+              setTotalViews(viewsData.totalViews);
+            }
+          } else {
+            console.warn(`[View Tracking] Failed to fetch updated view count: ${viewsResponse.status}`);
+            // Fallback: refresh stream data which includes totalViews
+            fetchStream();
           }
+        } catch (viewsError) {
+          console.error("[View Tracking] Error fetching updated view count:", viewsError);
+          // Fallback: refresh stream data which includes totalViews
+          fetchStream();
         }
       }
     } catch (error) {
-      console.error("Error tracking view:", error);
+      console.error("[View Tracking] Error tracking view:", error);
+      // Don't set hasTrackedView to true so it can retry
     }
-  }, [authenticated, user?.wallet?.address, params.id, hasTrackedView]);
+  }, [authenticated, user?.wallet?.address, params.id, hasTrackedView, fetchStream]);
 
   useEffect(() => {
     try {
