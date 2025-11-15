@@ -950,20 +950,10 @@ export default function StreamPage() {
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
                 {stream.endedAt ? (
-                  // ENDED STREAM - Use VOD playback
-                  stream.vodUrl ? (
-                    // Priority 1: Use vodUrl if available (direct HLS URL)
-                    <Player
-                      src={stream.vodUrl}
-                      autoPlay
-                      muted={false}
-                      showTitle={false}
-                      showPipButton={true}
-                      objectFit="contain"
-                      showUploadingIndicator={true}
-                    />
-                  ) : (assetPlaybackId || stream.assetPlaybackId) ? (
-                    // Priority 2: Use asset playbackId if available
+                  // ENDED STREAM - Use VOD playback with asset playbackId
+                  // According to Livepeer docs: https://docs.livepeer.org/developers/guides/playback-an-asset
+                  // Use playbackId prop directly for assets
+                  (assetPlaybackId || stream.assetPlaybackId) ? (
                     <Player
                       playbackId={assetPlaybackId || stream.assetPlaybackId}
                       autoPlay
@@ -974,10 +964,9 @@ export default function StreamPage() {
                       showUploadingIndicator={true}
                     />
                   ) : stream.livepeerPlaybackId ? (
-                    // Priority 3: Use stream playbackId with playRecording prop for seamless transition
+                    // Fallback: Use stream playbackId (may work for VOD if asset not ready)
                     <Player
                       playbackId={stream.livepeerPlaybackId}
-                      playRecording
                       autoPlay
                       muted={false}
                       showTitle={false}
