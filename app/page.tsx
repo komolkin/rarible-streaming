@@ -19,21 +19,12 @@ export default function Home() {
       if (response.ok) {
         const streams = await response.json();
 
-        // Debug: log streams with previewImageUrl
-        console.log("[Home] Fetched streams:", streams.length);
-        streams.forEach((stream: any) => {
-          if (stream.endedAt) {
-            console.log(`[Home] Stream ${stream.id}:`, {
-              title: stream.title,
-              endedAt: stream.endedAt,
-              previewImageUrl: stream.previewImageUrl,
-              hasPreviewImage: !!stream.previewImageUrl,
-            });
-          }
-        });
+        // Show streams immediately without waiting for creator profiles
+        setRecentStreams(streams);
+        setLoading(false);
 
-        // Fetch creator profiles for each stream
-        const streamsWithCreators = await Promise.all(
+        // Fetch creator profiles in background and update
+        Promise.all(
           streams.map(async (stream: any) => {
             try {
               const creatorResponse = await fetch(
@@ -44,20 +35,18 @@ export default function Home() {
                 return { ...stream, creator };
               }
             } catch (error) {
-              console.error(
-                `Error fetching creator for stream ${stream.id}:`,
-                error
-              );
+              // Silently fail - stream will show without creator info
             }
             return stream;
           })
-        );
-
-        setRecentStreams(streamsWithCreators);
+        ).then((streamsWithCreators) => {
+          setRecentStreams(streamsWithCreators);
+        });
+      } else {
+        setLoading(false);
       }
     } catch (error) {
       console.error("Error fetching recent streams:", error);
-    } finally {
       setLoading(false);
     }
   };

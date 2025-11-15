@@ -949,54 +949,22 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {stream.endedAt && stream.vodUrl ? (
-                  // ENDED STREAM - Use vodUrl from database
-                  <Player
-                    src={stream.vodUrl}
-                    autoPlay
-                    muted={false}
-                    showTitle={false}
-                    showPipButton={true}
-                    objectFit="contain"
-                    showUploadingIndicator={true}
-                  />
-                ) : stream.endedAt && !stream.vodUrl ? (
-                  // No VOD URL yet - show processing message
-                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                    <div className="text-center max-w-md px-4">
-                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
-                        ⏳
-                      </div>
-                      <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
-                        Recording Processing
-                      </h3>
-                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                        Your recording will be available shortly. Please
-                        check back in a few minutes.
-                      </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
-                        The recording is being processed and will appear
-                        here once ready.
-                      </p>
-                    </div>
-                  </div>
-                ) : stream.livepeerPlaybackId ? (
-                  // LIVE STREAM - Use playbackId
+                {stream.livepeerPlaybackId ? (
+                  // Use playbackId for both live and ended streams
                   <>
                     <Player
-                      key={`live-${stream.livepeerPlaybackId}`}
                       playbackId={stream.livepeerPlaybackId}
                       playRecording
                       autoPlay
-                      muted
+                      muted={!stream.endedAt}
                       showTitle={false}
-                      showPipButton={false}
+                      showPipButton={stream.endedAt}
                       objectFit="contain"
-                      priority
+                      priority={!stream.endedAt}
                       showUploadingIndicator={true}
-                      onStreamStatusChange={handleStreamStatusChange}
+                      onStreamStatusChange={!stream.endedAt ? handleStreamStatusChange : undefined}
                     />
-                    {showOfflineOverlay && (
+                    {!stream.endedAt && showOfflineOverlay && (
                       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
                         <div className="font-bold mb-1 text-[10px] sm:text-sm">
                           ⚠️ Stream Offline
