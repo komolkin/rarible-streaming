@@ -4,6 +4,53 @@ import { streams, categories } from "@/lib/db/schema"
 import { createStream, getStream } from "@/lib/livepeer"
 import { eq, and, isNotNull, desc, sql } from "drizzle-orm"
 
+type StreamRecord = typeof streams.$inferSelect
+
+async function resolveViewsPlaybackId(stream: StreamRecord) {
+  const isEnded = !!stream.endedAt
+
+  if (stream.livepeerStreamId) {
+    try {
+      const { getStreamAsset } = await import("@/lib/livepeer")
+      const asset = await getStreamAsset(stream.livepeerStreamId)
+      if (asset?.playbackId) {
+        if (isEnded) {
+          console.log(
+            `[Streams API] ✅ Using asset playbackId ${asset.playbackId} for ended stream ${stream.id}`
+          )
+          return { playbackId: asset.playbackId, isAssetPlaybackId: true }
+        }
+
+        console.log(
+          `[Streams API] Using asset playbackId ${asset.playbackId} for live stream ${stream.id} (recording available)`
+        )
+        return { playbackId: asset.playbackId, isAssetPlaybackId: true }
+      }
+
+      if (isEnded) {
+        console.warn(
+          `[Streams API] Asset found for ended stream ${stream.id} but playbackId missing - views unavailable until asset is ready`
+        )
+        return { playbackId: null, isAssetPlaybackId: false }
+      }
+    } catch (error: any) {
+      const message = error?.message || error
+      if (isEnded) {
+        console.warn(
+          `[Streams API] Could not fetch asset for ended stream ${stream.id}: ${message}`
+        )
+        return { playbackId: null, isAssetPlaybackId: false }
+      }
+
+      console.log(
+        `[Streams API] Could not fetch asset for live stream ${stream.id}, falling back to stream playbackId: ${message}`
+      )
+    }
+  }
+
+  return { playbackId: stream.livepeerPlaybackId || null, isAssetPlaybackId: false }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -262,21 +309,33 @@ export async function GET(request: NextRequest) {
           }
         }
         
-        // Get total views from Livepeer API only
+        // Get total views from Livepeer API only (prefer asset playbackId for ended streams)
         let totalViews: number | null = null
-        if (stream.livepeerPlaybackId) {
-          try {
+        let totalViewsPlaybackId: string | null = null
+        try {
+          const { playbackId: viewsPlaybackId } = await resolveViewsPlaybackId(stream)
+          totalViewsPlaybackId = viewsPlaybackId
+
+          if (viewsPlaybackId) {
             const { getTotalViews: getLivepeerTotalViews } = await import("@/lib/livepeer")
-            totalViews = await getLivepeerTotalViews(stream.livepeerPlaybackId)
-          } catch (error) {
-            console.warn(`[Streams API] Could not fetch total views from Livepeer for stream ${stream.id}:`, error)
+            totalViews = await getLivepeerTotalViews(viewsPlaybackId)
+          } else {
+            console.log(
+              `[Streams API] No playbackId available for total views (stream ${stream.id}). Asset may not be ready yet.`
+            )
           }
+        } catch (error) {
+          console.warn(
+            `[Streams API] Could not resolve total views playbackId for stream ${stream.id}:`,
+            error
+          )
         }
         
         return {
           ...stream,
           category: category,
           totalViews: totalViews,
+          totalViewsPlaybackId,
         }
       })
     )
