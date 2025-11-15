@@ -43,6 +43,8 @@ export default function StreamPage() {
   const [hasRealtimeViewerData, setHasRealtimeViewerData] =
     useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [totalViews, setTotalViews] = useState<number | null>(null);
+  const [hasTrackedView, setHasTrackedView] = useState<boolean>(false);
   const [assetPlaybackId, setAssetPlaybackId] = useState<string | null>(null);
   const [assetPlaybackUrl, setAssetPlaybackUrl] = useState<string | null>(null);
   const [streamJustEnded, setStreamJustEnded] = useState<boolean>(false);
@@ -214,6 +216,11 @@ export default function StreamPage() {
         }
       } catch (error) {
         console.error("Error fetching stream likes:", error);
+      }
+
+      // Set total views from stream data
+      if (typeof data.totalViews === "number") {
+        setTotalViews(data.totalViews);
       }
 
       // Log stream status for debugging
@@ -425,6 +432,37 @@ export default function StreamPage() {
     }
   }, []);
 
+  // Track view when user watches the stream
+  const trackView = useCallback(async () => {
+    if (!authenticated || !user?.wallet?.address || hasTrackedView) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/streams/${params.id}/views`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userAddress: user.wallet.address,
+        }),
+      });
+
+      if (response.ok) {
+        setHasTrackedView(true);
+        // Refresh total views count
+        const viewsResponse = await fetch(`/api/streams/${params.id}/views`);
+        if (viewsResponse.ok) {
+          const viewsData = await viewsResponse.json();
+          if (typeof viewsData.totalViews === "number") {
+            setTotalViews(viewsData.totalViews);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error tracking view:", error);
+    }
+  }, [authenticated, user?.wallet?.address, params.id, hasTrackedView]);
+
   useEffect(() => {
     try {
       fetchStream();
@@ -449,6 +487,17 @@ export default function StreamPage() {
       clearInterval(interval);
     };
   }, [params.id, fetchStream, fetchChatMessages, subscribeToChat]);
+
+  // Track view when stream is loaded and user is authenticated
+  useEffect(() => {
+    if (stream && authenticated && user?.wallet?.address && !hasTrackedView) {
+      // Small delay to ensure stream is fully loaded
+      const timer = setTimeout(() => {
+        trackView();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [stream, authenticated, user?.wallet?.address, hasTrackedView, trackView]);
 
   // Fetch asset playback ID when stream ends
   useEffect(() => {
@@ -1073,8 +1122,8 @@ export default function StreamPage() {
                     </div>
                   </div>
                   <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
-                    <div className="flex flex-row gap-1.5 sm:gap-2">
-                      {/* Viewers counter - styled like Like button */}
+                    <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+                      {/* Live Viewers counter */}
                       <Button
                         variant="outline"
                         size="sm"
@@ -1092,6 +1141,9 @@ export default function StreamPage() {
                         <span className="text-xs sm:text-sm">
                           {effectiveViewerCount}
                         </span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">
+                          live
+                        </span>
                         {viewerCountError && (
                           <span
                             className="text-[10px] text-destructive ml-0.5 sm:ml-1"
@@ -1100,6 +1152,25 @@ export default function StreamPage() {
                             ⚠
                           </span>
                         )}
+                      </Button>
+                      {/* Total Views counter */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        className="flex items-center gap-1 sm:gap-2 cursor-default hover:bg-muted h-8 sm:h-9 px-2 sm:px-3"
+                        title={`Total views: ${totalViews ?? 0}`}
+                      >
+                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="text-xs sm:text-sm">
+                          {totalViews ?? 0}
+                        </span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">
+                          total
+                        </span>
                       </Button>
                       <Button
                         variant={isLiked ? "default" : "outline"}

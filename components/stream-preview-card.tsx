@@ -25,6 +25,7 @@ interface StreamPreviewCardProps {
     endedAt?: string | Date | null
     createdAt?: string | Date | null
     viewerCount?: number
+    totalViews?: number
     category?: {
       name: string
       slug: string
@@ -160,8 +161,16 @@ export function StreamPreviewCard({
             </div>
           )}
           {/* Viewers counter - left bottom corner */}
-          <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-medium">
-            <span>{stream.viewerCount ?? 0} {stream.viewerCount === 1 ? 'viewer' : 'viewers'}</span>
+          <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-2">
+            {stream.isLive && (
+              <span>{stream.viewerCount ?? 0} live</span>
+            )}
+            {typeof stream.totalViews === 'number' && (
+              <span>{stream.totalViews} {stream.totalViews === 1 ? 'view' : 'views'}</span>
+            )}
+            {!stream.isLive && typeof stream.totalViews !== 'number' && (
+              <span>{stream.viewerCount ?? 0} {stream.viewerCount === 1 ? 'viewer' : 'viewers'}</span>
+            )}
           </div>
         </div>
         <CardHeader className="p-3 pb-2">
