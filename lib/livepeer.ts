@@ -850,8 +850,11 @@ export async function getHistoricalViews(
  * Get total lifetime views for a playbackId from Livepeer
  * Uses the correct Livepeer API endpoint: /api/data/views/query/total/{playbackId}
  * 
+ * According to Livepeer API reference: https://docs.livepeer.org/api-reference/viewership/get-public-total-views
+ * Response format: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
+ * 
  * @param playbackId - The playback ID of the stream/asset
- * @returns Total lifetime views or null if not available
+ * @returns Total lifetime views (0 if no views yet) or null if endpoint unavailable/error
  */
 export async function getTotalViews(playbackId: string): Promise<number | null> {
   if (!LIVEPEER_API_KEY) {
@@ -865,21 +868,28 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
   try {
     // Use the exact endpoint format from Livepeer API reference
     // GET /data/views/query/total/{playbackId}
-    // No query parameters needed - playbackId is a path parameter
-    const url = `https://livepeer.studio/api/data/views/query/total/${playbackId}`
+    // Reference: https://docs.livepeer.org/api-reference/viewership/get-public-total-views
+    const url = `https://livepeer.studio/api/data/views/query/total/${encodeURIComponent(playbackId)}`
     
     console.log(`[Total Views] Calling Livepeer API: ${url}`)
+    
+    // Add timeout to prevent hanging requests (10 seconds max)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
     
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+        'Content-Type': 'application/json',
         'Cache-Control': 'no-cache, no-store, must-revalidate, proxy-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
-        'X-Requested-With': 'XMLHttpRequest', // Prevent some CDN caching
       },
       cache: 'no-store', // Prevent Next.js fetch caching
+      signal: controller.signal,
+    }).finally(() => {
+      clearTimeout(timeoutId)
     })
 
     if (!response.ok) {
@@ -891,68 +901,90 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
         errorText = 'Unable to read error response'
       }
       
+      // Handle specific error cases
+      if (response.status === 404) {
+        // 404 might mean playbackId doesn't exist or views aren't available yet
+        console.log(`[Total Views] 404 for playbackId: ${playbackId} - views may not be available yet`)
+        return null
+      }
+      
+      if (response.status === 401 || response.status === 403) {
+        console.error(`[Total Views] Authentication error ${response.status} for playbackId: ${playbackId}`)
+        return null
+      }
+      
+      if (response.status === 429) {
+        console.warn(`[Total Views] Rate limited (429) for playbackId: ${playbackId}`)
+        return null
+      }
+      
       console.error(`[Total Views] API error ${response.status} for playbackId: ${playbackId}`, {
         status: response.status,
         statusText: response.statusText,
-        error: errorText,
+        error: errorText.substring(0, 200), // Limit error text length
         url: url,
       })
       
-      // If endpoint doesn't exist (404) or not available, return null
-      if (response.status === 404 || response.status === 501) {
-        console.log(`[Total Views] Endpoint not available for playbackId: ${playbackId}`)
-        return null
-      }
-      // For other errors, return null but log details
       return null
     }
 
     const data = await response.json()
     
-    // Log the raw response for debugging
-    console.log(`[Total Views] Raw API response for playbackId ${playbackId}:`, JSON.stringify(data, null, 2))
-    
     // Handle response format from Livepeer API
     // According to API reference: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
-    // Reference: https://docs.livepeer.org/api-reference/viewership/get-public-total-views
     if (data && typeof data === "object") {
-      // The API reference shows viewCount is the field name
+      // Primary: Check for viewCount field (per API reference)
       if (typeof data.viewCount === "number") {
-        console.log(`[Total Views] ✅ Found viewCount: ${data.viewCount} for playbackId: ${playbackId}`)
-        return data.viewCount
+        const viewCount = data.viewCount
+        console.log(`[Total Views] ✅ Found viewCount: ${viewCount} for playbackId: ${playbackId}`)
+        // Return 0 if viewCount is 0 (valid value, not an error)
+        return viewCount >= 0 ? viewCount : 0
       }
       
-      // Check if viewCount exists but is null/undefined (might mean no views yet)
+      // Check if viewCount exists but is null/undefined (shouldn't happen per API, but handle gracefully)
       if (data.viewCount === null || data.viewCount === undefined) {
         console.log(`[Total Views] viewCount is null/undefined for playbackId: ${playbackId}, returning 0`)
         return 0
       }
       
-      // Fallback for other possible formats (shouldn't happen per API reference, but handle it)
+      // Fallback: Check for alternative field names (shouldn't happen per API reference, but handle it)
       if (typeof data.totalViews === "number") {
         console.log(`[Total Views] ⚠️ Using fallback totalViews: ${data.totalViews} for playbackId: ${playbackId}`)
-        return data.totalViews
+        return data.totalViews >= 0 ? data.totalViews : 0
       }
+      
       if (typeof data.total === "number") {
         console.log(`[Total Views] ⚠️ Using fallback total: ${data.total} for playbackId: ${playbackId}`)
-        return data.total
+        return data.total >= 0 ? data.total : 0
+      }
+      
+      if (typeof data.views === "number") {
+        console.log(`[Total Views] ⚠️ Using fallback views: ${data.views} for playbackId: ${playbackId}`)
+        return data.views >= 0 ? data.views : 0
       }
       
       // Log what fields are available for debugging
       console.warn(`[Total Views] ⚠️ Unexpected response format for playbackId ${playbackId}. Available fields:`, Object.keys(data))
-      console.warn(`[Total Views] Full response:`, data)
+      console.warn(`[Total Views] Response structure:`, JSON.stringify(data, null, 2).substring(0, 500))
+      return null
     } else if (typeof data === "number") {
       // Direct number response (unlikely but handle it)
       console.log(`[Total Views] ✅ Direct number response: ${data} for playbackId: ${playbackId}`)
-      return data
+      return data >= 0 ? data : 0
     }
     
     console.warn(`[Total Views] ⚠️ Could not extract view count from response for playbackId: ${playbackId}`)
     console.warn(`[Total Views] Response type: ${typeof data}, value:`, data)
     return null
-  } catch (error) {
-    // Endpoint might not exist or network error, return null gracefully
-    console.log(`[Total Views] Could not fetch from Livepeer: ${error}`)
+  } catch (error: any) {
+    // Handle timeout and network errors gracefully
+    if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+      console.warn(`[Total Views] Request timeout for playbackId: ${playbackId}`)
+      return null
+    }
+    
+    // Log other errors but don't throw
+    console.error(`[Total Views] Error fetching from Livepeer for playbackId ${playbackId}:`, error?.message || error)
     return null
   }
 }

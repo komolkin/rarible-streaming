@@ -39,10 +39,20 @@ export async function GET(
     // The Livepeer dashboard shows views for the asset (VOD), not the stream
     // Even for live streams, if there's a recording/asset, the dashboard shows asset views
     // This ensures we match what the Livepeer dashboard displays
+    // According to Livepeer docs: views are tracked per playbackId, and assets have their own playbackId
     if (stream.livepeerStreamId) {
       try {
         console.log(`[Views API] Fetching asset for stream ${stream.livepeerStreamId} (ended: ${!!stream.endedAt})`)
-        const asset = await getStreamAsset(stream.livepeerStreamId)
+        
+        // Add timeout to prevent hanging (8 seconds max)
+        const assetPromise = getStreamAsset(stream.livepeerStreamId)
+        const assetTimeout = new Promise<null>((resolve) => 
+          setTimeout(() => {
+            console.warn(`[Views API] Asset fetch timeout after 8 seconds`)
+            resolve(null)
+          }, 8000)
+        )
+        const asset = await Promise.race([assetPromise, assetTimeout])
         
         if (asset) {
           assetInfo = {
@@ -55,12 +65,13 @@ export async function GET(
           
           if (asset.playbackId) {
             // Use asset playbackId for views (this matches what Livepeer dashboard shows)
+            // Even if asset is not "ready", the playbackId might still have views data
             playbackId = asset.playbackId
             console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for views (matches dashboard)`)
             
-            // Log if asset is not ready (views might still be available)
+            // Log asset status for debugging
             if (asset.status !== "ready") {
-              console.log(`[Views API] ⚠️ Asset status is "${asset.status}" but using playbackId for views`)
+              console.log(`[Views API] ⚠️ Asset status is "${asset.status}" but using playbackId for views (views may still be available)`)
             }
           } else {
             console.warn(`[Views API] ⚠️ Asset found but has no playbackId, using stream playbackId`)
@@ -69,8 +80,13 @@ export async function GET(
           console.log(`[Views API] No asset found for stream ${stream.livepeerStreamId}, using stream playbackId`)
         }
       } catch (assetError: any) {
-        console.error(`[Views API] Error fetching asset:`, assetError?.message || assetError)
-        console.log(`[Views API] Falling back to stream playbackId: ${stream.playbackId}`)
+        // Handle timeout and other errors gracefully
+        if (assetError?.name === 'AbortError' || assetError?.message?.includes('timeout') || assetError?.message?.includes('aborted')) {
+          console.warn(`[Views API] Asset fetch timed out, using stream playbackId: ${stream.playbackId}`)
+        } else {
+          console.error(`[Views API] Error fetching asset:`, assetError?.message || assetError)
+          console.log(`[Views API] Falling back to stream playbackId: ${stream.playbackId}`)
+        }
       }
     }
     
@@ -87,19 +103,27 @@ export async function GET(
     console.log(`[Views API] Fetching views from Livepeer API for playbackId: ${playbackId}`)
     const totalViews = await getTotalViews(playbackId)
     
+    // totalViews can be:
+    // - number (including 0): valid view count from Livepeer
+    // - null: endpoint unavailable, error, or views not available yet
+    // We want to return null only if getTotalViews returned null (not available)
+    // If it returned 0, that's a valid number and should be returned as 0
+    const responseTotalViews = typeof totalViews === "number" ? totalViews : null
+    
     console.log(`[Views API] Result:`, {
       streamId: params.id,
       playbackIdUsed: playbackId,
       isAssetPlaybackId: assetInfo?.playbackId === playbackId,
       assetId: assetInfo?.id,
       assetStatus: assetInfo?.status,
-      totalViews: totalViews,
+      totalViews: responseTotalViews,
+      rawTotalViews: totalViews,
     })
 
     return NextResponse.json(
       {
         streamId: params.id,
-        totalViews: totalViews ?? null,
+        totalViews: responseTotalViews, // null if unavailable, number (including 0) if available
         playbackId: playbackId, // Include which playbackId was used
         isAssetPlaybackId: assetInfo?.playbackId === playbackId, // Indicate if asset playbackId was used
       },
@@ -108,6 +132,7 @@ export async function GET(
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
+          'X-Content-Type-Options': 'nosniff',
         },
       }
     )

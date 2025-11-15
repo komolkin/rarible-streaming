@@ -221,15 +221,35 @@ export default function StreamPage() {
       }
 
       // Set total views from stream data
+      // Always use the value from API to ensure we have the latest data
       if (typeof data.totalViews === "number") {
-        setTotalViews(data.totalViews);
-        console.log(`[Views] Updated total views: ${data.totalViews}`, {
-          playbackIdUsed: data.playbackId,
-          isAssetPlaybackId: data.isAssetPlaybackId,
+        setTotalViews((prevViews) => {
+          const newViews = data.totalViews;
+          if (prevViews !== newViews) {
+            console.log(
+              `[Views] Updated total views: ${
+                prevViews ?? "null"
+              } -> ${newViews}`,
+              {
+                playbackIdUsed: data.playbackId,
+                isAssetPlaybackId: data.isAssetPlaybackId,
+                source: "initial fetch",
+              }
+            );
+          }
+          return newViews;
         });
       } else if (data.totalViews === null) {
-        // If null, keep current value or set to 0
-        console.log(`[Views] No views data available yet`);
+        // If null, views aren't available yet - keep current value or leave as null
+        console.log(`[Views] No views data available yet (null response)`);
+        // Don't update state - keep current value (might be from previous page load or polling)
+      } else {
+        // Unexpected format - log but don't update
+        console.warn(
+          `[Views] Unexpected totalViews format:`,
+          typeof data.totalViews,
+          data.totalViews
+        );
       }
 
       // Store asset playbackId if available (for direct Livepeer API calls)
@@ -465,20 +485,46 @@ export default function StreamPage() {
       })
         .then((res) => {
           if (!res.ok) {
+            // Don't throw for 404/500 - just log and keep current value
+            if (res.status === 404) {
+              console.log(
+                `[Views Poll] Stream not found (404) - keeping current view count`
+              );
+              return null;
+            }
             throw new Error(`HTTP ${res.status}`);
           }
           return res.json();
         })
         .then((data) => {
+          if (!data) {
+            // Response was null (404 case)
+            return;
+          }
+
           // Always update views if we get a number (including 0)
           // This ensures we show the latest count even if it's 0
           if (typeof data.totalViews === "number") {
             setTotalViews((prevViews) => {
-              // Always update to ensure we have the latest value
-              // Even if it's the same, we want to ensure freshness
-              if (prevViews !== data.totalViews) {
+              const newViews = data.totalViews;
+
+              // Always update to ensure we have the latest value from API
+              // Log when value changes for debugging
+              if (prevViews !== newViews) {
                 console.log(
-                  `[Views Poll] Updated views: ${prevViews} -> ${data.totalViews}`,
+                  `[Views Poll] Updated views: ${
+                    prevViews ?? "null"
+                  } -> ${newViews}`,
+                  {
+                    playbackIdUsed: data.playbackId,
+                    isAssetPlaybackId: data.isAssetPlaybackId,
+                    timestamp: new Date().toISOString(),
+                  }
+                );
+              } else {
+                // Log periodic check even if value hasn't changed (helps verify polling is working)
+                console.log(
+                  `[Views Poll] Views checked: ${newViews} (unchanged)`,
                   {
                     playbackIdUsed: data.playbackId,
                     isAssetPlaybackId: data.isAssetPlaybackId,
@@ -486,16 +532,30 @@ export default function StreamPage() {
                   }
                 );
               }
-              return data.totalViews;
+
+              // Always return the new value to ensure state is fresh
+              return newViews;
             });
           } else if (data.totalViews === null) {
-            // If API returns null, it means views aren't available yet
-            // Don't update, keep current value
-            console.log(`[Views Poll] Views not available yet (null response)`);
+            // If API returns null, it means views aren't available yet or endpoint unavailable
+            // Don't update, keep current value (might be from previous successful fetch)
+            console.log(
+              `[Views Poll] Views not available yet (null response) - keeping current value: ${
+                totalViews ?? "null"
+              }`
+            );
+          } else {
+            // Unexpected response format
+            console.warn(`[Views Poll] Unexpected response format:`, data);
           }
         })
         .catch((error) => {
-          console.error("Error fetching views:", error);
+          // Log error but don't update state (keep current value)
+          console.error(
+            `[Views Poll] Error fetching views:`,
+            error?.message || error
+          );
+          // Don't clear totalViews on error - keep showing last known value
         });
     }, 30000); // Check every 30 seconds for faster updates
 
