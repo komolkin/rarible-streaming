@@ -1122,7 +1122,7 @@ export default function StreamPage() {
                     </div>
                   </div>
                   <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
-                    <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+                    <div className="flex flex-row flex-wrap gap-1.5 sm:gap-2">
                       {/* Live Viewers counter */}
                       <Button
                         variant="outline"
