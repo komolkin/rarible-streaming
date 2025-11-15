@@ -1172,9 +1172,32 @@ export async function getAsset(assetId: string) {
 
     const asset = await response.json()
     
-    // Log asset status for debugging
+    // Log full asset response structure for debugging
     const statusPhase = typeof asset.status === 'object' ? asset.status?.phase : asset.status
-    console.log(`[getAsset] Fetched asset ${assetId}: status phase = ${statusPhase}, playbackId = ${asset.playbackId || 'none'}`)
+    console.log(`[getAsset] Fetched asset ${assetId}:`, {
+      id: asset.id,
+      playbackId: asset.playbackId,
+      playbackUrl: asset.playbackUrl,
+      status: asset.status,
+      statusPhase: statusPhase,
+      hasPlaybackId: !!asset.playbackId,
+      allKeys: Object.keys(asset),
+      // Log first few characters of response to see structure
+      responseSample: JSON.stringify(asset).substring(0, 500)
+    })
+    
+    // According to Livepeer docs, playbackId should be at top level
+    // But let's check multiple possible locations just in case
+    const playbackId = asset.playbackId || asset.playback?.id || asset.data?.playbackId
+    if (!asset.playbackId && playbackId) {
+      console.warn(`[getAsset] ⚠️ playbackId found in unexpected location: ${playbackId}`)
+      // Normalize to top level
+      asset.playbackId = playbackId
+    }
+    
+    if (!asset.playbackId) {
+      console.error(`[getAsset] ❌ No playbackId found in asset response! Asset keys:`, Object.keys(asset))
+    }
     
     return asset
   } catch (error) {

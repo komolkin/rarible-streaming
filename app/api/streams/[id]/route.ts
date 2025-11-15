@@ -328,49 +328,36 @@ export async function GET(
               // Store assetId and playbackId even if not ready (so frontend knows asset exists)
               if (asset.id) {
                 // Always store assetId when we fetch it (even if not ready)
-                if (asset.id !== stream.assetId) {
-                  try {
-                    await db
-                      .update(streams)
-                      .set({
-                        assetId: asset.id,
-                        updatedAt: new Date(),
-                      })
-                      .where(eq(streams.id, params.id))
-                    console.log(`[GET Stream ${params.id}] ✅ Stored assetId: ${asset.id}`)
-                  } catch (dbError) {
-                    console.warn(`[GET Stream ${params.id}] Failed to store assetId:`, dbError)
-                  }
+                const updateData: any = {
+                  assetId: asset.id,
+                  updatedAt: new Date(),
+                }
+                
+                // Store playbackId even if not ready (so frontend knows it exists)
+                if (asset.playbackId) {
+                  updateData.assetPlaybackId = asset.playbackId
+                  assetPlaybackId = asset.playbackId // Set it so we can return it
+                }
+                
+                try {
+                  await db
+                    .update(streams)
+                    .set(updateData)
+                    .where(eq(streams.id, params.id))
+                  console.log(`[GET Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId || 'none'}`)
+                } catch (dbError) {
+                  console.warn(`[GET Stream ${params.id}] Failed to store asset metadata:`, dbError)
                 }
               }
               
-              // CRITICAL: Only use asset playbackId and set vodUrl if asset is ready
-              // Unready assets will cause format errors in the player
+              // CRITICAL: Only set vodUrl if asset is ready (unready assets cause format errors)
+              // But we can still return assetPlaybackId so frontend knows it exists
               if (!assetReady) {
                 console.log(`[GET Stream ${params.id}] Asset ${asset.id} is processing. Status phase: ${assetStatus}. Asset exists but not ready yet.`)
-                // Store assetId so we can check again later, but don't set vodUrl yet
-                // The frontend will see assetPlaybackId is null and know to wait
+                console.log(`[GET Stream ${params.id}] Asset playbackId: ${asset.playbackId || 'not available yet'}`)
+                // Don't set vodUrl yet, but assetPlaybackId is already set above if it exists
               } else if (asset.playbackId) {
-                // Asset is ready - store the asset playbackId and ID for Player component
-                assetPlaybackId = asset.playbackId
-                // Store asset metadata in database for future use (especially for views)
-                // asset_playback_id is different from livepeer_playback_id and is needed for VOD views
-                if (asset.id && asset.playbackId) {
-                  try {
-                    await db
-                      .update(streams)
-                      .set({
-                        assetId: asset.id,
-                        assetPlaybackId: asset.playbackId,
-                        updatedAt: new Date(),
-                      })
-                      .where(eq(streams.id, params.id))
-                    console.log(`[GET Stream ${params.id}] ✅ Stored asset metadata: assetId=${asset.id}, assetPlaybackId=${asset.playbackId}`)
-                  } catch (dbError) {
-                    console.warn(`[GET Stream ${params.id}] Failed to store asset metadata:`, dbError)
-                  }
-                }
-                // Use the asset's playbackId to construct HLS URL for VOD
+                // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
                 // This is the correct playbackId for VOD assets
                 const newVodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
                 if (!vodUrl || vodUrl !== newVodUrl) {
@@ -469,18 +456,26 @@ export async function GET(
           }
         }
         
-        // If we found assetPlaybackId, return it immediately (even if vodUrl didn't change)
-        // This ensures frontend gets the correct playbackId
+        // If we found assetPlaybackId, return it immediately (even if vodUrl didn't change or asset is processing)
+        // This ensures frontend gets the correct playbackId and knows asset exists
         if (assetPlaybackId) {
-          console.log(`[GET Stream ${params.id}] ✅ Returning with asset playbackId: ${assetPlaybackId}`)
+          console.log(`[GET Stream ${params.id}] ✅ Returning with asset playbackId: ${assetPlaybackId} (vodUrl: ${vodUrl || 'not ready yet'})`)
           // For ended streams, use asset playbackId for views (matches Livepeer dashboard)
-          const totalViews = await getTotalViews(params.id, assetPlaybackId)
-          console.log(`[GET Stream ${params.id}] Using asset playbackId ${assetPlaybackId} for views: ${totalViews}`)
+          // Only fetch views if asset is ready (unready assets may not have views yet)
+          let totalViews = null
+          if (vodUrl) {
+            // Asset is ready, fetch views
+            totalViews = await getTotalViews(params.id, assetPlaybackId)
+            console.log(`[GET Stream ${params.id}] Using asset playbackId ${assetPlaybackId} for views: ${totalViews}`)
+          } else {
+            console.log(`[GET Stream ${params.id}] Asset playbackId available but asset not ready yet - skipping views fetch`)
+          }
           return NextResponse.json({
             ...stream,
             category: category,
             assetPlaybackId: assetPlaybackId,
             totalViews: totalViews,
+            vodUrl: vodUrl || stream.vodUrl, // Include vodUrl if ready, otherwise keep existing
           })
         }
         
