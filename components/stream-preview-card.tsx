@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { StreamCoverPlaceholder } from "@/components/stream-cover-placeholder"
+import { formatRelativeTime } from "@/lib/utils"
 
 interface StreamPreviewCardProps {
   stream: {
@@ -198,9 +199,9 @@ export function StreamPreviewCard({
               {showDate && (stream.createdAt || stream.endedAt) && (
                 <span className="text-xs text-muted-foreground">
                   {stream.endedAt
-                    ? new Date(stream.endedAt).toLocaleDateString()
+                    ? formatRelativeTime(stream.endedAt)
                     : stream.createdAt
-                    ? new Date(stream.createdAt).toLocaleDateString()
+                    ? formatRelativeTime(stream.createdAt)
                     : null}
                 </span>
               )}

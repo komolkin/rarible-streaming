@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation"
 import { Settings } from "lucide-react"
 import { StreamPreviewCard } from "@/components/stream-preview-card"
 import { StreamsGridSkeleton } from "@/components/stream-card-skeleton"
+import { formatRelativeTime } from "@/lib/utils"
 
 export default function ProfilePage() {
   const params = useParams()
@@ -411,7 +412,7 @@ export default function ProfilePage() {
                             </div>
                             {review.createdAt && (
                               <span className="text-xs text-muted-foreground ml-auto">
-                                {new Date(review.createdAt).toLocaleDateString()}
+                                {formatRelativeTime(review.createdAt)}
                               </span>
                             )}
                           </div>
