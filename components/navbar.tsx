@@ -20,6 +20,7 @@ export function Navbar() {
   const router = useRouter()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   const handleMouseEnter = useCallback(() => {
@@ -38,6 +39,60 @@ export function Navbar() {
       closeTimeoutRef.current = null
     }, 150) // 150ms delay
   }, [])
+
+  // Fetch user profile to get avatar URL
+  useEffect(() => {
+    if (authenticated && user?.wallet?.address) {
+      const fetchUserProfile = async () => {
+        try {
+          const response = await fetch(`/api/profiles?wallet=${user.wallet.address}`)
+          if (response.ok) {
+            const profile = await response.json()
+            setUserAvatarUrl(profile.avatarUrl || null)
+          }
+        } catch (error) {
+          console.error("Error fetching user profile for navbar:", error)
+        }
+      }
+      fetchUserProfile()
+    } else {
+      setUserAvatarUrl(null)
+    }
+  }, [authenticated, user?.wallet?.address])
+
+  // Refresh avatar when page becomes visible or window regains focus (e.g., after editing profile)
+  useEffect(() => {
+    const refreshAvatar = () => {
+      if (authenticated && user?.wallet?.address) {
+        fetch(`/api/profiles?wallet=${user.wallet.address}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(profile => {
+            if (profile) {
+              setUserAvatarUrl(profile.avatarUrl || null)
+            }
+          })
+          .catch(err => console.error("Error refreshing avatar:", err))
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAvatar()
+      }
+    }
+
+    const handleFocus = () => {
+      refreshAvatar()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [authenticated, user?.wallet?.address])
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -140,7 +195,13 @@ export function Navbar() {
                             <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 lg:h-10 lg:w-10">
                               {user?.wallet?.address && (
                                 <>
-                                  {/* Avatar image would come from user profile if available */}
+                                  {userAvatarUrl && (
+                                    <AvatarImage 
+                                      src={userAvatarUrl}
+                                      alt="Profile"
+                                      key={userAvatarUrl}
+                                    />
+                                  )}
                                   <AvatarFallback seed={(user.wallet.address || "").toLowerCase()} />
                                 </>
                               )}
