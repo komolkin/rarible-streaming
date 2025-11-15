@@ -897,14 +897,44 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
       return null
     }
     
+    // Log the full result for debugging
+    console.log(`[Total Views] Raw SDK response for playbackId ${playbackId}:`, JSON.stringify(result, null, 2))
+    
     // Handle response format from Livepeer SDK
     // SDK may return the data directly or wrapped in a response object
     // Expected format: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
     
     // Check if result is wrapped (some SDKs wrap responses)
-    const data = (result as any)?.data || (result as any)?.result || result
+    // Try multiple possible structures
+    let data: any = null
+    
+    if (result && typeof result === "object") {
+      // Check if it's already the data object
+      if ('viewCount' in result && typeof (result as any).viewCount === 'number') {
+        data = result
+      } 
+      // Check if wrapped in 'data' property
+      else if ('data' in result && result.data && typeof result.data === 'object') {
+        data = result.data
+      }
+      // Check if wrapped in 'result' property
+      else if ('result' in result && result.result && typeof result.result === 'object') {
+        data = result.result
+      }
+      // Check if wrapped in 'body' property
+      else if ('body' in result && result.body && typeof result.body === 'object') {
+        data = result.body
+      }
+      // Use result directly
+      else {
+        data = result
+      }
+    }
     
     if (data && typeof data === "object") {
+      // Log all available fields for debugging
+      console.log(`[Total Views] Extracted data object for playbackId ${playbackId}. Available fields:`, Object.keys(data))
+      
       // Check for viewCount field (primary field per SDK)
       if (typeof data.viewCount === "number") {
         const viewCount = data.viewCount
@@ -921,12 +951,12 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
       
       // Log what fields are available for debugging
       console.warn(`[Total Views] ⚠️ Unexpected response format for playbackId ${playbackId}. Available fields:`, Object.keys(data))
-      console.warn(`[Total Views] Response structure:`, JSON.stringify(data, null, 2).substring(0, 500))
+      console.warn(`[Total Views] Full response structure:`, JSON.stringify(data, null, 2))
       return null
     }
     
     console.warn(`[Total Views] ⚠️ Unexpected response type for playbackId: ${playbackId}`)
-    console.warn(`[Total Views] Response type: ${typeof data}, value:`, data)
+    console.warn(`[Total Views] Response type: ${typeof result}, value:`, result)
     return null
   } catch (error: any) {
     // Handle SDK errors gracefully
