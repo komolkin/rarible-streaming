@@ -779,37 +779,6 @@ export default function StreamPage() {
                     stream.assetId ||
                     stream.livepeerStreamId)) ? (
                   <>
-                    <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs z-20 max-w-[calc(100%-4rem)] sm:max-w-none">
-                      {stream.isLive ? (
-                        <>
-                          <span className="hidden sm:inline">
-                            Playback ID: {stream.livepeerPlaybackId}
-                          </span>
-                          <span className="text-green-400">● LIVE</span>
-                        </>
-                      ) : stream.endedAt ? (
-                        <>
-                          <span className="hidden sm:inline">Recording </span>
-                          {assetPlaybackId ? (
-                            <span className="hidden sm:inline">
-                              • Asset Playback ID: {assetPlaybackId}
-                            </span>
-                          ) : stream.livepeerPlaybackId ? (
-                            <span className="hidden sm:inline">
-                              • Playback ID: {stream.livepeerPlaybackId}
-                            </span>
-                          ) : stream.assetId ? (
-                            <span className="hidden sm:inline">
-                              • Asset ID: {stream.assetId}
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="hidden sm:inline">
-                          Playback ID: {stream.livepeerPlaybackId}
-                        </span>
-                      )}
-                    </div>
                     {stream.endedAt ? (
                       assetPlaybackUrl || assetPlaybackId ? (
                         <Player
