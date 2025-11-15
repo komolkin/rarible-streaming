@@ -165,20 +165,19 @@ export async function GET(
         })
       }
     } else if (!playbackId && !isEnded && stream.livepeerStreamId) {
-      // For live streams: ALWAYS use asset playbackId from Assets API (not sessions or stream playbackId)
-      // The Livepeer dashboard shows views for assets, not stream playbackId
-      // CRITICAL: Views must come from Assets, not sessions
+      // For live streams: Prefer asset playbackId from Assets API, but fall back to stream playbackId
+      // According to Livepeer docs: playbackId can be from "Livepeer assets or streams"
+      // Reference: https://docs.livepeer.org/api-reference/viewership/get-public-total-views
       try {
-        console.log(`[Views API] Stream is live - fetching asset playbackId from Assets API (stream: ${stream.livepeerStreamId})`)
-        console.log(`[Views API] CRITICAL: Views must come from Assets API, not sessions or stream playbackId`)
+        console.log(`[Views API] Stream is live - checking for asset playbackId first (stream: ${stream.livepeerStreamId})`)
         
-        // Longer timeout for live streams to ensure we get asset if it exists (8 seconds)
+        // Try to get asset first (preferred for accuracy)
         const assetPromise = getStreamAsset(stream.livepeerStreamId)
         const assetTimeout = new Promise<null>((resolve) => 
           setTimeout(() => {
-            console.warn(`[Views API] Asset fetch timeout for live stream - views not available without asset`)
+            console.log(`[Views API] Asset fetch timeout for live stream, will use stream playbackId`)
             resolve(null)
-          }, 8000)
+          }, 5000) // Shorter timeout for live streams
         )
         const asset = await Promise.race([assetPromise, assetTimeout])
         
@@ -209,50 +208,22 @@ export async function GET(
             }
           }
         } else {
-          // For live streams without asset, views are not available yet
-          // CRITICAL: Do NOT fall back to stream playbackId - views must come from Assets
-          console.warn(`[Views API] ⚠️ No asset found for live stream - views not available yet (must come from Assets API)`)
-          return NextResponse.json({
-            streamId: params.id,
-            totalViews: null,
-            message: "Asset playbackId not available yet. Views will be available once the asset is created from the stream.",
-            playbackId: null,
-            isAssetPlaybackId: false,
-          }, {
-            headers: {
-              'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0',
-            },
-          })
+          // Fall back to stream playbackId for live streams (per Livepeer docs)
+          playbackId = stream.playbackId
+          console.log(`[Views API] No asset found for live stream, using stream playbackId ${playbackId} (per Livepeer docs: playbackId can be from assets or streams)`)
         }
       } catch (assetError: any) {
-        // For live streams, do NOT fall back to stream playbackId - views must come from Assets
-        console.error(`[Views API] Error fetching asset for live stream:`, assetError?.message || assetError)
-        return NextResponse.json({
-          streamId: params.id,
-          totalViews: null,
-          message: "Could not fetch asset from Assets API. Views are only available from Assets, not sessions or stream playbackId.",
-          playbackId: null,
-          isAssetPlaybackId: false,
-        }, {
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-          },
-        })
+        // Fall back to stream playbackId on error (per Livepeer docs)
+        playbackId = stream.playbackId
+        console.log(`[Views API] Error fetching asset for live stream, using stream playbackId: ${playbackId}`)
+        console.log(`[Views API] Error details:`, assetError?.message || assetError)
       }
     } else if (!playbackId) {
-      // No livepeerStreamId - cannot get views without asset
-      console.warn(`[Views API] No livepeerStreamId available - cannot fetch asset for views`)
-      return NextResponse.json({
-        streamId: params.id,
-        totalViews: null,
-        message: "Stream has no livepeerStreamId. Views require an asset from Assets API.",
-        playbackId: null,
-        isAssetPlaybackId: false,
-      })
+      // No livepeerStreamId - use stream playbackId if available
+      playbackId = stream.playbackId
+      if (playbackId) {
+        console.log(`[Views API] Using stream playbackId ${playbackId} (no livepeerStreamId available)`)
+      }
     }
     
     if (!playbackId) {

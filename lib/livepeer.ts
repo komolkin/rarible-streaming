@@ -895,42 +895,48 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
 
     const result = await response.json().catch(() => null)
 
-    const extractViewCount = (payload: any): number | null => {
-      if (!payload || typeof payload !== "object") {
-        return null
+    if (!result) {
+      console.warn(`[Total Views] No response body for playbackId ${playbackId}`)
+      return null
+    }
+
+    // According to Livepeer docs: https://docs.livepeer.org/api-reference/viewership/get-public-total-views
+    // Response format: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
+    // The response is a single object with viewCount at the top level
+    
+    // Handle array response (unexpected but possible)
+    if (Array.isArray(result)) {
+      console.log(`[Total Views] Response is array (unexpected), checking first entry`)
+      if (result.length > 0 && result[0] && typeof result[0].viewCount === "number") {
+        return result[0].viewCount
+      }
+      return null
+    }
+
+    // Handle single object response (expected format per docs)
+    if (result && typeof result === "object") {
+      // Direct viewCount access (per docs format)
+      if (typeof result.viewCount === "number") {
+        console.log(`[Total Views] ✅ Found viewCount: ${result.viewCount} for playbackId ${playbackId}`)
+        return result.viewCount
       }
 
-      if (typeof payload.viewCount === "number") {
-        return payload.viewCount
-      }
-
-      const nestedCandidates = [payload.data, payload.result, payload.body]
+      // Check nested structures (fallback for different response formats)
+      const nestedCandidates = [result.data, result.result, result.body]
       for (const candidate of nestedCandidates) {
         if (candidate && typeof candidate === "object" && typeof candidate.viewCount === "number") {
+          console.log(`[Total Views] ✅ Found viewCount in nested structure: ${candidate.viewCount}`)
           return candidate.viewCount
         }
       }
-
-      return null
     }
 
-    if (Array.isArray(result)) {
-      for (const entry of result) {
-        const count = extractViewCount(entry)
-        if (typeof count === "number") {
-          return count
-        }
-      }
-      return null
-    }
-
-    const viewCount = extractViewCount(result)
-
-    if (typeof viewCount === "number") {
-      return viewCount
-    }
-
-    console.warn(`[Total Views] viewCount not found in response for playbackId ${playbackId}`, result)
+    console.warn(`[Total Views] viewCount not found in response for playbackId ${playbackId}`, {
+      responseType: typeof result,
+      isArray: Array.isArray(result),
+      keys: result && typeof result === "object" ? Object.keys(result) : null,
+      fullResponse: result
+    })
     return null
   } catch (error: any) {
     if (error?.name === "AbortError") {
@@ -1374,4 +1380,5 @@ export async function getStreamAsset(streamId: string) {
     return null
   }
 }
+
 
