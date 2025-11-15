@@ -47,7 +47,6 @@ export const streams = pgTable("streams", {
   livepeerPlaybackId: text("livepeer_playback_id"),
   livepeerStreamKey: text("livepeer_stream_key"),
   isLive: boolean("is_live").default(false).notNull(),
-  viewerCount: integer("viewer_count").default(0).notNull(),
   likeCount: integer("like_count").default(0).notNull(),
   scheduledAt: timestamp("scheduled_at"),
   startedAt: timestamp("started_at"),

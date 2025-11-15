@@ -332,12 +332,12 @@ export default function StreamPage() {
     };
   }, [params.id]);
 
-  // Subscribe to real-time viewer count updates via WebSocket
-  const subscribeToViewerCount = useCallback(() => {
+  // Subscribe to real-time stream status updates via WebSocket (isLive, endedAt)
+  const subscribeToStreamStatus = useCallback(() => {
     if (!params.id) return () => {};
 
     const channel = supabase
-      .channel(`stream-viewers:${params.id}`, {
+      .channel(`stream-status:${params.id}`, {
         config: {
           broadcast: { self: true },
         },
@@ -351,29 +351,11 @@ export default function StreamPage() {
           filter: `id=eq.${params.id}`,
         },
         (payload) => {
-          console.log("Stream update received:", payload);
+          console.log("Stream status update received:", payload);
           if (payload.new) {
-            // Update viewer count in real-time
-            const newViewerCount = payload.new.viewer_count;
             setStream((prev: any) => {
               if (!prev) return prev;
-              // Only update if viewer count actually changed
-              if (
-                typeof newViewerCount === "number" &&
-                newViewerCount !== prev.viewerCount
-              ) {
-                console.log(
-                  `[Real-time] Viewer count updated: ${prev.viewerCount} -> ${newViewerCount}`
-                );
-                return {
-                  ...prev,
-                  viewerCount: newViewerCount,
-                  // Also update other fields that might have changed
-                  isLive: payload.new.is_live ?? prev.isLive,
-                  endedAt: payload.new.ended_at ?? prev.endedAt,
-                };
-              }
-              // Still update other fields even if viewer count didn't change
+              // Update stream status fields
               if (
                 payload.new.is_live !== undefined ||
                 payload.new.ended_at !== undefined
@@ -390,19 +372,44 @@ export default function StreamPage() {
         }
       )
       .subscribe((status) => {
-        console.log("Viewer count subscription status:", status);
+        console.log("Stream status subscription status:", status);
         if (status === "SUBSCRIBED") {
-          console.log("Successfully subscribed to viewer count updates");
+          console.log("Successfully subscribed to stream status updates");
         } else if (status === "CHANNEL_ERROR") {
-          console.error("Viewer count subscription error");
+          console.error("Stream status subscription error");
         }
       });
 
     return () => {
-      console.log("Unsubscribing from viewer count channel");
+      console.log("Unsubscribing from stream status channel");
       supabase.removeChannel(channel);
     };
   }, [params.id]);
+
+  // Fetch viewer count from Livepeer API (for live streams)
+  const fetchViewerCount = useCallback(async () => {
+    if (!stream?.livepeerPlaybackId || stream?.endedAt) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/streams/${params.id}/viewers`);
+      if (response.ok) {
+        const data = await response.json();
+        if (typeof data.viewerCount === "number") {
+          setStream((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              viewerCount: data.viewerCount,
+            };
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching viewer count:", error);
+    }
+  }, [params.id, stream?.livepeerPlaybackId, stream?.endedAt]);
 
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
@@ -521,7 +528,10 @@ export default function StreamPage() {
 
     // Set up real-time subscriptions
     const chatCleanup = subscribeToChat();
-    const viewerCountCleanup = subscribeToViewerCount();
+    const streamStatusCleanup = subscribeToStreamStatus();
+
+    // Fetch viewer count for live streams
+    fetchViewerCount();
 
     // Poll for stream status updates every 30 seconds (reduced frequency since we have WebSocket)
     // This serves as a fallback and updates other stream metadata including views
@@ -538,19 +548,33 @@ export default function StreamPage() {
       fetchViews();
     }, 15000); // Check every 15 seconds for faster updates
 
+    // Poll for viewer count every 10 seconds for live streams
+    const viewerCountInterval =
+      stream?.livepeerPlaybackId && !stream?.endedAt
+        ? setInterval(() => {
+            fetchViewerCount();
+          }, 10000)
+        : null;
+
     return () => {
       chatCleanup();
-      viewerCountCleanup();
+      streamStatusCleanup();
       clearInterval(interval);
       clearInterval(viewsInterval);
+      if (viewerCountInterval) {
+        clearInterval(viewerCountInterval);
+      }
     };
   }, [
     params.id,
     fetchStream,
     fetchChatMessages,
     fetchViews,
+    fetchViewerCount,
     subscribeToChat,
-    subscribeToViewerCount,
+    subscribeToStreamStatus,
+    stream?.livepeerPlaybackId,
+    stream?.endedAt,
   ]);
 
   // Fetch asset playback ID when stream ends and refresh views

@@ -69,7 +69,6 @@ async function createSchema() {
         livepeer_playback_id TEXT,
         livepeer_stream_key TEXT,
         is_live BOOLEAN DEFAULT FALSE NOT NULL,
-        viewer_count INTEGER DEFAULT 0 NOT NULL,
         scheduled_at TIMESTAMP,
         started_at TIMESTAMP,
         ended_at TIMESTAMP,

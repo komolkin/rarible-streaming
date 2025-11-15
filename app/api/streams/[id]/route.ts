@@ -395,13 +395,13 @@ export async function GET(
     if (stream.livepeerStreamId && !isManuallyEnded) {
       try {
         const statusPromise = getStreamStatus(stream.livepeerStreamId)
-        const statusTimeout = new Promise<{ isActive: boolean; stream: null; viewerCount: undefined }>((resolve) => 
+        const statusTimeout = new Promise<{ isActive: boolean; stream: null }>((resolve) => 
           setTimeout(() => {
             console.warn(`[Stream ${params.id}] getStreamStatus timeout after 10 seconds`)
-            resolve({ isActive: false, stream: null, viewerCount: undefined })
+            resolve({ isActive: false, stream: null })
           }, 10000)
         )
-        const { isActive, stream: livepeerStreamData, viewerCount: livepeerViewerCount } = await Promise.race([statusPromise, statusTimeout])
+        const { isActive, stream: livepeerStreamData } = await Promise.race([statusPromise, statusTimeout])
         
         // If timeout occurred, skip status check
         if (!livepeerStreamData) {
@@ -471,9 +471,6 @@ export async function GET(
           console.log(`[Stream ${params.id}] Preserving user-uploaded cover image: ${stream.previewImageUrl}`)
         }
         
-        // Always update viewer count from Livepeer (for real-time accuracy)
-        const needsViewerCountUpdate = livepeerViewerCount !== undefined && livepeerViewerCount !== stream.viewerCount
-        
         // Debug logging
         console.log(`[Stream ${params.id}] Livepeer status check:`, {
           streamId: stream.livepeerStreamId,
@@ -481,11 +478,8 @@ export async function GET(
           currentIsLive: stream.isLive,
           currentPlaybackId: stream.livepeerPlaybackId,
           livepeerPlaybackId: livepeerStreamData?.playbackId,
-          currentViewerCount: stream.viewerCount,
-          livepeerViewerCount,
           needsPlaybackIdUpdate,
           needsPreviewImage,
-          needsViewerCountUpdate,
           livepeerData: livepeerStreamData ? {
             id: livepeerStreamData.id,
             isActive: livepeerStreamData.isActive,
@@ -500,15 +494,14 @@ export async function GET(
         // Detect if stream has ended naturally (was live, now inactive, and not already marked as ended)
         const streamEndedNaturally = stream.isLive && !isActiveBool && !stream.endedAt
         
-        // Update stream if status changed or playbackId/streamKey/previewImage/viewerCount needs update
-        if (isActiveBool !== stream.isLive || needsPlaybackIdUpdate || needsStreamKeyUpdate || needsPreviewImage || needsViewerCountUpdate || streamEndedNaturally) {
+        // Update stream if status changed or playbackId/streamKey/previewImage needs update
+        if (isActiveBool !== stream.isLive || needsPlaybackIdUpdate || needsStreamKeyUpdate || needsPreviewImage || streamEndedNaturally) {
           console.log(`[Stream ${params.id}] Updating stream:`, {
             isLive: `${stream.isLive} -> ${isActiveBool}`,
             endedNaturally: streamEndedNaturally,
             playbackId: needsPlaybackIdUpdate ? `missing -> ${livepeerStreamData?.playbackId}` : 'ok',
             streamKey: needsStreamKeyUpdate ? `missing -> ${livepeerStreamData?.streamKey}` : 'ok',
             previewImage: needsPreviewImage ? `missing -> ${previewImageUrl}` : 'ok',
-            viewerCount: needsViewerCountUpdate ? `${stream.viewerCount} -> ${livepeerViewerCount}` : 'ok',
             isActiveValue: isActive,
             isActiveBool
           })
@@ -521,7 +514,6 @@ export async function GET(
               livepeerPlaybackId: needsPlaybackIdUpdate ? livepeerStreamData?.playbackId : stream.livepeerPlaybackId,
               livepeerStreamKey: needsStreamKeyUpdate ? livepeerStreamData?.streamKey : stream.livepeerStreamKey,
               previewImageUrl: needsPreviewImage ? previewImageUrl : stream.previewImageUrl,
-              viewerCount: needsViewerCountUpdate ? livepeerViewerCount : stream.viewerCount,
               startedAt: isActiveBool && !stream.startedAt ? new Date() : stream.startedAt,
               updatedAt: new Date(),
             })
@@ -538,10 +530,23 @@ export async function GET(
             }
             
             const totalViews = await getTotalViews(params.id, updatedStream.livepeerPlaybackId)
+            
+            // Fetch viewer count from Livepeer API for live streams
+            let viewerCount = 0
+            if (updatedStream.livepeerPlaybackId && !updatedStream.endedAt) {
+              try {
+                const { getViewerCount } = await import("@/lib/livepeer")
+                viewerCount = await getViewerCount(updatedStream.livepeerPlaybackId)
+              } catch (error) {
+                console.warn(`[Stream ${params.id}] Could not fetch viewer count:`, error)
+              }
+            }
+            
             return NextResponse.json({
               ...updatedStream,
               category: updatedCategory,
               totalViews: totalViews,
+              viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
             })
           }
         }
@@ -638,11 +643,24 @@ export async function GET(
       null // assetPlaybackId is fetched dynamically, not stored in DB
     )
     const totalViews = await getTotalViews(params.id, viewsPlaybackId)
+    
+    // Fetch viewer count from Livepeer API for live streams
+    let viewerCount = 0
+    if (stream.livepeerPlaybackId && !stream.endedAt) {
+      try {
+        const { getViewerCount } = await import("@/lib/livepeer")
+        viewerCount = await getViewerCount(stream.livepeerPlaybackId)
+      } catch (error) {
+        console.warn(`[Stream ${params.id}] Could not fetch viewer count:`, error)
+      }
+    }
+    
     return NextResponse.json(
       {
         ...stream,
         category: category,
         totalViews: totalViews,
+        viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
       },
       {
         headers: {
