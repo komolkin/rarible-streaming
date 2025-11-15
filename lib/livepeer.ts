@@ -870,11 +870,17 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
   try {
     // Use Livepeer SDK for metrics
     // Reference: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
+    // The SDK automatically adds "Bearer" prefix to the API key in Authorization header
+    if (!LIVEPEER_API_KEY || LIVEPEER_API_KEY.trim() === '') {
+      throw new Error("LIVEPEER_API_KEY is empty or not set")
+    }
+    
     const livepeer = new Livepeer({
       apiKey: LIVEPEER_API_KEY,
     })
     
     console.log(`[Total Views] Calling Livepeer SDK getPublicViewership for playbackId: ${playbackId}`)
+    console.log(`[Total Views] API Key configured: ${LIVEPEER_API_KEY.substring(0, 10)}... (Bearer token will be added automatically by SDK)`)
     
     // Add timeout to prevent hanging requests (10 seconds max)
     const timeoutPromise = new Promise<null>((resolve) => 
