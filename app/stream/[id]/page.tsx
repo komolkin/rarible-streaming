@@ -448,10 +448,74 @@ export default function StreamPage() {
     }
   }, []);
 
+  // Function to fetch views - extracted to avoid closure issues
+  const fetchViews = useCallback(async () => {
+    const timestamp = Date.now();
+    try {
+      const response = await fetch(
+        `/api/streams/${params.id}/views?_=${timestamp}`,
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(
+            `[Views] Stream not found (404) - keeping current view count`
+          );
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data) {
+        return;
+      }
+
+      // Always update views if we get a number (including 0)
+      if (typeof data.totalViews === "number") {
+        setTotalViews((prevViews) => {
+          const newViews = data.totalViews;
+
+          // Always update to ensure we have the latest value from API
+          if (prevViews !== newViews) {
+            console.log(
+              `[Views] Updated views: ${prevViews ?? "null"} -> ${newViews}`,
+              {
+                playbackIdUsed: data.playbackId,
+                isAssetPlaybackId: data.isAssetPlaybackId,
+                timestamp: new Date().toISOString(),
+              }
+            );
+          }
+
+          // Always return the new value to ensure state is fresh
+          return newViews;
+        });
+      } else if (data.totalViews === null) {
+        // If API returns null, views aren't available yet
+        console.log(`[Views] Views not available yet (null response)`);
+      } else {
+        console.warn(`[Views] Unexpected response format:`, data);
+      }
+    } catch (error: any) {
+      console.error(`[Views] Error fetching views:`, error?.message || error);
+      // Don't clear totalViews on error - keep showing last known value
+    }
+  }, [params.id]);
+
   useEffect(() => {
     try {
       fetchStream();
       fetchChatMessages();
+      // Fetch views immediately on mount
+      fetchViews();
     } catch (error: any) {
       console.error("Error during initial fetch:", error);
       setPageError(error?.message || "Failed to load stream");
@@ -469,95 +533,12 @@ export default function StreamPage() {
       });
     }, 30000);
 
-    // Poll for views every 30 seconds to ensure we get latest data
+    // Poll for views every 15 seconds to ensure we get latest data quickly
     // Livepeer updates views every 5 minutes, but we check frequently to catch updates quickly
     // Note: This uses the backend API which correctly identifies asset playbackId for ended streams
     const viewsInterval = setInterval(() => {
-      // Fetch views from our backend API (which handles asset detection and uses correct playbackId)
-      // Use timestamp in URL to prevent any caching
-      const timestamp = Date.now();
-      fetch(`/api/streams/${params.id}/views?_=${timestamp}`, {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-      })
-        .then((res) => {
-          if (!res.ok) {
-            // Don't throw for 404/500 - just log and keep current value
-            if (res.status === 404) {
-              console.log(
-                `[Views Poll] Stream not found (404) - keeping current view count`
-              );
-              return null;
-            }
-            throw new Error(`HTTP ${res.status}`);
-          }
-          return res.json();
-        })
-        .then((data) => {
-          if (!data) {
-            // Response was null (404 case)
-            return;
-          }
-
-          // Always update views if we get a number (including 0)
-          // This ensures we show the latest count even if it's 0
-          if (typeof data.totalViews === "number") {
-            setTotalViews((prevViews) => {
-              const newViews = data.totalViews;
-
-              // Always update to ensure we have the latest value from API
-              // Log when value changes for debugging
-              if (prevViews !== newViews) {
-                console.log(
-                  `[Views Poll] Updated views: ${
-                    prevViews ?? "null"
-                  } -> ${newViews}`,
-                  {
-                    playbackIdUsed: data.playbackId,
-                    isAssetPlaybackId: data.isAssetPlaybackId,
-                    timestamp: new Date().toISOString(),
-                  }
-                );
-              } else {
-                // Log periodic check even if value hasn't changed (helps verify polling is working)
-                console.log(
-                  `[Views Poll] Views checked: ${newViews} (unchanged)`,
-                  {
-                    playbackIdUsed: data.playbackId,
-                    isAssetPlaybackId: data.isAssetPlaybackId,
-                    timestamp: new Date().toISOString(),
-                  }
-                );
-              }
-
-              // Always return the new value to ensure state is fresh
-              return newViews;
-            });
-          } else if (data.totalViews === null) {
-            // If API returns null, it means views aren't available yet or endpoint unavailable
-            // Don't update, keep current value (might be from previous successful fetch)
-            console.log(
-              `[Views Poll] Views not available yet (null response) - keeping current value: ${
-                totalViews ?? "null"
-              }`
-            );
-          } else {
-            // Unexpected response format
-            console.warn(`[Views Poll] Unexpected response format:`, data);
-          }
-        })
-        .catch((error) => {
-          // Log error but don't update state (keep current value)
-          console.error(
-            `[Views Poll] Error fetching views:`,
-            error?.message || error
-          );
-          // Don't clear totalViews on error - keep showing last known value
-        });
-    }, 30000); // Check every 30 seconds for faster updates
+      fetchViews();
+    }, 15000); // Check every 15 seconds for faster updates
 
     return () => {
       chatCleanup();
@@ -569,16 +550,20 @@ export default function StreamPage() {
     params.id,
     fetchStream,
     fetchChatMessages,
+    fetchViews,
     subscribeToChat,
     subscribeToViewerCount,
   ]);
 
-  // Fetch asset playback ID when stream ends
+  // Fetch asset playback ID when stream ends and refresh views
   useEffect(() => {
     if (stream?.endedAt && !assetPlaybackId) {
       fetchAssetPlaybackId();
+      // When stream ends, fetch views immediately to get asset views
+      // Asset playbackId becomes available after stream ends
+      fetchViews();
     }
-  }, [stream?.endedAt, assetPlaybackId, fetchAssetPlaybackId]);
+  }, [stream?.endedAt, assetPlaybackId, fetchAssetPlaybackId, fetchViews]);
 
   // Debug: log stream data when it changes
   useEffect(() => {
@@ -1195,7 +1180,7 @@ export default function StreamPage() {
                   </div>
                   <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
                     <div className="flex flex-row flex-wrap gap-1.5 sm:gap-2">
-                      {/* Total Views counter */}
+                      {/* Total Views counter - updates dynamically */}
                       <Button
                         variant="outline"
                         size="sm"
