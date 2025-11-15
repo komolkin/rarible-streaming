@@ -1,5 +1,3 @@
-import { Livepeer } from "livepeer"
-
 const LIVEPEER_API_KEY = process.env.LIVEPEER_API_KEY!
 
 export async function createStream(name: string) {
@@ -866,42 +864,84 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
     return null
   }
 
+  const endpoint = `https://livepeer.studio/api/data/views/query/total/${encodeURIComponent(playbackId)}`
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
+
   try {
-    const livepeer = new Livepeer({
-      apiKey: LIVEPEER_API_KEY,
+    const response = await fetch(endpoint, {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
+      cache: "no-store",
+      signal: controller.signal,
     })
 
-    const result = await livepeer.metrics.getPublicViewership(playbackId)
-    
-    // According to Livepeer docs, response format is:
-    // { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
-    // TypeScript types may not expose viewCount, but it exists at runtime
-    const resultAny = result as any
-    
-    // Extract viewCount directly from the result
-    const viewCount = resultAny?.viewCount
-    
-    if (typeof viewCount === "number") {
-      // Return the viewCount (including 0 if no views yet)
-      return viewCount
-    }
-    
-    // If viewCount is not a number, return null
-    return null
-  } catch (error: any) {
-    // Handle specific error cases
-    if (error?.status === 404) {
+    if (response.status === 404) {
       console.log(`[Total Views] 404 for playbackId: ${playbackId} - views may not be available yet`)
       return null
     }
-    
-    if (error?.status === 401 || error?.status === 403) {
-      console.error(`[Total Views] Authentication error ${error.status} for playbackId: ${playbackId}`)
+
+    if (response.status === 401 || response.status === 403) {
+      console.error(`[Total Views] Authentication error ${response.status} for playbackId: ${playbackId}`)
       return null
     }
-    
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "")
+      console.warn(`[Total Views] Unexpected response ${response.status} for playbackId ${playbackId}: ${errorBody}`)
+      return null
+    }
+
+    const result = await response.json().catch(() => null)
+
+    const extractViewCount = (payload: any): number | null => {
+      if (!payload || typeof payload !== "object") {
+        return null
+      }
+
+      if (typeof payload.viewCount === "number") {
+        return payload.viewCount
+      }
+
+      const nestedCandidates = [payload.data, payload.result, payload.body]
+      for (const candidate of nestedCandidates) {
+        if (candidate && typeof candidate === "object" && typeof candidate.viewCount === "number") {
+          return candidate.viewCount
+        }
+      }
+
+      return null
+    }
+
+    if (Array.isArray(result)) {
+      for (const entry of result) {
+        const count = extractViewCount(entry)
+        if (typeof count === "number") {
+          return count
+        }
+      }
+      return null
+    }
+
+    const viewCount = extractViewCount(result)
+
+    if (typeof viewCount === "number") {
+      return viewCount
+    }
+
+    console.warn(`[Total Views] viewCount not found in response for playbackId ${playbackId}`, result)
+    return null
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      console.warn(`[Total Views] Request timed out for playbackId ${playbackId}`)
+      return null
+    }
+
     console.error(`[Total Views] Error fetching views for playbackId ${playbackId}:`, error?.message || error)
     return null
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 

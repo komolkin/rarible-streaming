@@ -3,7 +3,6 @@
  * Run with: tsx scripts/test-views-api.ts <playbackId>
  */
 
-import { Livepeer } from "livepeer"
 import * as dotenv from "dotenv"
 
 dotenv.config({ path: ".env.local" })
@@ -25,23 +24,28 @@ if (!playbackId) {
 
 async function testViews() {
   console.log("=".repeat(60))
-  console.log("Testing Livepeer SDK getPublicViewership")
+  console.log("Testing Livepeer total views REST API")
   console.log("=".repeat(60))
   console.log(`PlaybackId: ${playbackId}`)
   console.log(`API Key: ${LIVEPEER_API_KEY.substring(0, 10)}...`)
   console.log("")
 
   try {
-    const livepeer = new Livepeer({
-      apiKey: LIVEPEER_API_KEY,
+    const endpoint = `https://livepeer.studio/api/data/views/query/total/${encodeURIComponent(playbackId)}`
+    console.log(`Calling GET ${endpoint} ...`)
+    
+    const response = await fetch(endpoint, {
+      headers: {
+        Authorization: `Bearer ${LIVEPEER_API_KEY}`,
+      },
     })
 
-    console.log("Calling livepeer.metrics.getPublicViewership()...")
-    const result = await livepeer.metrics.getPublicViewership(playbackId)
+    console.log(`Status: ${response.status}`)
+    const result = await response.json().catch(() => null)
 
     console.log("")
     console.log("=".repeat(60))
-    console.log("RAW SDK RESPONSE:")
+    console.log("RAW API RESPONSE:")
     console.log("=".repeat(60))
     console.log(JSON.stringify(result, null, 2))
     console.log("")
@@ -49,34 +53,10 @@ async function testViews() {
     console.log("=".repeat(60))
     console.log("RESPONSE ANALYSIS:")
     console.log("=".repeat(60))
-    console.log(`Type: ${typeof result}`)
-    console.log(`Is object: ${typeof result === "object"}`)
-    
     if (result && typeof result === "object") {
-      console.log(`Keys: ${Object.keys(result).join(", ")}`)
-      
-      // Check various possible structures
-      if ('viewCount' in result) {
-        console.log(`✅ viewCount found directly: ${(result as any).viewCount}`)
-      }
-      if ('data' in result) {
-        console.log(`✅ data property found:`, (result as any).data)
-        if ((result as any).data && typeof (result as any).data === 'object' && 'viewCount' in (result as any).data) {
-          console.log(`✅ viewCount in data: ${(result as any).data.viewCount}`)
-        }
-      }
-      if ('result' in result) {
-        console.log(`✅ result property found:`, (result as any).result)
-        if ((result as any).result && typeof (result as any).result === 'object' && 'viewCount' in (result as any).result) {
-          console.log(`✅ viewCount in result: ${(result as any).result.viewCount}`)
-        }
-      }
-      if ('body' in result) {
-        console.log(`✅ body property found:`, (result as any).body)
-        if ((result as any).body && typeof (result as any).body === 'object' && 'viewCount' in (result as any).body) {
-          console.log(`✅ viewCount in body: ${(result as any).body.viewCount}`)
-        }
-      }
+      console.log(`Top-level keys: ${Object.keys(result).join(", ")}`)
+    } else if (Array.isArray(result)) {
+      console.log(`Response is array with length ${result.length}`)
     }
 
     console.log("")
@@ -84,28 +64,37 @@ async function testViews() {
     console.log("EXTRACTED VIEW COUNT:")
     console.log("=".repeat(60))
     
-    // Try to extract viewCount using same logic as our function
-    let data: any = null
-    
-    if (result && typeof result === "object") {
-      if ('viewCount' in result && typeof (result as any).viewCount === 'number') {
-        data = result
-      } else if ('data' in result && result.data && typeof result.data === 'object') {
-        data = result.data
-      } else if ('result' in result && result.result && typeof result.result === 'object') {
-        data = result.result
-      } else if ('body' in result && result.body && typeof result.body === 'object') {
-        data = result.body
-      } else {
-        data = result
+    const extractViewCount = (payload: any): number | null => {
+      if (!payload || typeof payload !== "object") {
+        return null
       }
+      if (typeof payload.viewCount === "number") {
+        return payload.viewCount
+      }
+      const nested = [payload.data, payload.result, payload.body]
+      for (const candidate of nested) {
+        if (candidate && typeof candidate === "object" && typeof candidate.viewCount === "number") {
+          return candidate.viewCount
+        }
+      }
+      return null
     }
-    
-    if (data && typeof data === "object" && typeof data.viewCount === "number") {
-      console.log(`✅ SUCCESS: viewCount = ${data.viewCount}`)
+
+    let viewCount: number | null = null
+
+    if (Array.isArray(result)) {
+      for (const entry of result) {
+        viewCount = extractViewCount(entry)
+        if (viewCount !== null) break
+      }
+    } else {
+      viewCount = extractViewCount(result)
+    }
+
+    if (viewCount !== null) {
+      console.log(`✅ SUCCESS: viewCount = ${viewCount}`)
     } else {
       console.log(`❌ FAILED: Could not extract viewCount`)
-      console.log(`Data structure:`, data)
     }
     
   } catch (error: any) {
