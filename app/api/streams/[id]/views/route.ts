@@ -48,6 +48,7 @@ export async function POST(
       .limit(1)
 
     // Only record view if user hasn't viewed recently (prevents spam)
+    let viewRecorded = false
     if (recentView.length === 0) {
       try {
         await db.insert(streamViews).values({
@@ -55,13 +56,31 @@ export async function POST(
           userAddress: userAddress.toLowerCase(),
           viewedAt: new Date(),
         })
+        viewRecorded = true
+        console.log(`[Views API] View recorded for stream ${params.id} by user ${userAddress}`)
       } catch (error: any) {
         console.error(`[Views API] Error inserting view:`, error)
         throw error
       }
+    } else {
+      console.log(`[Views API] View skipped - user ${userAddress} viewed stream ${params.id} recently (within last hour)`)
     }
 
-    return NextResponse.json({ success: true })
+    // Get updated total views count
+    const viewsResult = await db
+      .select({
+        totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
+      })
+      .from(streamViews)
+      .where(eq(streamViews.streamId, params.id))
+
+    const totalViews = viewsResult[0]?.totalViews || 0
+
+    return NextResponse.json({ 
+      success: true, 
+      viewRecorded,
+      totalViews 
+    })
   } catch (error: any) {
     console.error(`[Views API] Error tracking view for stream ${params.id}:`, error)
     return NextResponse.json(
