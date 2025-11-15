@@ -11,6 +11,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Settings } from "lucide-react"
 import { StreamPreviewCard } from "@/components/stream-preview-card"
+import { StreamsGridSkeleton } from "@/components/stream-card-skeleton"
 
 export default function ProfilePage() {
   const params = useParams()
@@ -26,6 +27,8 @@ export default function ProfilePage() {
   const [followerCount, setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [streamsLoading, setStreamsLoading] = useState(false)
+  const [likedStreamsLoading, setLikedStreamsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchProfile = useCallback(async () => {
@@ -61,21 +64,28 @@ export default function ProfilePage() {
   }, [address])
 
   const fetchStreams = useCallback(async () => {
-    const response = await fetch(`/api/streams?creator=${address}`)
-    if (response.ok) {
-      const streamsData = await response.json()
-      
-      // Add creator profile to each stream (use current profile state)
-      const streamsWithCreator = streamsData.map((stream: any) => ({
-        ...stream,
-        creator: profile ? {
-          displayName: profile.displayName,
-          username: profile.username,
-          avatarUrl: profile.avatarUrl,
-        } : null
-      }))
-      
-      setStreams(streamsWithCreator)
+    try {
+      setStreamsLoading(true)
+      const response = await fetch(`/api/streams?creator=${address}`)
+      if (response.ok) {
+        const streamsData = await response.json()
+        
+        // Add creator profile to each stream (use current profile state)
+        const streamsWithCreator = streamsData.map((stream: any) => ({
+          ...stream,
+          creator: profile ? {
+            displayName: profile.displayName,
+            username: profile.username,
+            avatarUrl: profile.avatarUrl,
+          } : null
+        }))
+        
+        setStreams(streamsWithCreator)
+      }
+    } catch (error) {
+      console.error("Error fetching streams:", error)
+    } finally {
+      setStreamsLoading(false)
     }
   }, [address, profile])
 
@@ -93,6 +103,7 @@ export default function ProfilePage() {
 
   const fetchLikedStreams = useCallback(async () => {
     try {
+      setLikedStreamsLoading(true)
       const response = await fetch(`/api/streams/liked?userAddress=${address}`)
       if (response.ok) {
         const streamsData = await response.json()
@@ -122,6 +133,8 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error("Error fetching liked streams:", error)
+    } finally {
+      setLikedStreamsLoading(false)
     }
   }, [address])
 
@@ -334,7 +347,9 @@ export default function ProfilePage() {
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
           </TabsList>
           <TabsContent value="streams" className="mt-6">
-            {streams.length === 0 ? (
+            {streamsLoading ? (
+              <StreamsGridSkeleton count={6} />
+            ) : streams.length === 0 ? (
               <p className="text-muted-foreground">No streams yet</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -346,7 +361,9 @@ export default function ProfilePage() {
           </TabsContent>
           {authenticated && user?.wallet?.address?.toLowerCase() === address.toLowerCase() && (
             <TabsContent value="liked" className="mt-6">
-              {likedStreams.length === 0 ? (
+              {likedStreamsLoading ? (
+                <StreamsGridSkeleton count={6} />
+              ) : likedStreams.length === 0 ? (
                 <p className="text-muted-foreground">No liked streams yet</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
