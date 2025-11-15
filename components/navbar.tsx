@@ -13,12 +13,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Bell, Plus, User, Settings, LogOut } from "lucide-react"
+import { Bell, Plus, User, Settings, LogOut, Menu, X } from "lucide-react"
 
 export function Navbar() {
   const { authenticated, ready, user, login, logout } = usePrivy()
   const router = useRouter()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   const handleMouseEnter = useCallback(() => {
@@ -48,14 +49,16 @@ export function Navbar() {
   }, [])
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-background">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 gap-4">
-          <div className="flex items-center">
-            <Link href="/" className="text-xl font-bold">
-              Rarible Streaming
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-background border-b">
+      <div className="w-full px-3 sm:px-4 lg:px-8">
+        <div className="flex justify-between items-center h-14 sm:h-16 gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link href="/" className="text-lg sm:text-xl font-bold whitespace-nowrap">
+              <span className="hidden sm:inline">Rarible Streaming</span>
+              <span className="sm:hidden">Rarible</span>
             </Link>
-            <div className="ml-10 flex items-baseline space-x-4">
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-baseline space-x-4 ml-2 sm:ml-10">
               <Link href="/" className="text-sm font-medium hover:opacity-80 transition-opacity">
                 Home
               </Link>
@@ -64,15 +67,40 @@ export function Navbar() {
               </Link>
             </div>
           </div>
-          <div className="flex items-center">
+          
+          {/* Mobile Menu Button */}
+          <div className="md:hidden flex items-center gap-2">
+            {ready && authenticated && (
+              <Link href="/create">
+                <Button size="sm" className="rounded-lg h-8 px-2">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          </div>
+
+          {/* Desktop Actions */}
+          <div className="hidden md:flex items-center">
             {ready && (
               <>
                 {authenticated ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 lg:gap-3">
                     <Link href="/create">
-                      <Button className="rounded-lg">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Launch Stream
+                      <Button className="rounded-lg text-sm lg:text-base">
+                        <Plus className="h-4 w-4 mr-1 lg:mr-2" />
+                        <span className="hidden lg:inline">Launch Stream</span>
+                        <span className="lg:hidden">Launch</span>
                       </Button>
                     </Link>
                     <button
@@ -110,7 +138,7 @@ export function Navbar() {
                               }
                             }}
                           >
-                            <Avatar className="cursor-pointer hover:opacity-80 transition-opacity">
+                            <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 lg:h-10 lg:w-10">
                               {user?.wallet?.address && (
                                 <>
                                   {/* Avatar image would come from user profile if available */}
@@ -149,12 +177,92 @@ export function Navbar() {
                     </div>
                   </div>
                 ) : (
-                  <Button onClick={login}>Sign In</Button>
+                  <Button onClick={login} size="sm" className="text-sm">Sign In</Button>
                 )}
               </>
             )}
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t py-4 space-y-3">
+            <Link 
+              href="/" 
+              className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Home
+            </Link>
+            <Link 
+              href="/browse" 
+              className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Browse
+            </Link>
+            {ready && (
+              <>
+                {authenticated ? (
+                  <>
+                    <Link 
+                      href="/create" 
+                      className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Launch Stream
+                      </div>
+                    </Link>
+                    <Link 
+                      href={`/profile/${user?.wallet?.address}`}
+                      className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Profile
+                      </div>
+                    </Link>
+                    <Link 
+                      href={`/profile/${user?.wallet?.address}/edit`}
+                      className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Settings className="h-4 w-4" />
+                        Edit Profile
+                      </div>
+                    </Link>
+                    <button
+                      onClick={() => {
+                        logout()
+                        setMobileMenuOpen(false)
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
+                      </div>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      login()
+                      setMobileMenuOpen(false)
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                  >
+                    Sign In
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </nav>
   )

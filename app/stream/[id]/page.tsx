@@ -766,10 +766,10 @@ export default function StreamPage() {
   }
 
   return (
-    <main className="min-h-screen pt-24 pb-8">
-      <div className="w-full grid grid-cols-12 gap-4 px-4 lg:px-8 h-[calc(100vh-8rem)]">
+    <main className="min-h-screen pt-14 sm:pt-20 lg:pt-24 pb-4 sm:pb-8">
+      <div className="w-full flex flex-col lg:grid lg:grid-cols-12 gap-4 px-2 sm:px-4 lg:px-8">
         {/* Video Player - Full Width */}
-        <div className="col-span-12 lg:col-span-9">
+        <div className="w-full lg:col-span-9">
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
@@ -779,25 +779,35 @@ export default function StreamPage() {
                     stream.assetId ||
                     stream.livepeerStreamId)) ? (
                   <>
-                    <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs z-20">
+                    <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs z-20 max-w-[calc(100%-4rem)] sm:max-w-none">
                       {stream.isLive ? (
                         <>
-                          Playback ID: {stream.livepeerPlaybackId}
-                          <span className="ml-2 text-green-400">● LIVE</span>
+                          <span className="hidden sm:inline">
+                            Playback ID: {stream.livepeerPlaybackId}
+                          </span>
+                          <span className="text-green-400">● LIVE</span>
                         </>
                       ) : stream.endedAt ? (
                         <>
-                          Recording{" "}
-                          {assetPlaybackId
-                            ? `• Asset Playback ID: ${assetPlaybackId}`
-                            : stream.livepeerPlaybackId
-                            ? `• Playback ID: ${stream.livepeerPlaybackId}`
-                            : stream.assetId
-                            ? `• Asset ID: ${stream.assetId}`
-                            : ""}
+                          <span className="hidden sm:inline">Recording </span>
+                          {assetPlaybackId ? (
+                            <span className="hidden sm:inline">
+                              • Asset Playback ID: {assetPlaybackId}
+                            </span>
+                          ) : stream.livepeerPlaybackId ? (
+                            <span className="hidden sm:inline">
+                              • Playback ID: {stream.livepeerPlaybackId}
+                            </span>
+                          ) : stream.assetId ? (
+                            <span className="hidden sm:inline">
+                              • Asset ID: {stream.assetId}
+                            </span>
+                          ) : null}
                         </>
                       ) : (
-                        <>Playback ID: {stream.livepeerPlaybackId}</>
+                        <span className="hidden sm:inline">
+                          Playback ID: {stream.livepeerPlaybackId}
+                        </span>
                       )}
                     </div>
                     {stream.endedAt ? (
@@ -819,15 +829,17 @@ export default function StreamPage() {
                       ) : streamJustEnded ? (
                         <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                           <div className="text-center max-w-md px-4">
-                            <div className="text-2xl mb-4">⏳</div>
-                            <h3 className="text-xl font-semibold mb-2">
+                            <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                              ⏳
+                            </div>
+                            <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
                               Recording Processing
                             </h3>
-                            <p className="text-muted-foreground mb-4">
+                            <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
                               Your recording will be available shortly. Please
                               check back in a few minutes.
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs sm:text-sm text-muted-foreground px-2">
                               The recording is being processed and will appear
                               here once ready.
                             </p>
@@ -851,26 +863,27 @@ export default function StreamPage() {
                           onStreamStatusChange={handleStreamStatusChange}
                         />
                         {showOfflineOverlay && (
-                          <div className="absolute top-4 right-4 bg-yellow-500 text-black px-3 py-1 rounded text-sm font-semibold z-10 max-w-xs">
-                            <div className="font-bold mb-1">
+                          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
+                            <div className="font-bold mb-1 text-[10px] sm:text-sm">
                               ⚠️ Stream Offline
                             </div>
                             {stream.livepeerStreamKey ? (
                               <>
-                                <div className="text-xs mt-1">
-                                  <div className="font-semibold">
+                                <div className="text-[10px] sm:text-xs mt-1">
+                                  <div className="font-semibold hidden sm:block">
                                     OBS Settings:
                                   </div>
-                                  <div className="bg-black/20 p-1 rounded mt-1 font-mono text-[10px]">
-                                    <div>
+                                  <div className="bg-black/20 p-1 rounded mt-1 font-mono text-[9px] sm:text-[10px] break-all">
+                                    <div className="hidden sm:block">
                                       Server: rtmp://ingest.livepeer.studio/live
                                     </div>
                                     <div>
-                                      Stream Key: {stream.livepeerStreamKey}
+                                      Key:{" "}
+                                      {stream.livepeerStreamKey.slice(0, 20)}...
                                     </div>
                                   </div>
                                 </div>
-                                <div className="text-xs mt-2 opacity-90">
+                                <div className="text-[10px] sm:text-xs mt-2 opacity-90 hidden sm:block">
                                   <div>1. Go to OBS → Settings → Stream</div>
                                   <div>
                                     2. Set Service to &quot;Custom&quot;
@@ -884,8 +897,9 @@ export default function StreamPage() {
                                 </div>
                               </>
                             ) : (
-                              <div className="text-xs mt-1">
-                                Stream ID: {stream.livepeerStreamId}
+                              <div className="text-[10px] sm:text-xs mt-1">
+                                Stream ID:{" "}
+                                {stream.livepeerStreamId?.slice(0, 20)}...
                               </div>
                             )}
                           </div>
@@ -905,25 +919,27 @@ export default function StreamPage() {
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center text-white">
-                        <div className="text-center">
-                          <p className="text-lg mb-2">Stream offline</p>
+                        <div className="text-center px-4">
+                          <p className="text-base sm:text-lg mb-2">
+                            Stream offline
+                          </p>
                           {stream.livepeerStreamKey ? (
                             <>
-                              <p className="text-sm text-muted-foreground mb-3">
+                              <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                                 Make sure OBS is connected with the settings
                                 below:
                               </p>
-                              <div className="text-xs text-left space-y-2 font-mono bg-black/40 p-3 rounded">
-                                <div>
+                              <div className="text-[10px] sm:text-xs text-left space-y-2 font-mono bg-black/40 p-2 sm:p-3 rounded max-w-full overflow-hidden">
+                                <div className="break-all">
                                   Server: rtmp://ingest.livepeer.studio/live
                                 </div>
-                                <div>
+                                <div className="break-all">
                                   Stream Key: {stream.livepeerStreamKey}
                                 </div>
                               </div>
                             </>
                           ) : (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs sm:text-sm text-muted-foreground">
                               Waiting for the creator to start streaming...
                             </p>
                           )}
@@ -950,15 +966,17 @@ export default function StreamPage() {
                   ) : streamJustEnded ? (
                     <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                       <div className="text-center max-w-md px-4">
-                        <div className="text-2xl mb-4">⏳</div>
-                        <h3 className="text-xl font-semibold mb-2">
+                        <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                          ⏳
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
                           Recording Processing
                         </h3>
-                        <p className="text-muted-foreground mb-4">
+                        <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
                           Your recording will be available shortly. Please check
                           back in a few minutes.
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground px-2">
                           The recording is being processed and will appear here
                           once ready.
                         </p>
@@ -967,22 +985,26 @@ export default function StreamPage() {
                   ) : null
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-white">
-                    <div className="text-center">
-                      <p className="text-lg mb-2">Stream offline</p>
+                    <div className="text-center px-4">
+                      <p className="text-base sm:text-lg mb-2">
+                        Stream offline
+                      </p>
                       {stream.livepeerStreamKey ? (
                         <>
-                          <p className="text-sm text-muted-foreground mb-3">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                             Make sure OBS is connected with the settings below:
                           </p>
-                          <div className="text-xs text-left space-y-2 font-mono bg-black/40 p-3 rounded">
-                            <div>
+                          <div className="text-[10px] sm:text-xs text-left space-y-2 font-mono bg-black/40 p-2 sm:p-3 rounded max-w-full overflow-hidden">
+                            <div className="break-all">
                               Server: rtmp://ingest.livepeer.studio/live
                             </div>
-                            <div>Stream Key: {stream.livepeerStreamKey}</div>
+                            <div className="break-all">
+                              Stream Key: {stream.livepeerStreamKey}
+                            </div>
                           </div>
                         </>
                       ) : (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                           Waiting for the creator to start streaming...
                         </p>
                       )}
@@ -990,23 +1012,25 @@ export default function StreamPage() {
                   </div>
                 )}
               </div>
-              <div className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
+              <div className="p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-0">
+                  <div className="flex-1 min-w-0">
                     {stream.category && (
-                      <div className="text-sm text-blue-400 mb-2">
+                      <div className="text-xs sm:text-sm text-blue-400 mb-2">
                         {stream.category.name}
                       </div>
                     )}
-                    <h1 className="text-2xl font-bold mb-3">{stream.title}</h1>
+                    <h1 className="text-lg sm:text-xl lg:text-2xl font-bold mb-2 sm:mb-3 break-words">
+                      {stream.title}
+                    </h1>
                     {creator && (
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-3">
                         <Link
                           href={`/profile/${creator.walletAddress}`}
-                          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                          className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
                         >
                           {/* Only show avatar from database - use consistent seed for fallback */}
-                          <Avatar>
+                          <Avatar className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0">
                             {creator.avatarUrl ? (
                               <AvatarImage
                                 src={creator.avatarUrl}
@@ -1021,14 +1045,16 @@ export default function StreamPage() {
                               seed={(creator.walletAddress || "").toLowerCase()}
                             />
                           </Avatar>
-                          <div>
-                            <div className="font-semibold text-sm flex items-center gap-2">
-                              {creator.displayName ||
-                                creator.username ||
-                                `${creator.walletAddress.slice(
-                                  0,
-                                  6
-                                )}...${creator.walletAddress.slice(-4)}`}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <span className="truncate">
+                                {creator.displayName ||
+                                  creator.username ||
+                                  `${creator.walletAddress.slice(
+                                    0,
+                                    6
+                                  )}...${creator.walletAddress.slice(-4)}`}
+                              </span>
                               {authenticated &&
                                 user?.wallet?.address?.toLowerCase() !==
                                   stream.creatorAddress?.toLowerCase() && (
@@ -1044,13 +1070,13 @@ export default function StreamPage() {
                                         ? handleUnfollow()
                                         : handleFollow();
                                     }}
-                                    className="h-6 px-2 text-xs"
+                                    className="h-6 px-2 text-xs flex-shrink-0"
                                   >
                                     {isFollowing ? "Unfollow" : "Follow"}
                                   </Button>
                                 )}
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-[10px] sm:text-xs text-muted-foreground">
                               {followerCount}{" "}
                               {followerCount === 1 ? "follower" : "followers"}
                             </div>
@@ -1058,23 +1084,23 @@ export default function StreamPage() {
                         </Link>
                       </div>
                     )}
-                    <p className="text-muted-foreground">
+                    <p className="text-sm sm:text-base text-muted-foreground break-words">
                       {stream.description}
                     </p>
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
                       {stream.isLive ? (
-                        <span className="inline-block px-2 py-1 bg-red-500 text-white rounded text-sm">
+                        <span className="inline-block px-2 py-1 bg-red-500 text-white rounded text-xs sm:text-sm">
                           Live
                         </span>
                       ) : stream.endedAt ? (
-                        <span className="inline-block px-2 py-1 bg-muted text-muted-foreground rounded text-sm">
+                        <span className="inline-block px-2 py-1 bg-muted text-muted-foreground rounded text-xs sm:text-sm">
                           Ended {new Date(stream.endedAt).toLocaleDateString()}
                         </span>
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-3 ml-4">
-                    <div className="flex flex-row gap-2">
+                  <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
+                    <div className="flex flex-row gap-1.5 sm:gap-2">
                       {/* Viewers counter - styled like Like button */}
                       <Button
                         variant="outline"
@@ -1083,17 +1109,19 @@ export default function StreamPage() {
                           e.preventDefault();
                           e.stopPropagation();
                         }}
-                        className="flex items-center gap-2 cursor-default hover:bg-muted"
+                        className="flex items-center gap-1 sm:gap-2 cursor-default hover:bg-muted h-8 sm:h-9 px-2 sm:px-3"
                         title={
                           viewerCountError ||
                           `Live viewers: ${effectiveViewerCount}`
                         }
                       >
-                        <Eye className="h-4 w-4" />
-                        <span>{effectiveViewerCount}</span>
+                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="text-xs sm:text-sm">
+                          {effectiveViewerCount}
+                        </span>
                         {viewerCountError && (
                           <span
-                            className="text-[10px] text-destructive ml-1"
+                            className="text-[10px] text-destructive ml-0.5 sm:ml-1"
                             title={viewerCountError}
                           >
                             ⚠
@@ -1108,12 +1136,14 @@ export default function StreamPage() {
                           e.stopPropagation();
                           handleLike();
                         }}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
                       >
                         <Heart
-                          className={`h-4 w-4 ${isLiked ? "fill-current" : ""}`}
+                          className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
+                            isLiked ? "fill-current" : ""
+                          }`}
                         />
-                        <span>{likeCount}</span>
+                        <span className="text-xs sm:text-sm">{likeCount}</span>
                       </Button>
                       <Button
                         variant="outline"
@@ -1123,10 +1153,10 @@ export default function StreamPage() {
                           e.stopPropagation();
                           setIsShareModalOpen(true);
                         }}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
                       >
-                        <Share2 className="h-4 w-4" />
-                        <span>Share</span>
+                        <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="hidden sm:inline">Share</span>
                       </Button>
                       {authenticated &&
                         user?.wallet?.address?.toLowerCase() ===
@@ -1183,7 +1213,7 @@ export default function StreamPage() {
         </div>
 
         {/* Right Sidebar - Chat */}
-        <div className="col-span-3 flex flex-col gap-4 h-full">
+        <div className="w-full lg:col-span-3 flex flex-col gap-4 lg:h-[calc(100vh-8rem)]">
           {/* NFT Minting Section */}
           {stream.hasMinting && stream.mintContractAddress && (
             <Card className="flex-shrink-0">
@@ -1220,12 +1250,14 @@ export default function StreamPage() {
             </Card>
           )}
 
-          <Card className="flex-1 flex flex-col min-h-0">
-            <CardContent className="p-4 flex flex-col flex-1 min-h-0">
-              <h3 className="font-semibold mb-4 flex-shrink-0">Chat</h3>
+          <Card className="flex-1 flex flex-col min-h-0 lg:max-h-[calc(100vh-20rem)]">
+            <CardContent className="p-3 sm:p-4 flex flex-col flex-1 min-h-0">
+              <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
+                Chat
+              </h3>
               <div
                 id="chat-messages"
-                className="space-y-2 mb-4 flex-1 overflow-y-auto min-h-0"
+                className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0 max-h-[300px] sm:max-h-[400px] lg:max-h-none"
               >
                 {chatMessages.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -1254,6 +1286,7 @@ export default function StreamPage() {
                       stream.endedAt ? "Stream has ended" : "Say something..."
                     }
                     disabled={!authenticated || !!stream.endedAt}
+                    className="text-sm"
                   />
                   <Button
                     onClick={sendMessage}
@@ -1263,6 +1296,8 @@ export default function StreamPage() {
                         ? "Stream has ended. Chat is read-only."
                         : ""
                     }
+                    size="sm"
+                    className="px-3 sm:px-4"
                   >
                     Send
                   </Button>
