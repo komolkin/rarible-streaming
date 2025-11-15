@@ -1352,6 +1352,30 @@ export async function getStreamAsset(streamId: string) {
         console.warn(`[getStreamAsset] Could not fetch stream playbackId for comparison:`, streamError)
       }
       
+      // CRITICAL: According to Livepeer docs (https://docs.livepeer.org/api-reference/asset/get)
+      // We should fetch the full asset details using /api/asset/{assetId} to get the correct playbackId
+      // The asset list might not have complete information, so we need to fetch each asset individually
+      
+      // Helper function to fetch full asset details by ID
+      const fetchFullAssetDetails = async (assetId: string): Promise<any | null> => {
+        try {
+          console.log(`[getStreamAsset] Fetching full asset details for asset ID: ${assetId}`)
+          const fullAsset = await getAsset(assetId)
+          console.log(`[getStreamAsset] Full asset details:`, {
+            id: fullAsset.id,
+            playbackId: fullAsset.playbackId,
+            status: fullAsset.status,
+            sourceStreamId: fullAsset.source?.sessionId ? null : (fullAsset.source?.sourceId || fullAsset.sourceStreamId),
+            sourceType: fullAsset.source?.type,
+            keys: Object.keys(fullAsset)
+          })
+          return fullAsset
+        } catch (error: any) {
+          console.warn(`[getStreamAsset] Failed to fetch full asset details for ${assetId}:`, error?.message)
+          return null
+        }
+      }
+      
       // Helper function to verify asset playbackId is different from stream playbackId
       const verifyAssetPlaybackId = (asset: any): boolean => {
         if (!asset.playbackId) return false
@@ -1367,33 +1391,37 @@ export async function getStreamAsset(streamId: string) {
       // Unready assets will cause format errors in the player (MEDIA_ELEMENT_ERROR: Format error)
       // Prioritize assets that are ready and have playbackUrl (direct HLS URL) - this is what we need for VOD
       // CRITICAL: Asset playbackId MUST be different from stream playbackId
-      const readyAssetWithUrl = sortedAssets.find((asset: any) => 
-        asset.status === "ready" && 
-        asset.playbackUrl && 
-        verifyAsset(asset) &&
-        verifyAssetPlaybackId(asset)
-      )
-      
-      if (readyAssetWithUrl) {
-        console.log(`✅ Found ready asset with playbackUrl (most recent) for stream ${streamId}: ${readyAssetWithUrl.playbackUrl}`)
-        console.log(`[getStreamAsset] Asset playbackId: ${readyAssetWithUrl.playbackId}, Stream playbackId: ${streamPlaybackId}`)
-        return readyAssetWithUrl
+      // CRITICAL: Fetch full asset details using /api/asset/{assetId} to ensure we have the correct playbackId
+      for (const asset of sortedAssets) {
+        if (!verifyAsset(asset)) continue
+        
+        // Fetch full asset details using the asset ID
+        const fullAsset = await fetchFullAssetDetails(asset.id)
+        if (!fullAsset) continue
+        
+        // Verify the full asset has a different playbackId from stream
+        if (!verifyAssetPlaybackId(fullAsset)) continue
+        
+        // Check if asset is ready
+        if (fullAsset.status === "ready" || fullAsset.status?.phase === "ready") {
+          // Prioritize assets with playbackUrl
+          if (fullAsset.playbackUrl) {
+            console.log(`✅ Found ready asset with playbackUrl (most recent) for stream ${streamId}: ${fullAsset.playbackUrl}`)
+            console.log(`[getStreamAsset] Asset playbackId: ${fullAsset.playbackId}, Stream playbackId: ${streamPlaybackId}`)
+            return fullAsset
+          }
+          
+          // Fallback: Asset with playbackId
+          if (fullAsset.playbackId) {
+            console.log(`✅ Found ready asset with playbackId (most recent) for stream ${streamId}: ${fullAsset.playbackId}`)
+            console.log(`[getStreamAsset] Asset playbackId: ${fullAsset.playbackId}, Stream playbackId: ${streamPlaybackId}`)
+            return fullAsset
+          }
+        }
       }
       
-      // Fallback: Find asset with playbackId if no playbackUrl available
-      // CRITICAL: Asset playbackId MUST be different from stream playbackId
-      const readyAsset = sortedAssets.find((asset: any) => 
-        asset.status === "ready" && 
-        asset.playbackId && 
-        verifyAsset(asset) &&
-        verifyAssetPlaybackId(asset)
-      )
-      
-      if (readyAsset) {
-        console.log(`✅ Found ready asset with playbackId (most recent) for stream ${streamId}: ${readyAsset.playbackId}`)
-        console.log(`[getStreamAsset] Asset playbackId: ${readyAsset.playbackId}, Stream playbackId: ${streamPlaybackId}`)
-        return readyAsset
-      }
+      // If no ready asset found after fetching full details, log warning
+      console.warn(`[getStreamAsset] No ready asset found with different playbackId after fetching full details`)
       
       // If no ready asset found, log warning but don't return unready asset
       // This prevents format errors - the asset will be checked again later

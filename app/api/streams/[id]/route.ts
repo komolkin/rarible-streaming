@@ -10,13 +10,15 @@ export const maxDuration = 30
 // Helper function to get the correct playbackId for views
 // CRITICAL: For ended streams, MUST use asset playbackId (matches Livepeer dashboard)
 // Reference: https://docs.livepeer.org/developers/guides/get-engagement-analytics-via-api
+// Following Livepeer docs: https://docs.livepeer.org/api-reference/asset/get
 // For live streams, uses stream playbackId (or asset playbackId if recording is available)
 async function getViewsPlaybackId(
   streamId: string,
   streamPlaybackId: string | null | undefined,
   endedAt: Date | null | undefined,
   livepeerStreamId: string | null | undefined,
-  cachedAssetPlaybackId?: string | null | undefined
+  cachedAssetPlaybackId?: string | null | undefined,
+  cachedAssetId?: string | null | undefined
 ): Promise<string | null> {
   const isEnded = !!endedAt
   
@@ -29,9 +31,27 @@ async function getViewsPlaybackId(
   }
   
   // Priority 2: For ended streams, fetch asset playbackId from Livepeer API if not cached
+  // Following Livepeer docs: If we have assetId, directly call /api/asset/{assetId} to get playbackId
   // This is critical because stream playbackId views don't match asset views for VOD
   if (isEnded && livepeerStreamId) {
     try {
+      // Priority 2a: If we have stored assetId, directly fetch asset using /api/asset/{assetId}
+      // This follows the Livepeer docs pattern: https://docs.livepeer.org/api-reference/asset/get
+      if (cachedAssetId) {
+        try {
+          const { getAsset } = await import("@/lib/livepeer")
+          const asset = await getAsset(cachedAssetId)
+          if (asset?.playbackId) {
+            console.log(`[Views] ✅ Fetched asset playbackId ${asset.playbackId} directly using assetId ${cachedAssetId} (matches Livepeer dashboard)`)
+            return asset.playbackId
+          }
+        } catch (assetError) {
+          console.warn(`[Views] Failed to fetch asset by ID ${cachedAssetId}, falling back to getStreamAsset`)
+          // Fall through to getStreamAsset
+        }
+      }
+      
+      // Priority 2b: Fallback to getStreamAsset if no assetId or direct fetch failed
       const { getStreamAsset } = await import("@/lib/livepeer")
       const asset = await getStreamAsset(livepeerStreamId)
       if (asset?.playbackId) {
@@ -42,7 +62,7 @@ async function getViewsPlaybackId(
         // Asset not ready yet - return null instead of falling back to stream playbackId
         console.warn(`[Views] Asset not ready for ended stream ${streamId} - views not available yet`)
         return null
-  }
+      }
     } catch (error) {
       // Don't fall back to stream playbackId for ended streams
       console.warn(`[Views] Could not fetch asset for ended stream ${streamId} - views not available yet`)
@@ -53,6 +73,20 @@ async function getViewsPlaybackId(
   // Priority 3: For live streams, use stream playbackId (or try asset if available)
   if (!isEnded && livepeerStreamId) {
     try {
+      // Try using stored assetId first if available
+      if (cachedAssetId) {
+        try {
+          const { getAsset } = await import("@/lib/livepeer")
+          const asset = await getAsset(cachedAssetId)
+          if (asset?.playbackId) {
+            console.log(`[Views] Using asset playbackId ${asset.playbackId} for live stream ${streamId} (recording available)`)
+            return asset.playbackId
+          }
+        } catch (assetError) {
+          // Fall through to getStreamAsset
+        }
+      }
+      
       const { getStreamAsset } = await import("@/lib/livepeer")
       const asset = await getStreamAsset(livepeerStreamId)
       if (asset?.playbackId) {
@@ -226,19 +260,51 @@ export async function GET(
           }
         
         // METHOD 2: Check assets API (if session method didn't work)
+        // Following Livepeer docs: https://docs.livepeer.org/api-reference/asset/get
+        // If we have assetId stored, directly call /api/asset/{assetId} to get playbackId
         if (!vodUrl) {
           try {
             console.log(`[GET Stream ${params.id}] Method 2: Checking assets API...`)
-            // Add timeout to prevent Vercel function timeout (8 seconds max for asset fetch)
-            const assetFetchPromise = getStreamAsset(stream.livepeerStreamId)
-            const timeoutPromise = new Promise<null>((resolve) => 
-              setTimeout(() => {
-                console.warn(`[GET Stream ${params.id}] Asset fetch timeout after 8 seconds`)
-                resolve(null)
-              }, 8000)
-            )
             
-            const asset = await Promise.race([assetFetchPromise, timeoutPromise])
+            let asset: any = null
+            
+            // Priority 1: If we have assetId stored, directly fetch asset using /api/asset/{assetId}
+            // This follows the Livepeer docs pattern: https://docs.livepeer.org/api-reference/asset/get
+            if (stream.assetId) {
+              try {
+                console.log(`[GET Stream ${params.id}] Using stored assetId ${stream.assetId} to fetch asset directly`)
+                const { getAsset } = await import("@/lib/livepeer")
+                const assetFetchPromise = getAsset(stream.assetId)
+                const timeoutPromise = new Promise<null>((resolve) => 
+                  setTimeout(() => {
+                    console.warn(`[GET Stream ${params.id}] Asset fetch timeout after 8 seconds`)
+                    resolve(null)
+                  }, 8000)
+                )
+                asset = await Promise.race([assetFetchPromise, timeoutPromise])
+                
+                if (asset) {
+                  console.log(`[GET Stream ${params.id}] ✅ Fetched asset directly using assetId: ${asset.id}, playbackId: ${asset.playbackId}`)
+                }
+              } catch (assetError: any) {
+                console.warn(`[GET Stream ${params.id}] Failed to fetch asset by ID ${stream.assetId}:`, assetError?.message)
+                // Fall through to getStreamAsset fallback
+              }
+            }
+            
+            // Priority 2: If no stored assetId or direct fetch failed, use getStreamAsset to find asset
+            if (!asset && stream.livepeerStreamId) {
+              console.log(`[GET Stream ${params.id}] No stored assetId or direct fetch failed, using getStreamAsset to find asset`)
+              const assetFetchPromise = getStreamAsset(stream.livepeerStreamId)
+              const timeoutPromise = new Promise<null>((resolve) => 
+                setTimeout(() => {
+                  console.warn(`[GET Stream ${params.id}] Asset fetch timeout after 8 seconds`)
+                  resolve(null)
+                }, 8000)
+              )
+              
+              asset = await Promise.race([assetFetchPromise, timeoutPromise])
+            }
             
             if (asset) {
               console.log(`[GET Stream ${params.id}] Asset details:`, {
@@ -427,11 +493,18 @@ export async function GET(
           console.warn(`[Stream ${params.id}] Skipping status check due to timeout`)
           // Return stream as-is without status update
           const totalViews = await getTotalViews(params.id, stream.livepeerPlaybackId)
-          return NextResponse.json({
+          const timeoutResponse: any = {
             ...stream,
             category: category,
             totalViews: totalViews,
-          })
+          }
+          
+          // Include assetPlaybackId if it exists
+          if (stream.assetPlaybackId) {
+            timeoutResponse.assetPlaybackId = stream.assetPlaybackId
+          }
+          
+          return NextResponse.json(timeoutResponse)
         }
         
         // Always update playbackId if it's available from Livepeer (in case it was missing during creation)
@@ -561,12 +634,19 @@ export async function GET(
               }
             }
             
-            return NextResponse.json({
+            const liveStreamResponse: any = {
               ...updatedStream,
               category: updatedCategory,
               totalViews: totalViews,
               viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
-            })
+            }
+            
+            // Include assetPlaybackId if it exists (for recordings during live streams)
+            if (updatedStream.assetPlaybackId) {
+              liveStreamResponse.assetPlaybackId = updatedStream.assetPlaybackId
+            }
+            
+            return NextResponse.json(liveStreamResponse)
           }
         }
       } catch (error: any) {
@@ -654,12 +734,14 @@ export async function GET(
     // Return stream with category and totalViews
     // This is the fallback return for all other cases
     // For ended streams, use asset playbackId for views (matches Livepeer dashboard)
+    // Following Livepeer docs: If we have assetId, directly call /api/asset/{assetId} to get playbackId
     const viewsPlaybackId = await getViewsPlaybackId(
       params.id,
       stream.livepeerPlaybackId,
       stream.endedAt,
       stream.livepeerStreamId,
-      stream.assetPlaybackId // Use stored asset playbackId from database if available
+      stream.assetPlaybackId, // Use stored asset playbackId from database if available
+      stream.assetId // Use stored assetId to directly fetch asset if needed (follows Livepeer docs)
     )
     const totalViews = await getTotalViews(params.id, viewsPlaybackId)
     
@@ -674,13 +756,22 @@ export async function GET(
       }
     }
     
+    // Ensure assetPlaybackId is included in response if it exists in database
+    // This is critical for the frontend to use the correct playbackId for VOD
+    const responseData: any = {
+      ...stream,
+      category: category,
+      totalViews: totalViews,
+      viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
+    }
+    
+    // Explicitly include assetPlaybackId if it exists (don't include null/undefined)
+    if (stream.assetPlaybackId) {
+      responseData.assetPlaybackId = stream.assetPlaybackId
+    }
+    
     return NextResponse.json(
-      {
-        ...stream,
-        category: category,
-        totalViews: totalViews,
-        viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
-      },
+      responseData,
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
