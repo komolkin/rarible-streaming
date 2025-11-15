@@ -1,42 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { streams, categories, chatMessages, streamLikes, streamViews } from "@/lib/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { streams, categories, chatMessages, streamLikes } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 import { getStreamStatus, getTotalViews as getLivepeerTotalViews } from "@/lib/livepeer"
 
 // Increase timeout for Vercel functions (max 60s on Pro, 10s on Hobby)
 export const maxDuration = 30
 
-// Helper function to calculate total views for a stream
-// Tries Livepeer API first (if available), then falls back to database count
-async function getTotalViews(streamId: string, playbackId?: string | null): Promise<number> {
-  // Try Livepeer API first if we have a playbackId
-  if (playbackId) {
-    try {
-      const livepeerTotalViews = await getLivepeerTotalViews(playbackId)
-      if (livepeerTotalViews !== null && livepeerTotalViews !== undefined) {
-        console.log(`[GET Stream ${streamId}] Using Livepeer total views: ${livepeerTotalViews}`)
-        return livepeerTotalViews
-      }
-    } catch (error) {
-      console.log(`[GET Stream ${streamId}] Livepeer total views not available, using database count`)
-    }
+// Helper function to get total views from Livepeer API only
+async function getTotalViews(streamId: string, playbackId?: string | null): Promise<number | null> {
+  if (!playbackId) {
+    return null
   }
   
-  // Fall back to database count
   try {
-    const viewsResult = await db
-      .select({
-        totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
-      })
-      .from(streamViews)
-      .where(eq(streamViews.streamId, streamId))
-    
-    return viewsResult[0]?.totalViews || 0
+    const livepeerTotalViews = await getLivepeerTotalViews(playbackId)
+    if (livepeerTotalViews !== null && livepeerTotalViews !== undefined) {
+      console.log(`[GET Stream ${streamId}] Using Livepeer total views: ${livepeerTotalViews}`)
+      return livepeerTotalViews
+    }
   } catch (error) {
-    console.warn(`[GET Stream ${streamId}] Could not fetch total views:`, error)
-    return 0
+    console.log(`[GET Stream ${streamId}] Livepeer total views not available`)
   }
+  
+  return null
 }
 
 export async function GET(

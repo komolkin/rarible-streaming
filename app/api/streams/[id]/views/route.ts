@@ -1,31 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { streams, streamViews } from "@/lib/db/schema"
-import { eq, and, sql, gt } from "drizzle-orm"
+import { streams } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
+import { getTotalViews } from "@/lib/livepeer"
 
 /**
- * POST /api/streams/[id]/views
- * Track a view event for a stream
- * Records when a user views a stream (live or replay)
+ * GET /api/streams/[id]/views
+ * Get total views count from Livepeer API (if available)
  */
-export async function POST(
+export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const body = await request.json()
-    const userAddress = body.userAddress
-
-    if (!userAddress) {
-      return NextResponse.json(
-        { error: "userAddress is required" },
-        { status: 400 }
-      )
-    }
-
-    // Verify stream exists
     const [stream] = await db
-      .select()
+      .select({
+        id: streams.id,
+        playbackId: streams.livepeerPlaybackId,
+      })
       .from(streams)
       .where(eq(streams.id, params.id))
 
@@ -33,90 +25,30 @@ export async function POST(
       return NextResponse.json({ error: "Stream not found" }, { status: 404 })
     }
 
-    // Check if user has viewed this stream recently (within last hour) to prevent spam
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
-    const recentView = await db
-      .select()
-      .from(streamViews)
-      .where(
-        and(
-          eq(streamViews.streamId, params.id),
-          eq(streamViews.userAddress, userAddress.toLowerCase()),
-          gt(streamViews.viewedAt, oneHourAgo)
-        )
-      )
-      .limit(1)
-
-    // Only record view if user hasn't viewed recently (prevents spam)
-    let viewRecorded = false
-    if (recentView.length === 0) {
-      try {
-        await db.insert(streamViews).values({
-          streamId: params.id,
-          userAddress: userAddress.toLowerCase(),
-          viewedAt: new Date(),
-        })
-        viewRecorded = true
-        console.log(`[Views API] View recorded for stream ${params.id} by user ${userAddress}`)
-      } catch (error: any) {
-        console.error(`[Views API] Error inserting view:`, error)
-        throw error
-      }
-    } else {
-      console.log(`[Views API] View skipped - user ${userAddress} viewed stream ${params.id} recently (within last hour)`)
+    const playbackId = stream.playbackId
+    if (!playbackId) {
+      return NextResponse.json({
+        streamId: params.id,
+        totalViews: null,
+        message: "Stream has no playbackId yet",
+      })
     }
 
-    // Get updated total views count
-    const viewsResult = await db
-      .select({
-        totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
-      })
-      .from(streamViews)
-      .where(eq(streamViews.streamId, params.id))
-
-    const totalViews = viewsResult[0]?.totalViews || 0
-
-    return NextResponse.json({ 
-      success: true, 
-      viewRecorded,
-      totalViews 
-    })
-  } catch (error: any) {
-    console.error(`[Views API] Error tracking view for stream ${params.id}:`, error)
-    return NextResponse.json(
-      { error: error?.message || "Failed to track view" },
-      { status: 500 }
-    )
-  }
-}
-
-/**
- * GET /api/streams/[id]/views
- * Get total views count (unique users) for a stream
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // Count distinct users who viewed this stream
-    const result = await db
-      .select({
-        totalViews: sql<number>`COUNT(DISTINCT ${streamViews.userAddress})::int`,
-      })
-      .from(streamViews)
-      .where(eq(streamViews.streamId, params.id))
-
-    const totalViews = result[0]?.totalViews || 0
+    // Try to get total views from Livepeer API
+    const totalViews = await getTotalViews(playbackId)
 
     return NextResponse.json({
       streamId: params.id,
-      totalViews,
+      totalViews: totalViews ?? null,
     })
   } catch (error: any) {
     console.error(`[Views API] Error fetching total views for stream ${params.id}:`, error)
     return NextResponse.json(
-      { error: error?.message || "Failed to fetch total views" },
+      { 
+        streamId: params.id,
+        totalViews: null,
+        error: error?.message || "Failed to fetch total views" 
+      },
       { status: 500 }
     )
   }
