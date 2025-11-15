@@ -752,7 +752,8 @@ export default function StreamPage() {
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
                 {stream.livepeerPlaybackId ? (
-                  <Player
+                  <>
+                    <Player
                       playbackId={stream.livepeerPlaybackId}
                       playRecording
                       autoPlay
@@ -806,6 +807,7 @@ export default function StreamPage() {
                         )}
                       </div>
                     )}
+                  </>
                 ) : stream.endedAt ? (
                   // No playbackId available - show processing message
                   <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
