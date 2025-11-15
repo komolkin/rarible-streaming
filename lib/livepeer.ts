@@ -1149,6 +1149,10 @@ export async function listAssets(sourceStreamId?: string) {
 
 /**
  * Get asset by ID from Livepeer API
+ * Following Livepeer docs: https://docs.livepeer.org/api-reference/asset/get
+ * 
+ * @param assetId - The asset ID to fetch
+ * @returns Asset object with status.phase property (e.g., "ready", "uploading", "processing")
  */
 export async function getAsset(assetId: string) {
   if (!LIVEPEER_API_KEY) {
@@ -1166,11 +1170,34 @@ export async function getAsset(assetId: string) {
       throw new Error(`Failed to get asset: ${response.status}`)
     }
 
-    return await response.json()
+    const asset = await response.json()
+    
+    // Log asset status for debugging
+    const statusPhase = typeof asset.status === 'object' ? asset.status?.phase : asset.status
+    console.log(`[getAsset] Fetched asset ${assetId}: status phase = ${statusPhase}, playbackId = ${asset.playbackId || 'none'}`)
+    
+    return asset
   } catch (error) {
     console.error("Error fetching asset:", error)
     throw error
   }
+}
+
+/**
+ * Check if an asset is ready for playback
+ * According to Livepeer docs, status is an object with phase property
+ * https://docs.livepeer.org/api-reference/asset/get
+ * 
+ * @param asset - Asset object from Livepeer API
+ * @returns true if asset status phase is "ready"
+ */
+export function isAssetReady(asset: any): boolean {
+  if (!asset) return false
+  
+  // According to Livepeer docs: status is an object with phase property
+  // Example: { phase: "ready", updatedAt: 1234567890, progress: 100 }
+  const statusPhase = typeof asset.status === 'object' ? asset.status?.phase : asset.status
+  return statusPhase === "ready"
 }
 
 /**
@@ -1236,11 +1263,13 @@ export async function getStreamAsset(streamId: string) {
         }
         
         // Only return ready assets to prevent format errors
-        if (asset.status === "ready" && asset.playbackId) {
+        // Use helper function to check asset status (status is an object with phase property)
+        if (isAssetReady(asset) && asset.playbackId) {
           console.log(`[getStreamAsset] ✅ Found ready asset via /stream/${streamId}/asset: ${asset.playbackId}`)
           return asset
         } else if (asset.playbackId) {
-          console.log(`[getStreamAsset] Asset found via /stream/${streamId}/asset but not ready (status: ${asset.status}). Will not use for playback yet.`)
+          const statusPhase = typeof asset.status === 'object' ? asset.status?.phase : asset.status
+          console.log(`[getStreamAsset] Asset found via /stream/${streamId}/asset but not ready (status phase: ${statusPhase}). Will not use for playback yet.`)
           // Return null for unready assets to prevent format errors
           return null
         } else {
@@ -1402,8 +1431,9 @@ export async function getStreamAsset(streamId: string) {
         // Verify the full asset has a different playbackId from stream
         if (!verifyAssetPlaybackId(fullAsset)) continue
         
-        // Check if asset is ready
-        if (fullAsset.status === "ready" || fullAsset.status?.phase === "ready") {
+        // Check if asset is ready using helper function
+        // According to Livepeer docs: status is an object with phase property
+        if (isAssetReady(fullAsset)) {
           // Prioritize assets with playbackUrl
           if (fullAsset.playbackUrl) {
             console.log(`✅ Found ready asset with playbackUrl (most recent) for stream ${streamId}: ${fullAsset.playbackUrl}`)

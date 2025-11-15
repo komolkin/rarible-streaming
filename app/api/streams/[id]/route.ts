@@ -307,20 +307,49 @@ export async function GET(
             }
             
             if (asset) {
-              console.log(`[GET Stream ${params.id}] Asset details:`, {
+              // Use helper function to check if asset is ready
+              // According to Livepeer docs: status is an object with phase property
+              // https://docs.livepeer.org/api-reference/asset/get
+              const { isAssetReady } = await import("@/lib/livepeer")
+              const assetReady = isAssetReady(asset)
+              const assetStatus = typeof asset.status === 'object' ? asset.status?.phase : asset.status
+              
+              console.log(`[GET Stream ${params.id}] Asset details (from /api/asset/{assetId}):`, {
                 id: asset.id,
-                status: asset.status,
+                status: assetStatus,
+                statusObject: asset.status,
                 playbackId: asset.playbackId,
                 playbackUrl: asset.playbackUrl,
                 sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
-                hasExistingVodUrl: !!vodUrl
+                hasExistingVodUrl: !!vodUrl,
+                isReady: assetReady
               })
               
-              // CRITICAL: Only use asset if it's ready - unready assets will cause format errors
-              if (asset.status !== "ready") {
-                console.warn(`[GET Stream ${params.id}] Asset ${asset.id} is not ready yet. Status: ${asset.status}. Will not set vodUrl yet.`)
-                // Don't set vodUrl if asset is not ready - this prevents format errors
-                // The stream will be checked again on next request
+              // Store assetId and playbackId even if not ready (so frontend knows asset exists)
+              if (asset.id) {
+                // Always store assetId when we fetch it (even if not ready)
+                if (asset.id !== stream.assetId) {
+                  try {
+                    await db
+                      .update(streams)
+                      .set({
+                        assetId: asset.id,
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(streams.id, params.id))
+                    console.log(`[GET Stream ${params.id}] ✅ Stored assetId: ${asset.id}`)
+                  } catch (dbError) {
+                    console.warn(`[GET Stream ${params.id}] Failed to store assetId:`, dbError)
+                  }
+                }
+              }
+              
+              // CRITICAL: Only use asset playbackId and set vodUrl if asset is ready
+              // Unready assets will cause format errors in the player
+              if (!assetReady) {
+                console.log(`[GET Stream ${params.id}] Asset ${asset.id} is processing. Status phase: ${assetStatus}. Asset exists but not ready yet.`)
+                // Store assetId so we can check again later, but don't set vodUrl yet
+                // The frontend will see assetPlaybackId is null and know to wait
               } else if (asset.playbackId) {
                 // Asset is ready - store the asset playbackId and ID for Player component
                 assetPlaybackId = asset.playbackId
