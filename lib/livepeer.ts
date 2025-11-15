@@ -890,25 +890,35 @@ export async function getTotalViews(playbackId: string): Promise<number | null> 
 
     const data = await response.json()
     
+    // Log the raw response for debugging
+    console.log(`[Total Views] Raw API response for playbackId ${playbackId}:`, JSON.stringify(data, null, 2))
+    
     // Handle response format from Livepeer API
     // According to docs: { playbackId: string, dStorageUrl?: string, viewCount: number, playtimeMins: number }
     if (data && typeof data === "object") {
       // The API returns viewCount field
       if (typeof data.viewCount === "number") {
+        console.log(`[Total Views] ✅ Found viewCount: ${data.viewCount} for playbackId: ${playbackId}`)
         return data.viewCount
       }
       // Fallback for other possible formats
       if (typeof data.totalViews === "number") {
+        console.log(`[Total Views] ✅ Found totalViews: ${data.totalViews} for playbackId: ${playbackId}`)
         return data.totalViews
       }
       if (typeof data.total === "number") {
+        console.log(`[Total Views] ✅ Found total: ${data.total} for playbackId: ${playbackId}`)
         return data.total
       }
+      // Log what fields are available
+      console.warn(`[Total Views] ⚠️ Unexpected response format for playbackId ${playbackId}. Available fields:`, Object.keys(data))
     } else if (typeof data === "number") {
       // Direct number response (unlikely but handle it)
+      console.log(`[Total Views] ✅ Direct number response: ${data} for playbackId: ${playbackId}`)
       return data
     }
     
+    console.warn(`[Total Views] ⚠️ Could not extract view count from response for playbackId: ${playbackId}`)
     return null
   } catch (error) {
     // Endpoint might not exist or network error, return null gracefully

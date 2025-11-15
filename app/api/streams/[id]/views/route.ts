@@ -33,24 +33,43 @@ export async function GET(
     }
 
     let playbackId = stream.playbackId
+    let assetInfo: any = null
     
-    // CRITICAL: For ended streams, use asset playbackId instead of stream playbackId
+    // CRITICAL: For ended streams (and live streams with recordings), use asset playbackId
     // The Livepeer dashboard shows views for the asset (VOD), not the stream
-    if (stream.endedAt && stream.livepeerStreamId) {
+    // Always try to get asset for accurate view counts
+    if (stream.livepeerStreamId) {
       try {
-        console.log(`[Views API] Stream has ended, fetching asset playbackId for views`)
+        console.log(`[Views API] Fetching asset for stream ${stream.livepeerStreamId} (ended: ${!!stream.endedAt})`)
         const asset = await getStreamAsset(stream.livepeerStreamId)
-        if (asset?.playbackId && asset.status === "ready") {
-          playbackId = asset.playbackId
-          console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for views (matches dashboard)`)
-        } else if (asset?.playbackId) {
-          // Asset exists but not ready - still use it for views (views might be available before asset is ready)
-          playbackId = asset.playbackId
-          console.log(`[Views API] ⚠️ Using asset playbackId ${playbackId} (status: ${asset.status})`)
+        
+        if (asset) {
+          assetInfo = {
+            id: asset.id,
+            playbackId: asset.playbackId,
+            status: asset.status,
+            sourceStreamId: asset.sourceStreamId || asset.source?.streamId,
+          }
+          console.log(`[Views API] Asset found:`, assetInfo)
+          
+          if (asset.playbackId) {
+            // Use asset playbackId for views (this matches what Livepeer dashboard shows)
+            playbackId = asset.playbackId
+            console.log(`[Views API] ✅ Using asset playbackId ${playbackId} for views (matches dashboard)`)
+            
+            // Log if asset is not ready (views might still be available)
+            if (asset.status !== "ready") {
+              console.log(`[Views API] ⚠️ Asset status is "${asset.status}" but using playbackId for views`)
+            }
+          } else {
+            console.warn(`[Views API] ⚠️ Asset found but has no playbackId, using stream playbackId`)
+          }
+        } else {
+          console.log(`[Views API] No asset found for stream ${stream.livepeerStreamId}, using stream playbackId`)
         }
       } catch (assetError: any) {
-        console.warn(`[Views API] Could not fetch asset for ended stream:`, assetError?.message)
-        // Fall back to stream playbackId
+        console.error(`[Views API] Error fetching asset:`, assetError?.message || assetError)
+        console.log(`[Views API] Falling back to stream playbackId: ${stream.playbackId}`)
       }
     }
     
@@ -64,14 +83,24 @@ export async function GET(
 
     // Try to get total views from Livepeer API
     // For ended streams, this will use asset playbackId which matches the dashboard
+    console.log(`[Views API] Fetching views from Livepeer API for playbackId: ${playbackId}`)
     const totalViews = await getTotalViews(playbackId)
     
-    console.log(`[Views API] Fetched views for playbackId ${playbackId}: ${totalViews}`)
+    console.log(`[Views API] Result:`, {
+      streamId: params.id,
+      playbackIdUsed: playbackId,
+      isAssetPlaybackId: assetInfo?.playbackId === playbackId,
+      assetId: assetInfo?.id,
+      assetStatus: assetInfo?.status,
+      totalViews: totalViews,
+    })
 
     return NextResponse.json(
       {
         streamId: params.id,
         totalViews: totalViews ?? null,
+        playbackId: playbackId, // Include which playbackId was used
+        isAssetPlaybackId: assetInfo?.playbackId === playbackId, // Indicate if asset playbackId was used
       },
       {
         headers: {
