@@ -1204,6 +1204,39 @@ export default function StreamPage() {
                         </span>
                       ) : null}
                     </div>
+                    {/* Playback IDs Information */}
+                    {(stream.livepeerPlaybackId ||
+                      assetPlaybackId ||
+                      stream.assetPlaybackId) && (
+                      <div className="mt-3 p-2 bg-muted/50 rounded text-xs text-muted-foreground space-y-1">
+                        {stream.livepeerPlaybackId && (
+                          <div>
+                            <span className="font-semibold">
+                              Stream Playback ID:
+                            </span>{" "}
+                            <span className="font-mono break-all">
+                              {stream.livepeerPlaybackId}
+                            </span>
+                            <span className="ml-1 text-[10px]">
+                              (for live stream)
+                            </span>
+                          </div>
+                        )}
+                        {(assetPlaybackId || stream.assetPlaybackId) && (
+                          <div>
+                            <span className="font-semibold">
+                              Asset Playback ID:
+                            </span>{" "}
+                            <span className="font-mono break-all">
+                              {assetPlaybackId || stream.assetPlaybackId}
+                            </span>
+                            <span className="ml-1 text-[10px]">
+                              (for video recording/VOD)
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
                     <div className="flex flex-row flex-wrap gap-1.5 sm:gap-2">
