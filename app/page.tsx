@@ -35,13 +35,13 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4">The best way to have fun onchain</h1>
-          <p className="text-muted-foreground mb-3">
+          <p className="text-muted-foreground mb-6">
             We&apos;re currently in Private Access.{" "}
             <a 
               href="https://x.com/Rarible" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300"
+              className="text-white hover:text-gray-200"
             >
               Follow us for updates
             </a>
