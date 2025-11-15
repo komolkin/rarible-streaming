@@ -950,7 +950,8 @@ export default function StreamPage() {
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
                 {stream.livepeerPlaybackId ? (
-                  // Use playbackId for both live and ended streams
+                  // Use playbackId with playRecording prop for seamless transition
+                  // The Player automatically switches from live to recorded when stream ends
                   <>
                     <Player
                       playbackId={stream.livepeerPlaybackId}
