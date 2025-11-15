@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { Player, usePlaybackInfo } from "@livepeer/react";
+import { Player } from "@livepeer/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,83 +21,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Heart, Share2, MoreVertical, Trash2, Eye } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
-
-// Component to handle playback with usePlaybackInfo hook
-// Following Livepeer docs: https://docs.livepeer.org/sdks/react/migration/3.x/playback/usePlaybackInfo
-function StreamPlayer({ 
-  playbackId, 
-  isEnded, 
-  onStreamStatusChange 
-}: { 
-  playbackId: string | null | undefined
-  isEnded: boolean
-  onStreamStatusChange?: (isLive: boolean) => void
-}) {
-  const { data: playbackInfo, error, isLoading } = usePlaybackInfo({
-    playbackId: playbackId || undefined,
-  });
-
-  if (!playbackId) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-        <div className="text-center max-w-md px-4">
-          <p className="text-sm text-muted-foreground">
-            No playback ID available
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-        <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    console.error("Playback info error:", error);
-    return (
-      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-        <div className="text-center max-w-md px-4">
-          <p className="text-sm text-red-400 mb-2">Failed to load playback</p>
-          <p className="text-xs text-muted-foreground">
-            {error instanceof Error ? error.message : "Unknown error"}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!playbackInfo) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-        <div className="text-center max-w-md px-4">
-          <p className="text-sm text-muted-foreground">
-            Playback info not available
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <Player
-      playbackId={playbackId}
-      playRecording={!isEnded}
-      autoPlay
-      muted={!isEnded}
-      showTitle={false}
-      showPipButton={isEnded}
-      objectFit="contain"
-      priority={!isEnded}
-      showUploadingIndicator={true}
-      onStreamStatusChange={onStreamStatusChange}
-    />
-  );
-}
 
 export default function StreamPage() {
   const params = useParams();
@@ -1026,26 +949,54 @@ export default function StreamPage() {
           <Card>
             <CardContent className="p-0">
               <div className="w-full aspect-video bg-black relative">
-                {/* 
-                  Player implementation following Livepeer docs:
-                  https://docs.livepeer.org/developers/guides/playback-a-livestream
-                  
-                  The Player component uses playbackId prop for both live streams and VOD assets.
-                  For ended streams: Use asset playbackId if available, otherwise stream playbackId
-                  For live streams: Use stream playbackId with playRecording for seamless transition
-                */}
-                {stream.livepeerPlaybackId || assetPlaybackId || stream.assetPlaybackId ? (
+                {stream.endedAt && stream.vodUrl ? (
+                  // ENDED STREAM - Use vodUrl from database
+                  <Player
+                    src={stream.vodUrl}
+                    autoPlay
+                    muted={false}
+                    showTitle={false}
+                    showPipButton={true}
+                    objectFit="contain"
+                    showUploadingIndicator={true}
+                  />
+                ) : stream.endedAt && !stream.vodUrl ? (
+                  // No VOD URL yet - show processing message
+                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                    <div className="text-center max-w-md px-4">
+                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                        ⏳
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
+                        Recording Processing
+                      </h3>
+                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
+                        Your recording will be available shortly. Please
+                        check back in a few minutes.
+                      </p>
+                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
+                        The recording is being processed and will appear
+                        here once ready.
+                      </p>
+                    </div>
+                  </div>
+                ) : stream.livepeerPlaybackId ? (
+                  // LIVE STREAM - Use playbackId
                   <>
-                    <StreamPlayer
-                      playbackId={
-                        stream.endedAt
-                          ? assetPlaybackId || stream.assetPlaybackId || stream.livepeerPlaybackId
-                          : stream.livepeerPlaybackId
-                      }
-                      isEnded={!!stream.endedAt}
-                      onStreamStatusChange={!stream.endedAt ? handleStreamStatusChange : undefined}
+                    <Player
+                      key={`live-${stream.livepeerPlaybackId}`}
+                      playbackId={stream.livepeerPlaybackId}
+                      playRecording
+                      autoPlay
+                      muted
+                      showTitle={false}
+                      showPipButton={false}
+                      objectFit="contain"
+                      priority
+                      showUploadingIndicator={true}
+                      onStreamStatusChange={handleStreamStatusChange}
                     />
-                    {!stream.endedAt && showOfflineOverlay && (
+                    {showOfflineOverlay && (
                       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
                         <div className="font-bold mb-1 text-[10px] sm:text-sm">
                           ⚠️ Stream Offline
