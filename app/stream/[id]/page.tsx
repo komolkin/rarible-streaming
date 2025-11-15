@@ -53,6 +53,8 @@ export default function StreamPage() {
   }, [params.id]);
 
   // Fetch asset playback ID when stream ends
+  // CRITICAL: Asset playbackId must come from Assets API, not sessions or stream metadata
+  // Asset playbackId is different from stream playbackId - they serve different purposes
   const fetchAssetPlaybackId = useCallback(async () => {
     if (!stream?.endedAt || assetPlaybackId) return;
 
@@ -61,21 +63,46 @@ export default function StreamPage() {
     if (!livepeerStreamId) return;
 
     try {
-      const url = `/api/streams/${params.id}/recording`;
+      // Use the stream detail API which fetches from Assets API
+      // This ensures we get the correct asset playbackId (not stream playbackId)
+      const url = `/api/streams/${params.id}?t=${Date.now()}`;
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.recording) {
-          if (data.recording.playbackUrl) {
-            setAssetPlaybackUrl(data.recording.playbackUrl);
-            setStreamJustEnded(false); // Recording is available
+
+        // CRITICAL: Only use assetPlaybackId if it's different from stream playbackId
+        if (
+          data.assetPlaybackId &&
+          data.assetPlaybackId !== data.livepeerPlaybackId
+        ) {
+          console.log(
+            `[StreamPage] ✅ Fetched asset playbackId from Assets API: ${data.assetPlaybackId} (stream playbackId: ${data.livepeerPlaybackId})`
+          );
+          setAssetPlaybackId(data.assetPlaybackId);
+          setStreamJustEnded(false); // Recording is available
+
+          // Also set playback URL if available
+          if (data.vodUrl) {
+            setAssetPlaybackUrl(data.vodUrl);
           }
-          if (data.recording.playbackId) {
-            setAssetPlaybackId(data.recording.playbackId);
-            setStreamJustEnded(false); // Recording is available
-          }
+        } else if (data.assetPlaybackId === data.livepeerPlaybackId) {
+          console.warn(
+            `[StreamPage] ⚠️ Asset playbackId matches stream playbackId - this is incorrect! Not setting asset playbackId.`
+          );
+          console.warn(
+            `[StreamPage] This indicates the asset hasn't been created yet or the API returned incorrect data.`
+          );
+        } else {
+          console.log(
+            `[StreamPage] Asset playbackId not available yet - asset may still be processing`
+          );
         }
       }
     } catch (error) {
@@ -242,9 +269,21 @@ export default function StreamPage() {
       }
 
       // Store asset playbackId if available (from database or fetched dynamically)
-      // asset_playback_id is different from livepeer_playback_id and is needed for VOD views
+      // CRITICAL: asset_playback_id is different from livepeer_playback_id and is needed for VOD views
+      // The asset playbackId comes from the Assets API and is different from the stream playbackId
       if (data.assetPlaybackId) {
-        setAssetPlaybackId(data.assetPlaybackId);
+        // Verify it's different from stream playbackId (they should never be the same)
+        if (data.assetPlaybackId === data.livepeerPlaybackId) {
+          console.warn(
+            `[StreamPage] ⚠️ Asset playbackId matches stream playbackId - this is incorrect! Asset: ${data.assetPlaybackId}, Stream: ${data.livepeerPlaybackId}`
+          );
+          // Don't set it if they're the same - this indicates an error
+        } else {
+          console.log(
+            `[StreamPage] ✅ Setting asset playbackId: ${data.assetPlaybackId} (different from stream playbackId: ${data.livepeerPlaybackId})`
+          );
+          setAssetPlaybackId(data.assetPlaybackId);
+        }
       }
 
       // Log stream status for debugging
@@ -1222,19 +1261,31 @@ export default function StreamPage() {
                             </span>
                           </div>
                         )}
-                        {(assetPlaybackId || stream.assetPlaybackId) && (
-                          <div>
-                            <span className="font-semibold">
-                              Asset Playback ID:
-                            </span>{" "}
-                            <span className="font-mono break-all">
-                              {assetPlaybackId || stream.assetPlaybackId}
-                            </span>
-                            <span className="ml-1 text-[10px]">
-                              (for video recording/VOD)
-                            </span>
-                          </div>
-                        )}
+                        {(assetPlaybackId || stream.assetPlaybackId) &&
+                          (assetPlaybackId || stream.assetPlaybackId) !==
+                            stream.livepeerPlaybackId && (
+                            <div>
+                              <span className="font-semibold">
+                                Asset Playback ID:
+                              </span>{" "}
+                              <span className="font-mono break-all">
+                                {assetPlaybackId || stream.assetPlaybackId}
+                              </span>
+                              <span className="ml-1 text-[10px]">
+                                (for video recording/VOD)
+                              </span>
+                            </div>
+                          )}
+                        {(assetPlaybackId || stream.assetPlaybackId) &&
+                          (assetPlaybackId || stream.assetPlaybackId) ===
+                            stream.livepeerPlaybackId && (
+                            <div className="text-yellow-600 dark:text-yellow-400">
+                              <span className="font-semibold">
+                                ⚠️ Asset Playback ID:
+                              </span>{" "}
+                              Not available yet (asset still processing)
+                            </div>
+                          )}
                       </div>
                     )}
                   </div>
