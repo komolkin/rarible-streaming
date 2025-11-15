@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { streams } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
-import { getViewerCount } from "@/lib/livepeer"
+import { getViewerCount, getTotalViews, getPeakViewers, getHistoricalViews } from "@/lib/livepeer"
 
 export async function GET(
   request: NextRequest,
@@ -26,11 +26,22 @@ export async function GET(
       return NextResponse.json({ error: "Stream has no playbackId yet" }, { status: 400 })
     }
 
+    // Get real-time concurrent viewers (always available)
     const viewerCount = await getViewerCount(playbackId)
+
+    // Try to get historical data from Livepeer (if available)
+    const [totalViews, peakViewers, historicalData] = await Promise.all([
+      getTotalViews(playbackId),
+      getPeakViewers(playbackId),
+      getHistoricalViews(playbackId),
+    ])
 
     return NextResponse.json({
       playbackId,
-      viewerCount,
+      viewerCount, // Real-time concurrent viewers
+      totalViews: totalViews ?? null, // Total lifetime views from Livepeer (if available)
+      peakViewers: peakViewers ?? null, // Peak concurrent viewers (if available)
+      historicalData: historicalData ?? null, // Full historical data (if available)
       fetchedAt: new Date().toISOString(),
     })
   } catch (error: any) {
