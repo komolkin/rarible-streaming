@@ -224,9 +224,6 @@ export default function CreateStreamPage() {
                       <p className="text-sm text-muted-foreground">
                         Click to upload cover image
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        If not provided, a placeholder will be generated
-                      </p>
                     </div>
                   )}
                   <input
