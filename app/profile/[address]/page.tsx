@@ -9,9 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Settings } from "lucide-react"
 import { StreamPreviewCard } from "@/components/stream-preview-card"
-import { StreamsGridSkeleton } from "@/components/stream-card-skeleton"
 import { formatRelativeTime } from "@/lib/utils"
 
 export default function ProfilePage() {
@@ -302,7 +300,6 @@ export default function ProfilePage() {
                       onClick={() => router.push(`/profile/${address}/edit`)}
                       variant="outline"
                     >
-                      <Settings className="h-4 w-4 mr-2" />
                       Edit Profile
                     </Button>
                   ) : authenticated && user?.wallet?.address?.toLowerCase() !== address.toLowerCase() ? (
@@ -349,7 +346,9 @@ export default function ProfilePage() {
           </TabsList>
           <TabsContent value="streams" className="mt-6">
             {streamsLoading ? (
-              <StreamsGridSkeleton count={6} />
+              <div className="text-center py-12">
+                <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
+              </div>
             ) : streams.length === 0 ? (
               <p className="text-muted-foreground">No streams yet</p>
             ) : (
@@ -363,7 +362,9 @@ export default function ProfilePage() {
           {authenticated && user?.wallet?.address?.toLowerCase() === address.toLowerCase() && (
             <TabsContent value="liked" className="mt-6">
               {likedStreamsLoading ? (
-                <StreamsGridSkeleton count={6} />
+                <div className="text-center py-12">
+                  <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
+                </div>
               ) : likedStreams.length === 0 ? (
                 <p className="text-muted-foreground">No liked streams yet</p>
               ) : (

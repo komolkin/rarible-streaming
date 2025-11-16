@@ -190,7 +190,7 @@ export function Navbar() {
                               }
                             }}
                           >
-                            <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 lg:h-10 lg:w-10">
+                            <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-10 w-10">
                               {user?.wallet?.address && (
                                 <>
                                   {userAvatarUrl && (
@@ -215,19 +215,16 @@ export function Navbar() {
                         >
                           <DropdownMenuItem asChild>
                             <Link href={`/profile/${user?.wallet?.address}`} className="cursor-pointer">
-                              <User className="mr-2 h-4 w-4" />
                               Profile
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link href={`/profile/${user?.wallet?.address}/edit`} className="cursor-pointer">
-                              <Settings className="mr-2 h-4 w-4" />
                               Edit Profile
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={logout} className="cursor-pointer">
-                            <LogOut className="mr-2 h-4 w-4" />
                             Sign Out
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -268,30 +265,21 @@ export function Navbar() {
                       className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
                       onClick={() => setMobileMenuOpen(false)}
                     >
-                      <div className="flex items-center gap-2">
-                        <Plus className="h-4 w-4" />
-                        Launch Stream
-                      </div>
+                      Launch Stream
                     </Link>
                     <Link 
                       href={`/profile/${user?.wallet?.address}`}
                       className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
                       onClick={() => setMobileMenuOpen(false)}
                     >
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        Profile
-                      </div>
+                      Profile
                     </Link>
                     <Link 
                       href={`/profile/${user?.wallet?.address}/edit`}
                       className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
                       onClick={() => setMobileMenuOpen(false)}
                     >
-                      <div className="flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Edit Profile
-                      </div>
+                      Edit Profile
                     </Link>
                     <button
                       onClick={() => {
@@ -300,10 +288,7 @@ export function Navbar() {
                       }}
                       className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
                     >
-                      <div className="flex items-center gap-2">
-                        <LogOut className="h-4 w-4" />
-                        Sign Out
-                      </div>
+                      Sign Out
                     </button>
                   </>
                 ) : (
