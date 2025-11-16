@@ -79,57 +79,61 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Category Filter */}
-        <div className="mb-8 overflow-x-auto scrollbar-hide">
-          <div className="flex items-center gap-2 pb-2">
-            <button
-              onClick={() => setSelectedCategory("all")}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                selectedCategory === "all"
-                  ? "bg-gray-200 text-black"
-                  : "bg-gray-800 text-white hover:bg-gray-700"
-              }`}
-            >
-              All
-            </button>
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  selectedCategory === category.id
-                    ? "bg-gray-200 text-black"
-                    : "bg-gray-800 text-white hover:bg-gray-700"
-                }`}
-              >
-                {category.name}
-              </button>
-            ))}
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Category Filter */}
+            <div className="mb-8 overflow-x-auto scrollbar-hide">
+              <div className="flex items-center gap-2 pb-2">
+                <button
+                  onClick={() => setSelectedCategory("all")}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    selectedCategory === "all"
+                      ? "bg-gray-200 text-black"
+                      : "bg-gray-800 text-white hover:bg-gray-700"
+                  }`}
+                >
+                  All
+                </button>
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                      selectedCategory === category.id
+                        ? "bg-gray-200 text-black"
+                        : "bg-gray-800 text-white hover:bg-gray-700"
+                    }`}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="mb-8">
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
+            <div className="mb-8">
+              {recentStreams.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">
+                    No streams yet. Be the first to stream!
+                  </p>
+                  <Link href="/create" className="mt-4 inline-block">
+                    <Button>Launch Your First Stream</Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {recentStreams.map((stream) => (
+                    <StreamPreviewCard key={stream.id} stream={stream} />
+                  ))}
+                </div>
+              )}
             </div>
-          ) : recentStreams.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">
-                No streams yet. Be the first to stream!
-              </p>
-              <Link href="/create" className="mt-4 inline-block">
-                <Button>Launch Your First Stream</Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {recentStreams.map((stream) => (
-                <StreamPreviewCard key={stream.id} stream={stream} />
-              ))}
-            </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </main>
   );
