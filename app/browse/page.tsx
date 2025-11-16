@@ -62,12 +62,11 @@ export default function BrowsePage() {
                     </div>
                   ) : (
                     <div 
-                      className="aspect-video w-full overflow-hidden rounded-t-lg flex items-center justify-center relative"
-                      style={{ background: "linear-gradient(135deg, #1f2937 0%, #111827 50%, #0f172a 100%)" }}
+                      className="aspect-video w-full overflow-hidden rounded-t-lg flex items-center justify-center relative bg-black"
                     >
-                      {/* Subtle pattern overlay for texture */}
+                      {/* Dots pattern */}
                       <div 
-                        className="absolute inset-0 opacity-10"
+                        className="absolute inset-0"
                         style={{
                           backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
                           backgroundSize: '24px 24px'
