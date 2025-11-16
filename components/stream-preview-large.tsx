@@ -229,42 +229,46 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
   return (
     <div ref={containerRef} className="w-full h-[60vh] mb-6 flex gap-4">
       {/* Player Section */}
-      <div className="flex-1 rounded-lg overflow-hidden bg-black relative">
-        {stream.livepeerPlaybackId ? (
-          <div className="w-full h-full relative">
-            <Player
-              playbackId={stream.livepeerPlaybackId}
-              playRecording
-              autoPlay={false}
-              muted
-              showTitle={false}
-              showPipButton={false}
-              objectFit="contain"
-              priority={false}
-              showUploadingIndicator={true}
-            />
-
-            {/* Live badge */}
-            {stream.isLive && !stream.endedAt && (
-              <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-semibold flex items-center gap-2">
-                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                LIVE
+      <Card className="flex-1 flex flex-col min-h-0 p-0 overflow-hidden">
+        <CardContent className="p-0 flex-1 flex items-center justify-center bg-black relative">
+          {stream.livepeerPlaybackId ? (
+            <div className="w-full h-full flex items-center justify-center relative">
+              <div className="w-full h-full max-w-full max-h-full">
+                <Player
+                  playbackId={stream.livepeerPlaybackId}
+                  playRecording
+                  autoPlay={false}
+                  muted
+                  showTitle={false}
+                  showPipButton={false}
+                  objectFit="contain"
+                  priority={false}
+                  showUploadingIndicator={true}
+                />
               </div>
-            )}
 
-            {/* Ended badge */}
-            {stream.endedAt && (
-              <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
-                Ended
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/60">
-            <p>No playback available</p>
-          </div>
-        )}
-      </div>
+              {/* Live badge */}
+              {stream.isLive && !stream.endedAt && (
+                <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-semibold flex items-center gap-2 z-10">
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                  LIVE
+                </div>
+              )}
+
+              {/* Ended badge */}
+              {stream.endedAt && (
+                <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-semibold z-10">
+                  Ended
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white/60">
+              <p>No playback available</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Right Sidebar */}
       <div className="w-80 flex-shrink-0 flex flex-col gap-4">
