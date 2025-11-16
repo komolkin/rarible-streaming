@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { StreamPreviewCard } from "@/components/stream-preview-card";
+import { StreamPreviewLarge } from "@/components/stream-preview-large";
 
 interface Category {
   id: string;
@@ -125,9 +125,9 @@ export default function Home() {
                   </Link>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="flex flex-col gap-6">
                   {recentStreams.map((stream) => (
-                    <StreamPreviewCard key={stream.id} stream={stream} />
+                    <StreamPreviewLarge key={stream.id} stream={stream} />
                   ))}
                 </div>
               )}

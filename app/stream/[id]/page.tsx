@@ -38,6 +38,8 @@ export default function StreamPage() {
   const [playerIsStreaming, setPlayerIsStreaming] = useState<boolean>(false);
   const playerOfflineTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const streamLiveStatusRef = useRef<boolean>(false);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const [isInViewport, setIsInViewport] = useState<boolean>(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [totalViews, setTotalViews] = useState<number | null>(null);
 
@@ -710,6 +712,94 @@ export default function StreamPage() {
     }
   };
 
+  // Intersection Observer for viewport-based playback control
+  useEffect(() => {
+    if (!playerContainerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          setIsInViewport(entry.isIntersecting);
+        });
+      },
+      {
+        threshold: 0.5, // Trigger when 50% of the video is visible
+      }
+    );
+
+    observer.observe(playerContainerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  // Control playback based on viewport visibility
+  useEffect(() => {
+    if (!playerContainerRef.current || !stream?.livepeerPlaybackId) return;
+
+    // Find the video element inside the Player component
+    const findVideoElement = (): HTMLVideoElement | null => {
+      return playerContainerRef.current?.querySelector("video") || null;
+    };
+
+    const handlePlayback = async () => {
+      const videoElement = findVideoElement();
+      if (!videoElement) return;
+
+      try {
+        if (isInViewport) {
+          // Video is in viewport - play if paused
+          if (videoElement.paused) {
+            await videoElement.play().catch((error) => {
+              // Handle autoplay restrictions
+              console.warn("Autoplay prevented:", error);
+            });
+          }
+        } else {
+          // Video is out of viewport - pause if playing
+          if (!videoElement.paused) {
+            videoElement.pause();
+          }
+        }
+      } catch (error) {
+        // Handle other playback errors
+        console.warn("Playback control error:", error);
+      }
+    };
+
+    // Use MutationObserver to detect when video element is added to DOM
+    const observer = new MutationObserver(() => {
+      handlePlayback();
+    });
+
+    // Start observing when component mounts
+    const checkInterval = setInterval(() => {
+      const videoElement = findVideoElement();
+      if (videoElement) {
+        clearInterval(checkInterval);
+        observer.disconnect();
+        handlePlayback();
+      }
+    }, 200);
+
+    // Also observe DOM changes
+    if (playerContainerRef.current) {
+      observer.observe(playerContainerRef.current, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    // Initial check
+    handlePlayback();
+
+    return () => {
+      clearInterval(checkInterval);
+      observer.disconnect();
+    };
+  }, [isInViewport, stream?.livepeerPlaybackId]);
+
   // Show live player if we have a playbackId and stream hasn't ended
   // Use useMemo to prevent unnecessary recalculations (must be before early returns)
   const showLivePlayer = useMemo(
@@ -750,7 +840,7 @@ export default function StreamPage() {
         <div className="w-full lg:col-span-9">
           <Card>
             <CardContent className="p-0">
-              <div className="w-full aspect-video bg-black relative">
+              <div ref={playerContainerRef} className="w-full aspect-video bg-black relative">
                 {stream.livepeerPlaybackId ? (
                   <>
                     <Player
