@@ -157,7 +157,7 @@ export function Navbar() {
                 {authenticated ? (
                   <div className="flex items-center gap-2 lg:gap-3">
                     <Link href="/create">
-                      <Button className="bg-white text-black hover:bg-gray-100 rounded-lg">
+                      <Button className="bg-white text-black hover:bg-gray-100 rounded-lg h-10">
                         <span className="hidden lg:inline">Launch Stream</span>
                         <span className="lg:hidden">Launch</span>
                       </Button>
@@ -165,7 +165,7 @@ export function Navbar() {
                     <div
                       onMouseEnter={handleMouseEnter}
                       onMouseLeave={handleMouseLeave}
-                      className="relative"
+                      className="relative flex items-center"
                     >
                       <DropdownMenu 
                         open={dropdownOpen} 
@@ -181,7 +181,7 @@ export function Navbar() {
                       >
                         <DropdownMenuTrigger asChild>
                           <button 
-                            className="outline-none" 
+                            className="outline-none flex items-center" 
                             onMouseEnter={handleMouseEnter}
                             onClick={(e) => {
                               // Navigate to profile on click

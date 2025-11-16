@@ -74,7 +74,7 @@ export default function CategoryPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen pt-24 pb-8 px-8">
+      <main className="min-h-screen pt-24 pb-8 px-2 md:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
             <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
@@ -86,7 +86,7 @@ export default function CategoryPage() {
 
   if (!category) {
     return (
-      <main className="min-h-screen pt-24 pb-8 px-8">
+      <main className="min-h-screen pt-24 pb-8 px-2 md:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">Category not found</p>

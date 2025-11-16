@@ -36,7 +36,7 @@ export default function BrowsePage() {
   }
 
   return (
-    <main className="min-h-screen pt-24 pb-8 px-8">
+    <main className="min-h-screen pt-24 pb-8 px-2 md:px-8">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-4xl font-bold mb-16 text-center">Browse Categories</h1>
         {loading ? (
