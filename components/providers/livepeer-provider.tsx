@@ -24,7 +24,14 @@ export function LivepeerProvider({ children }: { children: ReactNode }) {
   }
   
   return (
-    <LivepeerConfig client={livepeerClient}>
+    <LivepeerConfig 
+      client={livepeerClient}
+      theme={{
+        colors: {
+          accent: "rgb(70, 168, 255)"
+        }
+      }}
+    >
       {children}
     </LivepeerConfig>
   )
