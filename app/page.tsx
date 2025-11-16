@@ -4,14 +4,36 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StreamPreviewCard } from "@/components/stream-preview-card";
+import { ChevronRight } from "lucide-react";
+
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 export default function Home() {
   const [recentStreams, setRecentStreams] = useState<any[]>([]);
+  const [allStreams, setAllStreams] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchRecentStreams();
+    fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (selectedCategory === "all") {
+      setRecentStreams(allStreams);
+    } else {
+      const filtered = allStreams.filter(
+        (stream) => stream.categoryId === selectedCategory
+      );
+      setRecentStreams(filtered);
+    }
+  }, [selectedCategory, allStreams]);
 
   const fetchRecentStreams = async () => {
     try {
@@ -19,6 +41,7 @@ export default function Home() {
       if (response.ok) {
         const streams = await response.json();
         // Creator profiles are now included in the API response
+        setAllStreams(streams);
         setRecentStreams(streams);
         setLoading(false);
       } else {
@@ -27,6 +50,18 @@ export default function Home() {
     } catch (error) {
       console.error("Error fetching recent streams:", error);
       setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch("/api/categories");
+      if (response.ok) {
+        const categoriesData = await response.json();
+        setCategories(categoriesData);
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error);
     }
   };
 
@@ -49,6 +84,40 @@ export default function Home() {
           <Button className="bg-white text-black hover:bg-gray-100 mb-12">
             Join waitlist
           </Button>
+        </div>
+
+        {/* Category Filter */}
+        <div className="mb-8 overflow-x-auto">
+          <div className="flex items-center gap-2 pb-2">
+            <button
+              onClick={() => setSelectedCategory("all")}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                selectedCategory === "all"
+                  ? "bg-gray-200 text-black"
+                  : "bg-gray-800 text-white hover:bg-gray-700"
+              }`}
+            >
+              All
+            </button>
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => setSelectedCategory(category.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  selectedCategory === category.id
+                    ? "bg-gray-200 text-black"
+                    : "bg-gray-800 text-white hover:bg-gray-700"
+                }`}
+              >
+                {category.name}
+              </button>
+            ))}
+            {categories.length > 0 && (
+              <div className="px-2">
+                <ChevronRight className="h-5 w-5 text-gray-400" />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mb-8">
