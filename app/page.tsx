@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StreamPreviewCard } from "@/components/stream-preview-card";
-import { ChevronRight } from "lucide-react";
 
 interface Category {
   id: string;
@@ -70,7 +69,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4 [text-wrap:pretty]">The best way to have fun onchain</h1>
-          <p className="text-base text-muted-foreground mb-6 [text-wrap:pretty]">
+          <p className="text-base text-muted-foreground mb-12 [text-wrap:pretty]">
             We&apos;re currently in Private Access.{" "}
             <a 
               href="https://x.com/Rarible" 
@@ -78,16 +77,13 @@ export default function Home() {
               rel="noopener noreferrer"
               className="text-white hover:text-gray-200"
             >
-              Follow us for updates
+              Join waitlist
             </a>
           </p>
-          <Button className="bg-white text-black hover:bg-gray-100 mb-12">
-            Join waitlist
-          </Button>
         </div>
 
         {/* Category Filter */}
-        <div className="mb-8 overflow-x-auto">
+        <div className="mb-8 overflow-x-auto scrollbar-hide">
           <div className="flex items-center gap-2 pb-2">
             <button
               onClick={() => setSelectedCategory("all")}
@@ -112,11 +108,6 @@ export default function Home() {
                 {category.name}
               </button>
             ))}
-            {categories.length > 0 && (
-              <div className="px-2">
-                <ChevronRight className="h-5 w-5 text-gray-400" />
-              </div>
-            )}
           </div>
         </div>
 
