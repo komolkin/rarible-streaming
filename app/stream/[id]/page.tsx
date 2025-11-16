@@ -1140,11 +1140,6 @@ export default function StreamPage() {
                     Send
                   </Button>
                 </div>
-                {stream.endedAt && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Stream has ended. Chat is read-only.
-                  </p>
-                )}
               </div>
             </CardContent>
           </Card>

@@ -137,6 +137,11 @@ export function Navbar() {
                 </Button>
               </Link>
             )}
+            {ready && !authenticated && (
+              <Button onClick={login} size="sm" className="text-sm h-8 px-3">
+                Sign In
+              </Button>
+            )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg hover:bg-muted transition-colors"
@@ -256,52 +261,38 @@ export function Navbar() {
             >
               Browse
             </Link>
-            {ready && (
+            {ready && authenticated && (
               <>
-                {authenticated ? (
-                  <>
-                    <Link 
-                      href="/create" 
-                      className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Launch Stream
-                    </Link>
-                    <Link 
-                      href={`/profile/${user?.wallet?.address}`}
-                      className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Profile
-                    </Link>
-                    <Link 
-                      href={`/profile/${user?.wallet?.address}/edit`}
-                      className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Edit Profile
-                    </Link>
-                    <button
-                      onClick={() => {
-                        logout()
-                        setMobileMenuOpen(false)
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
-                    >
-                      Sign Out
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => {
-                      login()
-                      setMobileMenuOpen(false)
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
-                  >
-                    Sign In
-                  </button>
-                )}
+                <Link 
+                  href="/create" 
+                  className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Launch Stream
+                </Link>
+                <Link 
+                  href={`/profile/${user?.wallet?.address}`}
+                  className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Profile
+                </Link>
+                <Link 
+                  href={`/profile/${user?.wallet?.address}/edit`}
+                  className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Edit Profile
+                </Link>
+                <button
+                  onClick={() => {
+                    logout()
+                    setMobileMenuOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                >
+                  Sign Out
+                </button>
               </>
             )}
           </div>
