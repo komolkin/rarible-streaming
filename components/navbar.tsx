@@ -131,11 +131,27 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center gap-2">
             {ready && authenticated && (
-              <Link href="/create">
-                <Button size="sm" className="rounded-lg h-8 px-2">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </Link>
+              <>
+                <Link href="/create">
+                  <Button size="sm" className="rounded-lg h-8 px-2">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+                {user?.wallet?.address && (
+                  <Link href={`/profile/${user.wallet.address}`}>
+                    <Avatar className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity">
+                      {userAvatarUrl && (
+                        <AvatarImage 
+                          src={userAvatarUrl}
+                          alt="Profile"
+                          key={userAvatarUrl}
+                        />
+                      )}
+                      <AvatarFallback seed={(user.wallet.address || "").toLowerCase()} />
+                    </Avatar>
+                  </Link>
+                )}
+              </>
             )}
             {ready && !authenticated && (
               <Button onClick={login} size="sm" className="text-sm h-8 px-3">
