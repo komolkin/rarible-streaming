@@ -218,7 +218,7 @@ export default function CreateStreamPage() {
                   ) : (
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="relative w-full aspect-video border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
+                      className="relative w-full aspect-video border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary/20 transition-colors"
                     >
                       <Upload className="h-8 w-8 mb-2 text-muted-foreground" />
                       <p className="text-sm text-muted-foreground">
