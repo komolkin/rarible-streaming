@@ -157,7 +157,7 @@ export function Navbar() {
                 {authenticated ? (
                   <div className="flex items-center gap-2 lg:gap-3">
                     <Link href="/create">
-                      <Button className="bg-white text-black hover:bg-gray-100 rounded-lg text-sm lg:text-base">
+                      <Button className="bg-white text-black hover:bg-gray-100 rounded-lg">
                         <Plus className="h-4 w-4 mr-1 lg:mr-2" />
                         <span className="hidden lg:inline">Launch Stream</span>
                         <span className="lg:hidden">Launch</span>
