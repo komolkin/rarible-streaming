@@ -5,10 +5,25 @@ import { asc, eq } from "drizzle-orm"
 
 export async function GET(request: NextRequest) {
   try {
-    const allCategories = await db
-      .select()
-      .from(categories)
-      .orderBy(asc(categories.order), asc(categories.name))
+    // Try to order by order field first, fallback to name if order column doesn't exist
+    let allCategories
+    try {
+      allCategories = await db
+        .select()
+        .from(categories)
+        .orderBy(asc(categories.order), asc(categories.name))
+    } catch (orderError: any) {
+      // If order column doesn't exist yet (migration not run), fallback to name only
+      if (orderError?.message?.includes('order') || orderError?.code === '42703') {
+        console.warn("Order column not found, sorting by name only. Run migration to enable custom ordering.")
+        allCategories = await db
+          .select()
+          .from(categories)
+          .orderBy(asc(categories.name))
+      } else {
+        throw orderError
+      }
+    }
     return NextResponse.json(allCategories)
   } catch (error) {
     console.error("Error fetching categories:", error)
@@ -21,15 +36,33 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, slug, description, imageUrl, order } = body
 
-    const [category] = await db.insert(categories).values({
-      name,
-      slug,
-      description,
-      imageUrl,
-      order: order ?? 0,
-    }).returning()
+    // Try to insert with order, fallback without if column doesn't exist
+    let category
+    try {
+      category = await db.insert(categories).values({
+        name,
+        slug,
+        description,
+        imageUrl,
+        order: order ?? 0,
+      }).returning()
+    } catch (orderError: any) {
+      // If order column doesn't exist yet, insert without it
+      if (orderError?.message?.includes('order') || orderError?.code === '42703') {
+        console.warn("Order column not found, creating category without order field.")
+        const [created] = await db.insert(categories).values({
+          name,
+          slug,
+          description,
+          imageUrl,
+        }).returning()
+        category = [created]
+      } else {
+        throw orderError
+      }
+    }
 
-    return NextResponse.json(category)
+    return NextResponse.json(category[0])
   } catch (error) {
     console.error("Error creating category:", error)
     return NextResponse.json({ error: "Failed to create category" }, { status: 500 })
