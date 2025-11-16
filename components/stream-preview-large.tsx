@@ -243,67 +243,6 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
               priority={false}
               showUploadingIndicator={true}
             />
-            
-            {/* Overlay with stream info */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 sm:p-6">
-              <div className="flex items-start gap-3 sm:gap-4">
-                <Link
-                  href={`/profile/${stream.creatorAddress}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-shrink-0"
-                >
-                  <Avatar className="h-10 w-10 sm:h-12 sm:w-12 border-2 border-white/20">
-                    <AvatarImage src={stream.creator?.avatarUrl || ""} />
-                    <AvatarFallback
-                      seed={(stream.creatorAddress || "").toLowerCase()}
-                    />
-                  </Avatar>
-                </Link>
-                <div className="flex-1 min-w-0">
-                  {stream.category && (
-                    <Link 
-                      href={`/browse/${stream.category.slug}`}
-                      className="text-xs sm:text-sm text-blue-400 mb-1 inline-block"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {stream.category.name}
-                    </Link>
-                  )}
-                  <Link href={`/stream/${stream.id}`}>
-                    <h3 className="text-lg sm:text-xl font-bold text-white mb-1 line-clamp-2 hover:underline">
-                      {stream.title}
-                    </h3>
-                  </Link>
-                  <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-white/80">
-                    <Link
-                      href={`/profile/${stream.creatorAddress}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="hover:text-white transition-colors"
-                    >
-                      {stream.creator?.displayName || stream.creator?.username || `${stream.creatorAddress?.slice(0, 6)}...${stream.creatorAddress?.slice(-4)}`}
-                    </Link>
-                    {stream.isLive && (
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                        {stream.viewerCount ?? 0} live
-                      </span>
-                    )}
-                    {typeof stream.totalViews === 'number' && (
-                      <span>{stream.totalViews} {stream.totalViews === 1 ? 'view' : 'views'}</span>
-                    )}
-                    {(stream.createdAt || stream.endedAt) && (
-                      <span>
-                        {stream.endedAt
-                          ? formatRelativeTime(stream.endedAt)
-                          : stream.createdAt
-                          ? formatRelativeTime(stream.createdAt)
-                          : null}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* Live badge */}
             {stream.isLive && !stream.endedAt && (
@@ -327,9 +266,73 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
         )}
       </div>
 
-      {/* Chat Section */}
-      <div className="w-80 flex-shrink-0">
-        <Card className="h-full flex flex-col">
+      {/* Right Sidebar */}
+      <div className="w-80 flex-shrink-0 flex flex-col gap-4">
+        {/* Stream Info Section */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <Link
+                href={`/profile/${stream.creatorAddress}`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-shrink-0"
+              >
+                <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
+                  <AvatarImage src={stream.creator?.avatarUrl || ""} />
+                  <AvatarFallback
+                    seed={(stream.creatorAddress || "").toLowerCase()}
+                  />
+                </Avatar>
+              </Link>
+              <div className="flex-1 min-w-0">
+                {stream.category && (
+                  <Link 
+                    href={`/browse/${stream.category.slug}`}
+                    className="text-xs sm:text-sm text-blue-400 mb-1 inline-block"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {stream.category.name}
+                  </Link>
+                )}
+                <Link href={`/stream/${stream.id}`}>
+                  <h3 className="text-base sm:text-lg font-bold mb-1 line-clamp-2 hover:underline">
+                    {stream.title}
+                  </h3>
+                </Link>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
+                  <Link
+                    href={`/profile/${stream.creatorAddress}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:text-foreground transition-colors"
+                  >
+                    {stream.creator?.displayName || stream.creator?.username || `${stream.creatorAddress?.slice(0, 6)}...${stream.creatorAddress?.slice(-4)}`}
+                  </Link>
+                  {stream.isLive && (
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      {stream.viewerCount ?? 0} live
+                    </span>
+                  )}
+                  {typeof stream.totalViews === 'number' && (
+                    <span>{stream.totalViews} {stream.totalViews === 1 ? 'view' : 'views'}</span>
+                  )}
+                  {(stream.createdAt || stream.endedAt) && (
+                    <span>
+                      {stream.endedAt
+                        ? formatRelativeTime(stream.endedAt)
+                        : stream.createdAt
+                        ? formatRelativeTime(stream.createdAt)
+                        : null}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Chat Section */}
+        <Card className="flex-1 flex flex-col min-h-0">
           <CardContent className="p-4 flex flex-col flex-1 min-h-0">
             <h3 className="font-semibold mb-4 flex-shrink-0 text-sm sm:text-base">
               Chat
