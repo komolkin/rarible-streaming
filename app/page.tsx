@@ -19,8 +19,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchRecentStreams();
-    fetchCategories();
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -34,33 +33,31 @@ export default function Home() {
     }
   }, [selectedCategory, allStreams]);
 
-  const fetchRecentStreams = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch("/api/streams?limit=12");
-      if (response.ok) {
-        const streams = await response.json();
+      setLoading(true);
+      // Fetch streams and categories in parallel
+      const [streamsResponse, categoriesResponse] = await Promise.all([
+        fetch("/api/streams?limit=12"),
+        fetch("/api/categories"),
+      ]);
+
+      if (streamsResponse.ok) {
+        const streams = await streamsResponse.json();
         // Creator profiles are now included in the API response
         setAllStreams(streams);
         setRecentStreams(streams);
-        setLoading(false);
-      } else {
-        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching recent streams:", error);
-      setLoading(false);
-    }
-  };
 
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch("/api/categories");
-      if (response.ok) {
-        const categoriesData = await response.json();
+      if (categoriesResponse.ok) {
+        const categoriesData = await categoriesResponse.json();
         setCategories(categoriesData);
       }
+
+      setLoading(false);
     } catch (error) {
-      console.error("Error fetching categories:", error);
+      console.error("Error fetching data:", error);
+      setLoading(false);
     }
   };
 
