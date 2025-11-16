@@ -62,17 +62,9 @@ export default function BrowsePage() {
                     </div>
                   ) : (
                     <div 
-                      className="aspect-video w-full overflow-hidden rounded-t-lg flex items-center justify-center relative bg-black"
+                      className="aspect-video w-full overflow-hidden rounded-t-lg flex items-center justify-center bg-black"
                     >
-                      {/* Dots pattern */}
-                      <div 
-                        className="absolute inset-0"
-                        style={{
-                          backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
-                          backgroundSize: '24px 24px'
-                        }}
-                      />
-                      <span className="text-4xl font-bold text-white relative z-10">
+                      <span className="text-4xl font-bold text-white">
                         {category.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
