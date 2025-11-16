@@ -723,7 +723,7 @@ export default function StreamPage() {
 
   if (pageError) {
     return (
-      <div className="min-h-screen pt-12 flex items-center justify-center">
+      <div className="min-h-screen pt-16 flex items-center justify-center">
         <div className="text-center max-w-md">
           <h2 className="text-xl font-semibold text-red-500 mb-2">
             Error Loading Stream
@@ -737,14 +737,14 @@ export default function StreamPage() {
 
   if (!stream) {
     return (
-      <div className="min-h-screen pt-12 flex items-center justify-center">
+      <div className="min-h-screen pt-16 flex items-center justify-center">
         <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen pt-7 sm:pt-10 lg:pt-12 pb-4 sm:pb-8">
+    <main className="min-h-screen pt-16 pb-4 sm:pb-8">
       <div className="w-full flex flex-col lg:grid lg:grid-cols-12 gap-4 px-2 sm:px-4 lg:px-8">
         {/* Video Player - Full Width */}
         <div className="w-full lg:col-span-9">
@@ -864,7 +864,7 @@ export default function StreamPage() {
                     {stream.category && (
                       <Link
                         href={`/browse/${stream.category.slug}`}
-                        className="text-xs sm:text-sm text-blue-400 mb-2 hover:underline inline-block"
+                        className="text-xs sm:text-sm text-blue-400 mb-2 inline-block"
                       >
                         {stream.category.name}
                       </Link>

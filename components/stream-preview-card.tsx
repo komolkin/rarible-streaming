@@ -177,7 +177,7 @@ export function StreamPreviewCard({
           {stream.category && (
             <Link 
               href={`/browse/${stream.category.slug}`}
-              className="text-xs text-blue-400 mb-1 hover:underline inline-block"
+              className="text-xs text-blue-400 mb-1 inline-block"
               onClick={(e) => e.stopPropagation()}
             >
               {stream.category.name}
