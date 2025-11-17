@@ -13,6 +13,7 @@ import { StreamPreviewCard } from "@/components/stream-preview-card"
 import { formatRelativeTime, formatAddress } from "@/lib/utils"
 import { normalizeToAddress, isEnsName } from "@/lib/ens"
 import { useEnsName } from "@/lib/hooks/use-ens"
+import { Copy, Check } from "lucide-react"
 
 export default function ProfilePage() {
   const params = useParams()
@@ -31,6 +32,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [likedStreamsLoading, setLikedStreamsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   
   // Resolve ENS name to address if needed
   useEffect(() => {
@@ -235,6 +237,17 @@ export default function ProfilePage() {
     }
   }
 
+  const handleCopyAddress = async () => {
+    if (!address) return
+    try {
+      await navigator.clipboard.writeText(address)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error("Failed to copy address:", error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen pt-24 flex items-center justify-center">
@@ -286,11 +299,72 @@ export default function ProfilePage() {
                       <>
                         <h1 className="text-3xl font-bold">{profile.displayName}</h1>
                         {profile.username && (
-                          <p className="text-muted-foreground text-sm mt-1">@{profile.username}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-muted-foreground text-sm">@{profile.username}</p>
+                            <button
+                              onClick={handleCopyAddress}
+                              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-xs"
+                              title="Copy wallet address"
+                            >
+                              {copied ? (
+                                <>
+                                  <Check className="h-3 w-3" />
+                                  <span>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3" />
+                                  <span>{ensName || formatAddress(address)}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                        {!profile.username && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              onClick={handleCopyAddress}
+                              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
+                              title="Copy wallet address"
+                            >
+                              {copied ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5" />
+                                  <span>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5" />
+                                  <span>{ensName || formatAddress(address)}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         )}
                       </>
                     ) : profile.username ? (
-                      <h1 className="text-3xl font-bold">@{profile.username}</h1>
+                      <>
+                        <h1 className="text-3xl font-bold">@{profile.username}</h1>
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            onClick={handleCopyAddress}
+                            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
+                            title="Copy wallet address"
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="h-3.5 w-3.5" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5" />
+                                <span>{ensName || formatAddress(address)}</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </>
                     ) : (
                       <h1 className="text-3xl font-bold">{ensName || formatAddress(address)}</h1>
                     )}
