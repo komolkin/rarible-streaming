@@ -2,25 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { normalizeToAddress, isEnsName } from "@/lib/ens";
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const walletAddress = searchParams.get("wallet");
+    const walletInput = searchParams.get("wallet");
 
-    if (!walletAddress) {
+    if (!walletInput) {
       return NextResponse.json(
-        { error: "Wallet address required" },
+        { error: "Wallet address or ENS name required" },
         { status: 400 }
       );
     }
 
-    // Validate wallet address format (basic check)
-    if (typeof walletAddress !== "string" || walletAddress.length < 10) {
-      return NextResponse.json(
-        { error: "Invalid wallet address format" },
-        { status: 400 }
-      );
+    // Resolve ENS name to address if needed
+    let walletAddress: string | null = null;
+    if (isEnsName(walletInput)) {
+      walletAddress = await normalizeToAddress(walletInput);
+      if (!walletAddress) {
+        return NextResponse.json(
+          { error: "ENS name could not be resolved" },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Validate wallet address format (basic check)
+      if (typeof walletInput !== "string" || walletInput.length < 10) {
+        return NextResponse.json(
+          { error: "Invalid wallet address format" },
+          { status: 400 }
+        );
+      }
+      walletAddress = walletInput;
     }
 
     const [user] = await db

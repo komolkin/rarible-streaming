@@ -1,8 +1,33 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { isAddress, getAddress } from "viem"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+/**
+ * Check if a string is a valid Ethereum address
+ */
+export function isValidAddress(address: string): boolean {
+  try {
+    return isAddress(address)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Format an address for display (truncated)
+ */
+export function formatAddress(address: string | null | undefined): string {
+  if (!address) return ""
+  try {
+    const normalized = getAddress(address)
+    return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`
+  } catch {
+    return address
+  }
 }
 
 /**

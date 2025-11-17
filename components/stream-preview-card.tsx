@@ -5,7 +5,8 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { StreamCoverPlaceholder } from "@/components/stream-cover-placeholder"
-import { formatRelativeTime } from "@/lib/utils"
+import { formatRelativeTime, formatAddress } from "@/lib/utils"
+import { useEnsName } from "@/lib/hooks/use-ens"
 
 interface StreamPreviewCardProps {
   stream: {
@@ -42,6 +43,7 @@ export function StreamPreviewCard({
 }: StreamPreviewCardProps) {
   const [liveThumbnailUrl, setLiveThumbnailUrl] = useState<string | null>(stream.thumbnailUrl || null)
   const [thumbnailRefreshKey, setThumbnailRefreshKey] = useState(Date.now())
+  const creatorEnsName = useEnsName(stream.creatorAddress)
 
   // For live streams without previewImageUrl, use thumbnailUrl from stream or fetch from playback info
   // and refresh it every 5 seconds to get the latest frame
@@ -190,7 +192,7 @@ export function StreamPreviewCard({
                   />
                 </Avatar>
                 <span className="text-xs text-muted-foreground">
-                  {stream.creator?.displayName || stream.creator?.username || `${stream.creatorAddress?.slice(0, 6)}...${stream.creatorAddress?.slice(-4)}`}
+                  {stream.creator?.displayName || stream.creator?.username || creatorEnsName || formatAddress(stream.creatorAddress)}
                 </span>
               </Link>
               {showDate && (stream.createdAt || stream.endedAt) && (

@@ -10,14 +10,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { StreamPreviewCard } from "@/components/stream-preview-card"
-import { formatRelativeTime } from "@/lib/utils"
+import { formatRelativeTime, formatAddress } from "@/lib/utils"
+import { normalizeToAddress, isEnsName } from "@/lib/ens"
+import { useEnsName } from "@/lib/hooks/use-ens"
 
 export default function ProfilePage() {
   const params = useParams()
   const router = useRouter()
   const { authenticated, user } = usePrivy()
   // Normalize address parameter to string (Next.js params can be string | string[])
-  const address = Array.isArray(params.address) ? params.address[0] : params.address || ''
+  const addressInput = Array.isArray(params.address) ? params.address[0] : params.address || ''
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null)
   const [profile, setProfile] = useState<any>(null)
   const [streams, setStreams] = useState<any[]>([])
   const [likedStreams, setLikedStreams] = useState<any[]>([])
@@ -28,10 +31,33 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [likedStreamsLoading, setLikedStreamsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Resolve ENS name to address if needed
+  useEffect(() => {
+    const resolveAddress = async () => {
+      if (!addressInput) {
+        setResolvedAddress(null)
+        return
+      }
+      
+      if (isEnsName(addressInput)) {
+        const address = await normalizeToAddress(addressInput)
+        setResolvedAddress(address)
+      } else {
+        setResolvedAddress(addressInput)
+      }
+    }
+    
+    resolveAddress()
+  }, [addressInput])
+  
+  const address = resolvedAddress || addressInput
+  const ensName = useEnsName(address)
 
   // Load all initial data together to prevent UI jumps
   const loadInitialData = useCallback(async () => {
-    if (!address) return
+    // Wait for address resolution if it's an ENS name
+    if (!address || (isEnsName(addressInput) && !resolvedAddress)) return
     
     try {
       setLoading(true)
@@ -71,7 +97,7 @@ export default function ProfilePage() {
         // User doesn't have a profile yet - create a default one
         const defaultProfile = {
           walletAddress: address,
-          displayName: `${address.slice(0, 6)}...${address.slice(-4)}`,
+          displayName: ensName || formatAddress(address),
           username: null,
           bio: null,
           avatarUrl: null,
@@ -160,10 +186,10 @@ export default function ProfilePage() {
 
   // Initial load - fetch all data together
   useEffect(() => {
-    if (address) {
+    if (address && (!isEnsName(addressInput) || resolvedAddress)) {
       loadInitialData()
     }
-  }, [address, loadInitialData])
+  }, [address, addressInput, resolvedAddress, loadInitialData])
 
   // Refetch profile when page becomes visible (e.g., navigating back from edit)
   useEffect(() => {

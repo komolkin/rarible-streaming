@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { usePrivy } from "@privy-io/react-auth"
 import { supabase } from "@/lib/supabase/client"
-import { formatRelativeTime } from "@/lib/utils"
+import { formatRelativeTime, formatAddress } from "@/lib/utils"
+import { useEnsName } from "@/lib/hooks/use-ens"
 
 interface StreamPreviewLargeProps {
   stream: {
@@ -41,6 +42,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
   const { authenticated, user } = usePrivy()
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [message, setMessage] = useState("")
+  const creatorEnsName = useEnsName(stream.creatorAddress)
 
   const fetchChatMessages = useCallback(async () => {
     const response = await fetch(`/api/chat/${stream.id}`)
@@ -309,7 +311,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
                     onClick={(e) => e.stopPropagation()}
                     className="hover:text-foreground transition-colors"
                   >
-                    {stream.creator?.displayName || stream.creator?.username || `${stream.creatorAddress?.slice(0, 6)}...${stream.creatorAddress?.slice(-4)}`}
+                    {stream.creator?.displayName || stream.creator?.username || creatorEnsName || formatAddress(stream.creatorAddress)}
                   </Link>
                   {stream.isLive && (
                     <span className="flex items-center gap-1">
