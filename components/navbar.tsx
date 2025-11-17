@@ -290,6 +290,11 @@ export function Navbar() {
                               Edit Profile
                             </Link>
                           </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href="https://relay.link/bridge" target="_blank" rel="noopener noreferrer" className="cursor-pointer">
+                              Add funds
+                            </Link>
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={logout} className="cursor-pointer">
                             Sign Out
@@ -345,6 +350,15 @@ export function Navbar() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Edit Profile
+                </Link>
+                <Link 
+                  href="https://relay.link/bridge"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Add funds
                 </Link>
                 <button
                   onClick={() => {
