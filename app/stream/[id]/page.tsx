@@ -834,27 +834,29 @@ export default function StreamPage() {
   }
 
   return (
-    <main className="min-h-screen pt-16 pb-4 sm:pb-8">
-      <div className="w-full flex flex-col lg:grid lg:grid-cols-12 gap-4 px-2 sm:px-4 lg:px-8">
+    <main className="min-h-screen pt-16 pb-4 sm:pb-8 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
+      <div className="w-full flex flex-col lg:grid lg:grid-cols-12 gap-4 px-2 sm:px-4 lg:px-8 lg:h-full">
         {/* Video Player - Full Width */}
         <div className="w-full lg:col-span-9">
-          <Card>
-            <CardContent className="p-0">
-              <div ref={playerContainerRef} className="w-full aspect-video bg-black relative">
+          <Card className="flex flex-col min-h-0 p-0 overflow-hidden">
+            <CardContent className="p-0 flex-1 flex items-center justify-center bg-black relative aspect-video">
+              <div ref={playerContainerRef} className="w-full h-full flex items-center justify-center relative">
                 {stream.livepeerPlaybackId ? (
                   <>
-                    <Player
-                      playbackId={stream.livepeerPlaybackId}
-                      playRecording={!!stream.endedAt}
-                      autoPlay
-                      muted={!stream.endedAt}
-                      showTitle={false}
-                      showPipButton={stream.endedAt}
-                      objectFit="contain"
-                      priority={!stream.endedAt}
-                      showUploadingIndicator={true}
-                      onStreamStatusChange={!stream.endedAt ? handleStreamStatusChange : undefined}
-                    />
+                    <div className="w-full h-full max-w-full max-h-full">
+                      <Player
+                        playbackId={stream.livepeerPlaybackId}
+                        playRecording={!!stream.endedAt}
+                        autoPlay
+                        muted={!stream.endedAt}
+                        showTitle={false}
+                        showPipButton={stream.endedAt}
+                        objectFit="contain"
+                        priority={!stream.endedAt}
+                        showUploadingIndicator={true}
+                        onStreamStatusChange={!stream.endedAt ? handleStreamStatusChange : undefined}
+                      />
+                    </div>
                     {!stream.endedAt && showOfflineOverlay && (
                       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
                         <div className="font-bold mb-1 text-[10px] sm:text-sm">
@@ -948,200 +950,12 @@ export default function StreamPage() {
                   </div>
                 )}
               </div>
-              <div className="p-3 sm:p-4">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-0">
-                  <div className="flex-1 min-w-0">
-                    {stream.category && (
-                      <Link
-                        href={`/browse/${stream.category.slug}`}
-                        className="text-xs sm:text-sm text-[#FAFF00] mb-2 inline-block"
-                      >
-                        {stream.category.name}
-                      </Link>
-                    )}
-                    <h1 className="text-lg sm:text-xl lg:text-2xl font-bold mb-2 sm:mb-3 break-words">
-                      {stream.title}
-                    </h1>
-                    {creator && (
-                      <div className="flex items-center gap-2 sm:gap-3 mb-3">
-                        <Link
-                          href={`/profile/${creator.walletAddress}`}
-                          className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
-                        >
-                          {/* Only show avatar from database - use consistent seed for fallback */}
-                          <Avatar className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0">
-                            {creator.avatarUrl ? (
-                              <AvatarImage
-                                src={creator.avatarUrl}
-                                alt={
-                                  creator.displayName ||
-                                  creator.username ||
-                                  "Creator"
-                                }
-                              />
-                            ) : null}
-                            <AvatarFallback
-                              seed={(creator.walletAddress || "").toLowerCase()}
-                            />
-                          </Avatar>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                              <span className="truncate">
-                                {creator.displayName ||
-                                  creator.username ||
-                                  `${creator.walletAddress.slice(
-                                    0,
-                                    6
-                                  )}...${creator.walletAddress.slice(-4)}`}
-                              </span>
-                              {authenticated &&
-                                user?.wallet?.address?.toLowerCase() !==
-                                  stream.creatorAddress?.toLowerCase() && (
-                                  <Button
-                                    variant={
-                                      isFollowing ? "outline" : "default"
-                                    }
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      isFollowing
-                                        ? handleUnfollow()
-                                        : handleFollow();
-                                    }}
-                                    className="h-6 px-2 text-xs flex-shrink-0"
-                                  >
-                                    {isFollowing ? "Unfollow" : "Follow"}
-                                  </Button>
-                                )}
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-muted-foreground">
-                              {followerCount}{" "}
-                              {followerCount === 1 ? "follower" : "followers"}
-                            </div>
-                          </div>
-                        </Link>
-                      </div>
-                    )}
-                    <p className="text-sm sm:text-base text-muted-foreground break-words">
-                      {stream.description}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2 flex-wrap">
-                      {stream.isLive ? (
-                        <span className="inline-block px-2 py-1 bg-red-500 text-white rounded text-xs sm:text-sm">
-                          Live
-                        </span>
-                      ) : stream.endedAt ? (
-                        <span className="inline-block px-2 py-1 bg-muted text-muted-foreground rounded text-xs sm:text-sm">
-                          Ended {formatRelativeTime(stream.endedAt)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-row sm:flex-col sm:items-end gap-2 sm:gap-3 sm:ml-4">
-                    <div className="flex flex-row flex-wrap gap-1.5 sm:gap-2">
-                      {/* Total Views counter - updates dynamically */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        className="flex items-center gap-1 sm:gap-2 cursor-default hover:bg-muted h-8 sm:h-9 px-2 sm:px-3"
-                        title={`Total views: ${totalViews ?? 0}`}
-                      >
-                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        <span className="text-xs sm:text-sm">
-                          {totalViews ?? 0}
-                        </span>
-                      </Button>
-                      <Button
-                        variant={isLiked ? "default" : "outline"}
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleLike();
-                        }}
-                        className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
-                      >
-                        <Heart
-                          className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
-                            isLiked ? "fill-current" : ""
-                          }`}
-                        />
-                        <span className="text-xs sm:text-sm">{likeCount}</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setIsShareModalOpen(true);
-                        }}
-                        className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
-                      >
-                        <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        <span className="hidden sm:inline">Share</span>
-                      </Button>
-                      {authenticated &&
-                        user?.wallet?.address?.toLowerCase() ===
-                          stream.creatorAddress?.toLowerCase() && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {stream.isLive && !stream.endedAt && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleEndStream();
-                                    }}
-                                    className="text-white"
-                                  >
-                                    End Stream
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                </>
-                              )}
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDeleteStream();
-                                }}
-                                className="text-white"
-                              >
-                                Delete Stream
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                    </div>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Right Sidebar - Chat */}
-        <div className="w-full lg:col-span-3 flex flex-col gap-4 lg:h-[calc(100vh-8rem)]">
+        {/* Right Sidebar - Title/Metadata/Controls and Chat */}
+        <div className="w-full lg:col-span-3 flex flex-col gap-4 lg:h-full lg:overflow-hidden">
           {/* NFT Minting Section */}
           {stream.hasMinting && stream.mintContractAddress && (
             <Card className="flex-shrink-0">
@@ -1178,54 +992,254 @@ export default function StreamPage() {
             </Card>
           )}
 
-          <Card className="flex-1 flex flex-col min-h-0 lg:max-h-[calc(100vh-20rem)]">
+          {/* Combined Title/Metadata/Controls and Chat Section */}
+          <Card className="flex-1 flex flex-col min-h-0 lg:h-full lg:overflow-hidden">
             <CardContent className="p-3 sm:p-4 flex flex-col flex-1 min-h-0">
-              <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
-                Chat
-              </h3>
-              <div
-                id="chat-messages"
-                className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0 max-h-[300px] sm:max-h-[400px] lg:max-h-none"
-              >
-                {chatMessages.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No messages.
+              {/* Title, Metadata, and Controls Section */}
+              <div className="flex flex-col gap-1.5 mb-4 flex-shrink-0">
+                {/* Category */}
+                {stream.category && (
+                  <Link
+                    href={`/browse/${stream.category.slug}`}
+                    className="text-xs sm:text-sm text-[#FAFF00] hover:opacity-80 transition-opacity"
+                  >
+                    {stream.category.name}
+                  </Link>
+                )}
+                
+                {/* Title */}
+                <h1 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold break-words">
+                  {stream.title}
+                </h1>
+                
+                {/* Creator Info */}
+                {creator && (
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Link
+                      href={`/profile/${creator.walletAddress}`}
+                      className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
+                    >
+                      <Avatar className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0">
+                        {creator.avatarUrl ? (
+                          <AvatarImage
+                            src={creator.avatarUrl}
+                            alt={
+                              creator.displayName ||
+                              creator.username ||
+                              "Creator"
+                            }
+                          />
+                        ) : null}
+                        <AvatarFallback
+                          seed={(creator.walletAddress || "").toLowerCase()}
+                        />
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          <span className="truncate">
+                            {creator.displayName ||
+                              creator.username ||
+                              `${creator.walletAddress.slice(
+                                0,
+                                6
+                              )}...${creator.walletAddress.slice(-4)}`}
+                          </span>
+                          {authenticated &&
+                            user?.wallet?.address?.toLowerCase() !==
+                              stream.creatorAddress?.toLowerCase() && (
+                              <Button
+                                variant={
+                                  isFollowing ? "outline" : "default"
+                                }
+                                size="sm"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  isFollowing
+                                    ? handleUnfollow()
+                                    : handleFollow();
+                                }}
+                                className="h-6 px-2 text-xs flex-shrink-0"
+                              >
+                                {isFollowing ? "Unfollow" : "Follow"}
+                              </Button>
+                            )}
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">
+                          {followerCount}{" "}
+                          {followerCount === 1 ? "follower" : "followers"}
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                )}
+                
+                {/* Description */}
+                {stream.description && (
+                  <p className="text-sm sm:text-base text-muted-foreground break-words">
+                    {stream.description}
                   </p>
-                ) : (
-                  chatMessages.map((msg) => (
-                    <div key={msg.id} className="text-sm">
-                      <span className="font-semibold">
-                        {msg.senderAddress
-                          ? `${msg.senderAddress.slice(0, 6)}...`
-                          : "Unknown"}
-                      </span>
-                      <span className="ml-2">{msg.message}</span>
+                )}
+                
+                {/* Status Badges */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {stream.isLive ? (
+                    <span className="inline-block px-2 py-1 bg-red-500 text-white rounded text-xs sm:text-sm">
+                      Live
+                    </span>
+                  ) : stream.endedAt ? (
+                    <span className="inline-block px-2 py-1 bg-muted text-muted-foreground rounded text-xs sm:text-sm">
+                      Ended {formatRelativeTime(stream.endedAt)}
+                    </span>
+                  ) : null}
+                </div>
+                
+                {/* Controls */}
+                <div className="flex flex-row flex-wrap gap-2 pt-2">
+                  {/* Total Views counter - updates dynamically */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    className="flex items-center gap-1 sm:gap-2 cursor-default hover:bg-muted h-8 sm:h-9 px-2 sm:px-3"
+                    title={`Total views: ${totalViews ?? 0}`}
+                  >
+                    <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="text-xs sm:text-sm">
+                      {totalViews ?? 0}
+                    </span>
+                  </Button>
+                  <Button
+                    variant={isLiked ? "default" : "outline"}
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleLike();
+                    }}
+                    className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                  >
+                    <Heart
+                      className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
+                        isLiked ? "fill-current" : ""
+                      }`}
+                    />
+                    <span className="text-xs sm:text-sm">{likeCount}</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsShareModalOpen(true);
+                    }}
+                    className="flex items-center gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                  >
+                    <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Share</span>
+                  </Button>
+                  {authenticated &&
+                    user?.wallet?.address?.toLowerCase() ===
+                      stream.creatorAddress?.toLowerCase() && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            className="flex items-center gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {stream.isLive && !stream.endedAt && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleEndStream();
+                                }}
+                                className="text-white"
+                              >
+                                End Stream
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteStream();
+                            }}
+                            className="text-white"
+                          >
+                            Delete Stream
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                </div>
+              </div>
+
+              {/* Chat Section */}
+              <div className="flex-1 flex flex-col min-h-0">
+                <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
+                  Chat
+                </h3>
+                <div
+                  id="chat-messages"
+                  className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0 max-h-[300px] sm:max-h-[400px] lg:max-h-none"
+                >
+                  {chatMessages.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No messages.
+                    </p>
+                  ) : (
+                    chatMessages.map((msg) => (
+                      <div key={msg.id} className="text-sm">
+                        <span className="font-semibold">
+                          {msg.senderAddress
+                            ? `${msg.senderAddress.slice(0, 6)}...`
+                            : "Unknown"}
+                        </span>
+                        <span className="ml-2">{msg.message}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {!stream.endedAt && (
+                  <div className="flex-shrink-0">
+                    <div className="flex gap-2">
+                      <Input
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                        placeholder="Say something..."
+                        disabled={!authenticated}
+                        className="text-sm"
+                      />
+                      <Button
+                        onClick={sendMessage}
+                        disabled={!authenticated || !message.trim()}
+                        size="sm"
+                        className="px-3 sm:px-4"
+                      >
+                        Send
+                      </Button>
                     </div>
-                  ))
+                  </div>
                 )}
               </div>
-              {!stream.endedAt && (
-                <div className="flex-shrink-0">
-                  <div className="flex gap-2">
-                    <Input
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                      placeholder="Say something..."
-                      disabled={!authenticated}
-                      className="text-sm"
-                    />
-                    <Button
-                      onClick={sendMessage}
-                      disabled={!authenticated || !message.trim()}
-                      size="sm"
-                      className="px-3 sm:px-4"
-                    >
-                      Send
-                    </Button>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>

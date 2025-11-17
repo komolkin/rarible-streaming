@@ -476,15 +476,15 @@ export default function ProfilePage() {
           }}
         >
           <div className="flex justify-center">
-            <TabsList>
-              <TabsTrigger value="streams">Streams</TabsTrigger>
-              {authenticated &&
-                user?.wallet?.address?.toLowerCase() ===
-                  address.toLowerCase() && (
-                  <TabsTrigger value="liked">Liked</TabsTrigger>
-                )}
-              <TabsTrigger value="reviews">Reviews</TabsTrigger>
-            </TabsList>
+          <TabsList>
+            <TabsTrigger value="streams">Streams</TabsTrigger>
+            {authenticated &&
+              user?.wallet?.address?.toLowerCase() ===
+                address.toLowerCase() && (
+                <TabsTrigger value="liked">Liked</TabsTrigger>
+              )}
+            <TabsTrigger value="reviews">Reviews</TabsTrigger>
+          </TabsList>
           </div>
           <TabsContent value="streams" className="mt-6">
             {streams.length === 0 ? (

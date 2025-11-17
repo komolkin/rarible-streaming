@@ -215,15 +215,15 @@ export function Navbar() {
                         {formattedBalance}
                       </span>
                       <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 flex-shrink-0">
-                        {userAvatarUrl && (
-                          <AvatarImage 
-                            src={userAvatarUrl}
-                            alt="Profile"
-                            key={userAvatarUrl}
-                          />
-                        )}
-                        <AvatarFallback seed={(user.wallet.address || "").toLowerCase()} />
-                      </Avatar>
+                      {userAvatarUrl && (
+                        <AvatarImage 
+                          src={userAvatarUrl}
+                          alt="Profile"
+                          key={userAvatarUrl}
+                        />
+                      )}
+                      <AvatarFallback seed={(user.wallet.address || "").toLowerCase()} />
+                    </Avatar>
                     </button>
                   </Link>
                 )}

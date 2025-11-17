@@ -328,52 +328,52 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
 
             {/* Chat Section - Hidden on mobile */}
             <div className="hidden lg:block flex-1 flex flex-col min-h-0">
-              <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
-                Chat
-              </h3>
-              <div
-                id={`chat-messages-${stream.id}`}
-                className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0"
-              >
-                {chatMessages.length === 0 ? (
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    No messages.
-                  </p>
-                ) : (
-                  chatMessages.map((msg) => (
-                    <div key={msg.id} className="text-xs sm:text-sm">
-                      <span className="font-semibold">
-                        {msg.senderAddress
-                          ? `${msg.senderAddress.slice(0, 6)}...`
-                          : "Unknown"}
-                      </span>
-                      <span className="ml-2">{msg.message}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-              {!stream.endedAt && (
-                <div className="flex-shrink-0">
-                  <div className="flex gap-2">
-                    <Input
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                      placeholder="Say something..."
-                      disabled={!authenticated}
-                      className="text-xs sm:text-sm"
-                    />
-                    <Button
-                      onClick={sendMessage}
-                      disabled={!authenticated || !message.trim()}
-                      size="sm"
-                      className="px-3 sm:px-4 text-xs sm:text-sm"
-                    >
-                      Send
-                    </Button>
+            <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
+              Chat
+            </h3>
+            <div
+              id={`chat-messages-${stream.id}`}
+              className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0"
+            >
+              {chatMessages.length === 0 ? (
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  No messages.
+                </p>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div key={msg.id} className="text-xs sm:text-sm">
+                    <span className="font-semibold">
+                      {msg.senderAddress
+                        ? `${msg.senderAddress.slice(0, 6)}...`
+                        : "Unknown"}
+                    </span>
+                    <span className="ml-2">{msg.message}</span>
                   </div>
-                </div>
+                ))
               )}
+            </div>
+            {!stream.endedAt && (
+              <div className="flex-shrink-0">
+                <div className="flex gap-2">
+                  <Input
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                    placeholder="Say something..."
+                    disabled={!authenticated}
+                    className="text-xs sm:text-sm"
+                  />
+                  <Button
+                    onClick={sendMessage}
+                    disabled={!authenticated || !message.trim()}
+                    size="sm"
+                    className="px-3 sm:px-4 text-xs sm:text-sm"
+                  >
+                    Send
+                  </Button>
+                </div>
+              </div>
+            )}
             </div>
           </CardContent>
         </Card>
