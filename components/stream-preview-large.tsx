@@ -305,7 +305,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
                     {stream.title}
                   </h3>
                 </Link>
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 lg:gap-3 text-xs sm:text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 lg:gap-3 text-[10px] sm:text-xs text-muted-foreground">
                   <Link
                     href={`/profile/${stream.creatorAddress}`}
                     onClick={(e) => e.stopPropagation()}
