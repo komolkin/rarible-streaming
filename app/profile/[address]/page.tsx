@@ -26,19 +26,48 @@ export default function ProfilePage() {
   const [followerCount, setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [streamsLoading, setStreamsLoading] = useState(false)
   const [likedStreamsLoading, setLikedStreamsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchProfile = useCallback(async () => {
+  // Load all initial data together to prevent UI jumps
+  const loadInitialData = useCallback(async () => {
+    if (!address) return
+    
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch(`/api/profiles?wallet=${address}`)
-      if (response.ok) {
-        const data = await response.json()
-        setProfile(data)
-      } else if (response.status === 404) {
+
+      // Fetch all initial data in parallel
+      const [profileResponse, streamsResponse, reviewsResponse, followersResponse, followingResponse, followStatusResponse] = await Promise.all([
+        fetch(`/api/profiles?wallet=${address}`),
+        fetch(`/api/streams?creator=${address}`),
+        fetch(`/api/reviews?reviewee=${address}`),
+        fetch(`/api/follows?address=${encodeURIComponent(address.toLowerCase())}&type=followers`),
+        fetch(`/api/follows?address=${encodeURIComponent(address.toLowerCase())}&type=following`),
+        authenticated && user?.wallet?.address
+          ? fetch(`/api/follows?follower=${encodeURIComponent(user.wallet.address.toLowerCase())}&following=${encodeURIComponent(address.toLowerCase())}`)
+          : Promise.resolve(null)
+      ])
+
+      // Process profile
+      if (profileResponse.ok) {
+        const profileData = await profileResponse.json()
+        setProfile(profileData)
+        
+        // Process streams with creator info
+        if (streamsResponse.ok) {
+          const streamsData = await streamsResponse.json()
+          const streamsWithCreator = streamsData.map((stream: any) => ({
+            ...stream,
+            creator: {
+              displayName: profileData.displayName,
+              username: profileData.username,
+              avatarUrl: profileData.avatarUrl,
+            }
+          }))
+          setStreams(streamsWithCreator)
+        }
+      } else if (profileResponse.status === 404) {
         // User doesn't have a profile yet - create a default one
         const defaultProfile = {
           walletAddress: address,
@@ -48,57 +77,49 @@ export default function ProfilePage() {
           avatarUrl: null,
         }
         setProfile(defaultProfile)
+        
+        // Still try to load streams even without profile
+        if (streamsResponse.ok) {
+          const streamsData = await streamsResponse.json()
+          setStreams(streamsData)
+        }
       } else {
-        const errorData = await response.json().catch(() => ({}))
+        const errorData = await profileResponse.json().catch(() => ({}))
         const errorMessage = errorData.error || "Failed to load profile"
         const errorDetails = errorData.details ? `\n\nDetails: ${errorData.details}` : ""
         setError(`${errorMessage}${errorDetails}`)
         console.error("Profile fetch error:", errorData)
       }
+
+      // Process reviews
+      if (reviewsResponse.ok) {
+        const reviewsData = await reviewsResponse.json()
+        setReviews(reviewsData)
+      }
+
+      // Process follow counts
+      if (followersResponse.ok) {
+        const followersData = await followersResponse.json()
+        setFollowerCount(followersData.count || 0)
+      }
+
+      if (followingResponse.ok) {
+        const followingData = await followingResponse.json()
+        setFollowingCount(followingData.count || 0)
+      }
+
+      // Process follow status
+      if (followStatusResponse && followStatusResponse.ok) {
+        const followStatusData = await followStatusResponse.json()
+        setIsFollowing(followStatusData.isFollowing || false)
+      }
     } catch (err: any) {
       setError(err?.message || "Failed to load profile")
+      console.error("Error loading initial data:", err)
     } finally {
       setLoading(false)
     }
-  }, [address])
-
-  const fetchStreams = useCallback(async () => {
-    try {
-      setStreamsLoading(true)
-      const response = await fetch(`/api/streams?creator=${address}`)
-      if (response.ok) {
-        const streamsData = await response.json()
-        
-        // Add creator profile to each stream (use current profile state)
-        const streamsWithCreator = streamsData.map((stream: any) => ({
-          ...stream,
-          creator: profile ? {
-            displayName: profile.displayName,
-            username: profile.username,
-            avatarUrl: profile.avatarUrl,
-          } : null
-        }))
-        
-        setStreams(streamsWithCreator)
-      }
-    } catch (error) {
-      console.error("Error fetching streams:", error)
-    } finally {
-      setStreamsLoading(false)
-    }
-  }, [address, profile])
-
-  const fetchReviews = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/reviews?reviewee=${address}`)
-      if (response.ok) {
-        const data = await response.json()
-        setReviews(data)
-      }
-    } catch (error) {
-      console.error("Error fetching reviews:", error)
-    }
-  }, [address])
+  }, [address, authenticated, user?.wallet?.address])
 
   const fetchLikedStreams = useCallback(async () => {
     try {
@@ -137,71 +158,24 @@ export default function ProfilePage() {
     }
   }, [address])
 
-  const checkFollowStatus = useCallback(async () => {
-    if (!authenticated || !user?.wallet?.address) return
-    try {
-      const response = await fetch(
-        `/api/follows?follower=${encodeURIComponent(user.wallet.address.toLowerCase())}&following=${encodeURIComponent(address.toLowerCase())}`
-      )
-      if (response.ok) {
-        const data = await response.json()
-        setIsFollowing(data.isFollowing || false)
-      }
-    } catch (error) {
-      console.error("Error checking follow status:", error)
-    }
-  }, [authenticated, user?.wallet?.address, address])
-
-  const fetchFollowCounts = useCallback(async () => {
-    try {
-      const normalizedAddress = address.toLowerCase()
-      const [followersResponse, followingResponse] = await Promise.all([
-        fetch(`/api/follows?address=${encodeURIComponent(normalizedAddress)}&type=followers`),
-        fetch(`/api/follows?address=${encodeURIComponent(normalizedAddress)}&type=following`),
-      ])
-
-      if (followersResponse.ok) {
-        const followersData = await followersResponse.json()
-        setFollowerCount(followersData.count || 0)
-      }
-
-      if (followingResponse.ok) {
-        const followingData = await followingResponse.json()
-        setFollowingCount(followingData.count || 0)
-      }
-    } catch (error) {
-      console.error("Error fetching follow counts:", error)
-    }
-  }, [address])
-
-  // Initial load - fetch profile and other data
+  // Initial load - fetch all data together
   useEffect(() => {
     if (address) {
-      fetchProfile()
-      fetchReviews()
-      checkFollowStatus()
-      fetchFollowCounts()
+      loadInitialData()
     }
-  }, [address, fetchProfile, fetchReviews, checkFollowStatus, fetchFollowCounts])
-
-  // Fetch streams after profile is loaded
-  useEffect(() => {
-    if (address && profile) {
-      fetchStreams()
-    }
-  }, [address, profile, fetchStreams])
+  }, [address, loadInitialData])
 
   // Refetch profile when page becomes visible (e.g., navigating back from edit)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && address) {
-        fetchProfile()
+        loadInitialData()
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [address, fetchProfile])
+  }, [address, loadInitialData])
 
   const handleFollow = async () => {
     if (!authenticated || !user?.wallet?.address) return
@@ -345,11 +319,7 @@ export default function ProfilePage() {
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
           </TabsList>
           <TabsContent value="streams" className="mt-6">
-            {streamsLoading ? (
-              <div className="text-center py-12">
-                <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
-              </div>
-            ) : streams.length === 0 ? (
+            {streams.length === 0 ? (
               <p className="text-muted-foreground">No streams yet</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
