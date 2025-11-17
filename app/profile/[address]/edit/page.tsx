@@ -28,6 +28,7 @@ export default function EditProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string | null>(null)
+  const [avatarRemoved, setAvatarRemoved] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function EditProfilePage() {
           email: data.email || "",
         })
         setCurrentAvatarUrl(data.avatarUrl)
+        setAvatarRemoved(false) // Reset removal flag when loading profile
       } else if (response.status === 404) {
         // No profile exists yet, redirect to setup
         router.push("/setup")
@@ -114,6 +116,7 @@ export default function EditProfilePage() {
     const file = e.target.files?.[0]
     if (file) {
       setAvatarFile(file)
+      setAvatarRemoved(false) // Reset removal flag when new file is selected
       const reader = new FileReader()
       reader.onloadend = () => {
         setAvatarPreview(reader.result as string)
@@ -125,6 +128,8 @@ export default function EditProfilePage() {
   const removeAvatar = () => {
     setAvatarFile(null)
     setAvatarPreview(null)
+    setCurrentAvatarUrl(null)
+    setAvatarRemoved(true)
     if (avatarInputRef.current) {
       avatarInputRef.current.value = ""
     }
@@ -158,11 +163,17 @@ export default function EditProfilePage() {
         throw new Error("No wallet address found")
       }
 
-      let avatarUrl = currentAvatarUrl || ""
+      let avatarUrl: string | null = null
 
-      // Upload new avatar if provided
-      if (avatarFile) {
+      // If avatar was removed, set to null
+      if (avatarRemoved && !avatarFile) {
+        avatarUrl = null
+      } else if (avatarFile) {
+        // Upload new avatar if provided
         avatarUrl = await uploadFile(avatarFile, "avatars")
+      } else {
+        // Keep existing avatar if not removed and no new file
+        avatarUrl = currentAvatarUrl || null
       }
 
       // Normalize wallet address to lowercase for consistency
