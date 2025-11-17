@@ -1204,33 +1204,28 @@ export default function StreamPage() {
                   ))
                 )}
               </div>
-              <div className="flex-shrink-0">
-                <div className="flex gap-2">
-                  <Input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                    placeholder={
-                      stream.endedAt ? "Stream has ended" : "Say something..."
-                    }
-                    disabled={!authenticated || !!stream.endedAt}
-                    className="text-sm"
-                  />
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!authenticated || !!stream.endedAt}
-                    title={
-                      stream.endedAt
-                        ? "Stream has ended. Chat is read-only."
-                        : ""
-                    }
-                    size="sm"
-                    className="px-3 sm:px-4"
-                  >
-                    Send
-                  </Button>
+              {!stream.endedAt && (
+                <div className="flex-shrink-0">
+                  <div className="flex gap-2">
+                    <Input
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                      placeholder="Say something..."
+                      disabled={!authenticated}
+                      className="text-sm"
+                    />
+                    <Button
+                      onClick={sendMessage}
+                      disabled={!authenticated || !message.trim()}
+                      size="sm"
+                      className="px-3 sm:px-4"
+                    >
+                      Send
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
