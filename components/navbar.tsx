@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { usePrivy } from "@privy-io/react-auth"
 import { useBalance } from "wagmi"
 import { formatUnits } from "viem"
@@ -20,6 +20,7 @@ import { Bell, Plus, User, Settings, LogOut, Menu, X } from "lucide-react"
 export function Navbar() {
   const { authenticated, ready, user, login, logout } = usePrivy()
   const router = useRouter()
+  const pathname = usePathname()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
@@ -162,10 +163,24 @@ export function Navbar() {
             </Link>
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-baseline space-x-4 ml-[32px]">
-              <Link href="/" className="text-sm font-medium hover:opacity-80 transition-opacity">
+              <Link 
+                href="/" 
+                className={`text-sm font-medium transition-all px-3 py-1.5 rounded-lg ${
+                  pathname === "/" 
+                    ? "bg-gray-800 text-white" 
+                    : "text-gray-400 hover:text-white hover:opacity-80"
+                }`}
+              >
                 Home
               </Link>
-              <Link href="/browse" className="text-sm font-medium hover:opacity-80 transition-opacity">
+              <Link 
+                href="/browse" 
+                className={`text-sm font-medium transition-all px-3 py-1.5 rounded-lg ${
+                  pathname?.startsWith("/browse") 
+                    ? "bg-gray-800 text-white" 
+                    : "text-gray-400 hover:text-white hover:opacity-80"
+                }`}
+              >
                 Browse
               </Link>
             </div>
@@ -316,14 +331,22 @@ export function Navbar() {
           <div className="md:hidden border-t py-4 space-y-3">
             <Link 
               href="/" 
-              className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+              className={`block px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                pathname === "/" 
+                  ? "bg-gray-800 text-white" 
+                  : "text-gray-400 hover:bg-muted hover:text-white"
+              }`}
               onClick={() => setMobileMenuOpen(false)}
             >
               Home
             </Link>
             <Link 
               href="/browse" 
-              className="block px-3 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
+              className={`block px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                pathname?.startsWith("/browse") 
+                  ? "bg-gray-800 text-white" 
+                  : "text-gray-400 hover:bg-muted hover:text-white"
+              }`}
               onClick={() => setMobileMenuOpen(false)}
             >
               Browse
