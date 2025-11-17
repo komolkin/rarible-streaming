@@ -62,9 +62,9 @@ export default function BrowsePage() {
                     </div>
                   ) : (
                     <div 
-                      className="aspect-video w-full overflow-hidden rounded-t-lg flex items-center justify-center bg-black"
+                      className="aspect-video w-full overflow-hidden rounded-t-lg flex items-center justify-center"
                     >
-                      <span className="text-4xl font-bold text-white">
+                      <span className="text-4xl font-bold">
                         {category.name.charAt(0).toUpperCase()}
                       </span>
                     </div>

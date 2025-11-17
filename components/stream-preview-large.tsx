@@ -275,7 +275,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
       {/* Right Sidebar */}
       <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
         {/* Combined Title/Metadata and Chat Section */}
-        <Card className="flex-1 flex flex-col min-h-0 hidden lg:flex">
+        <Card className="flex-1 flex flex-col min-h-0">
           <CardContent className="p-3 sm:p-4 flex flex-col flex-1 min-h-0">
             {/* Title and Metadata Section */}
             <div className="flex flex-col gap-1.5 mb-4 flex-shrink-0">
@@ -292,7 +292,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
               
               {/* Title */}
               <Link href={`/stream/${stream.id}`}>
-                <h3 className="text-base sm:text-lg lg:text-xl font-bold text-white mb-1 line-clamp-2 hover:opacity-80 transition-opacity">
+                <h3 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-white mb-1 line-clamp-2 hover:opacity-80 transition-opacity">
                   {stream.title}
                 </h3>
               </Link>
@@ -326,53 +326,55 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
               </div>
             </div>
 
-            {/* Chat Section */}
-            <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
-              Chat
-            </h3>
-            <div
-              id={`chat-messages-${stream.id}`}
-              className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0"
-            >
-              {chatMessages.length === 0 ? (
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  No messages.
-                </p>
-              ) : (
-                chatMessages.map((msg) => (
-                  <div key={msg.id} className="text-xs sm:text-sm">
-                    <span className="font-semibold">
-                      {msg.senderAddress
-                        ? `${msg.senderAddress.slice(0, 6)}...`
-                        : "Unknown"}
-                    </span>
-                    <span className="ml-2">{msg.message}</span>
+            {/* Chat Section - Hidden on mobile */}
+            <div className="hidden lg:block flex-1 flex flex-col min-h-0">
+              <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
+                Chat
+              </h3>
+              <div
+                id={`chat-messages-${stream.id}`}
+                className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0"
+              >
+                {chatMessages.length === 0 ? (
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    No messages.
+                  </p>
+                ) : (
+                  chatMessages.map((msg) => (
+                    <div key={msg.id} className="text-xs sm:text-sm">
+                      <span className="font-semibold">
+                        {msg.senderAddress
+                          ? `${msg.senderAddress.slice(0, 6)}...`
+                          : "Unknown"}
+                      </span>
+                      <span className="ml-2">{msg.message}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              {!stream.endedAt && (
+                <div className="flex-shrink-0">
+                  <div className="flex gap-2">
+                    <Input
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                      placeholder="Say something..."
+                      disabled={!authenticated}
+                      className="text-xs sm:text-sm"
+                    />
+                    <Button
+                      onClick={sendMessage}
+                      disabled={!authenticated || !message.trim()}
+                      size="sm"
+                      className="px-3 sm:px-4 text-xs sm:text-sm"
+                    >
+                      Send
+                    </Button>
                   </div>
-                ))
+                </div>
               )}
             </div>
-            {!stream.endedAt && (
-              <div className="flex-shrink-0">
-                <div className="flex gap-2">
-                  <Input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                    placeholder="Say something..."
-                    disabled={!authenticated}
-                    className="text-xs sm:text-sm"
-                  />
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!authenticated || !message.trim()}
-                    size="sm"
-                    className="px-3 sm:px-4 text-xs sm:text-sm"
-                  >
-                    Send
-                  </Button>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

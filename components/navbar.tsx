@@ -210,16 +210,21 @@ export function Navbar() {
                 </Link>
                 {user?.wallet?.address && (
                   <Link href={`/profile/${user.wallet.address}`}>
-                    <Avatar className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity">
-                      {userAvatarUrl && (
-                        <AvatarImage 
-                          src={userAvatarUrl}
-                          alt="Profile"
-                          key={userAvatarUrl}
-                        />
-                      )}
-                      <AvatarFallback seed={(user.wallet.address || "").toLowerCase()} />
-                    </Avatar>
+                    <button className="outline-none flex items-center gap-2 bg-gray-800/80 hover:bg-gray-800 rounded-lg px-3 py-1.5 transition-colors">
+                      <span className="text-white text-sm font-medium whitespace-nowrap">
+                        {formattedBalance}
+                      </span>
+                      <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 flex-shrink-0">
+                        {userAvatarUrl && (
+                          <AvatarImage 
+                            src={userAvatarUrl}
+                            alt="Profile"
+                            key={userAvatarUrl}
+                          />
+                        )}
+                        <AvatarFallback seed={(user.wallet.address || "").toLowerCase()} />
+                      </Avatar>
+                    </button>
                   </Link>
                 )}
               </>
