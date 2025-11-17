@@ -27,7 +27,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center rounded-sm px-4 py-3 text-sm outline-none hover:bg-gray-700 focus:bg-gray-700 data-[state=open]:bg-gray-700",
+      "flex cursor-default select-none items-center rounded-sm px-4 py-3 text-sm outline-none hover:bg-gray-800/50 focus:bg-gray-800/50 data-[state=open]:bg-gray-800/50",
       inset && "pl-8",
       className
     )}
@@ -83,7 +83,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-4 py-3 text-sm outline-none transition-colors hover:bg-gray-700 focus:bg-gray-700 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-sm px-4 py-3 text-sm outline-none transition-colors hover:bg-gray-800/50 focus:bg-gray-800/50 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       inset && "pl-8",
       className
     )}
