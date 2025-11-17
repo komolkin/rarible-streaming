@@ -321,7 +321,7 @@ export default function ProfilePage() {
                 )}
                 <div className="flex gap-6 text-sm">
                   <div>
-                    <span className="font-semibold">{followerCount}</span> followers
+                    <span className="font-semibold">{followerCount}</span> {followerCount === 1 ? "follower" : "followers"}
                   </div>
                   <div>
                     <span className="font-semibold">{followingCount}</span> following
