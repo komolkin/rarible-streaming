@@ -845,7 +845,7 @@ export default function StreamPage() {
                   <>
                     <Player
                       playbackId={stream.livepeerPlaybackId}
-                      playRecording
+                      playRecording={!!stream.endedAt}
                       autoPlay
                       muted={!stream.endedAt}
                       showTitle={false}
