@@ -162,7 +162,7 @@ export function Navbar() {
               Rarible
             </Link>
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-baseline space-x-4 ml-[32px]">
+            <div className="hidden md:flex items-baseline space-x-2 ml-4">
               <Link 
                 href="/" 
                 className={`text-sm font-medium transition-all px-3 py-1.5 rounded-lg ${
