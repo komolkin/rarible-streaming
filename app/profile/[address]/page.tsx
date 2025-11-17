@@ -320,163 +320,148 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen pt-24 pb-8 px-2 md:px-8">
       <div className="max-w-7xl mx-auto">
-        <Card className="mb-6">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-6">
-              <Avatar className="h-24 w-24">
-                {profile.avatarUrl ? (
-                  <AvatarImage
-                    src={profile.avatarUrl}
-                    alt={profile.displayName || profile.username || "Profile"}
-                  />
-                ) : null}
-                <AvatarFallback
-                  seed={(profile.walletAddress || address || "").toLowerCase()}
-                />
-              </Avatar>
-              <div className="flex-1">
-                <div className="flex items-center gap-4 mb-2">
-                  <div className="flex-1">
-                    {profile.displayName ? (
+        <div className="mb-6 flex flex-col items-center text-center">
+          <Avatar className="h-24 w-24 mb-4">
+            {profile.avatarUrl ? (
+              <AvatarImage
+                src={profile.avatarUrl}
+                alt={profile.displayName || profile.username || "Profile"}
+              />
+            ) : null}
+            <AvatarFallback
+              seed={(profile.walletAddress || address || "").toLowerCase()}
+            />
+          </Avatar>
+
+          {profile.displayName ? (
+            <>
+              <h1 className="text-3xl font-bold mb-2">{profile.displayName}</h1>
+              {profile.username && (
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <p className="text-muted-foreground text-sm">
+                    @{profile.username}
+                  </p>
+                  <button
+                    onClick={handleCopyAddress}
+                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
+                    title="Copy wallet address"
+                  >
+                    {copied ? (
                       <>
-                        <h1 className="text-3xl font-bold">
-                          {profile.displayName}
-                        </h1>
-                        {profile.username && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-muted-foreground text-sm">
-                              @{profile.username}
-                            </p>
-                            <button
-                              onClick={handleCopyAddress}
-                              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
-                              title="Copy wallet address"
-                            >
-                              {copied ? (
-                                <>
-                                  <Check className="h-3.5 w-3.5" />
-                                  <span>Copied!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3.5 w-3.5" />
-                                  <span>
-                                    {ensName || formatAddress(address)}
-                                  </span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        )}
-                        {!profile.username && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <button
-                              onClick={handleCopyAddress}
-                              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
-                              title="Copy wallet address"
-                            >
-                              {copied ? (
-                                <>
-                                  <Check className="h-3.5 w-3.5" />
-                                  <span>Copied!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3.5 w-3.5" />
-                                  <span>
-                                    {ensName || formatAddress(address)}
-                                  </span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    ) : profile.username ? (
-                      <>
-                        <h1 className="text-3xl font-bold">
-                          @{profile.username}
-                        </h1>
-                        <div className="flex items-center gap-2 mt-1">
-                          <button
-                            onClick={handleCopyAddress}
-                            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
-                            title="Copy wallet address"
-                          >
-                            {copied ? (
-                              <>
-                                <Check className="h-3.5 w-3.5" />
-                                <span>Copied!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3.5 w-3.5" />
-                                <span>{ensName || formatAddress(address)}</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Copied!</span>
                       </>
                     ) : (
-                      <h1 className="text-3xl font-bold">
-                        {ensName || formatAddress(address)}
-                      </h1>
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>{ensName || formatAddress(address)}</span>
+                      </>
                     )}
-                  </div>
-                  {authenticated &&
-                  user?.wallet?.address?.toLowerCase() ===
-                    address.toLowerCase() ? (
-                    <Button
-                      onClick={() => router.push(`/profile/${address}/edit`)}
-                      variant="outline"
-                    >
-                      Edit Profile
-                    </Button>
-                  ) : authenticated &&
-                    user?.wallet?.address?.toLowerCase() !==
-                      address.toLowerCase() ? (
-                    <Button
-                      onClick={isFollowing ? handleUnfollow : handleFollow}
-                      variant={isFollowing ? "outline" : "default"}
-                    >
-                      {isFollowing ? "Unfollow" : "Follow"}
-                    </Button>
-                  ) : null}
-                </div>
-                {profile.bio && (
-                  <p className="text-muted-foreground mb-4">{profile.bio}</p>
-                )}
-                {profile.email && (
-                  <p className="text-muted-foreground mb-4 text-sm">
-                    <span className="font-medium">Email:</span> {profile.email}
-                  </p>
-                )}
-                <div className="flex gap-6 text-sm">
-                  <button
-                    onClick={() => {
-                      setModalInitialTab("followers");
-                      setShowFollowersModal(true);
-                    }}
-                    className="hover:underline cursor-pointer"
-                  >
-                    <span className="font-semibold">{followerCount}</span>{" "}
-                    {followerCount === 1 ? "follower" : "followers"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setModalInitialTab("following");
-                      setShowFollowersModal(true);
-                    }}
-                    className="hover:underline cursor-pointer"
-                  >
-                    <span className="font-semibold">{followingCount}</span>{" "}
-                    following
                   </button>
                 </div>
+              )}
+              {!profile.username && (
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <button
+                    onClick={handleCopyAddress}
+                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
+                    title="Copy wallet address"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>{ensName || formatAddress(address)}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : profile.username ? (
+            <>
+              <h1 className="text-3xl font-bold mb-2">@{profile.username}</h1>
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <button
+                  onClick={handleCopyAddress}
+                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
+                  title="Copy wallet address"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" />
+                      <span>{ensName || formatAddress(address)}</span>
+                    </>
+                  )}
+                </button>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </>
+          ) : (
+            <h1 className="text-3xl font-bold mb-2">
+              {ensName || formatAddress(address)}
+            </h1>
+          )}
+
+          <div className="flex items-center justify-center gap-6 text-sm mb-4">
+            <button
+              onClick={() => {
+                setModalInitialTab("followers");
+                setShowFollowersModal(true);
+              }}
+              className="hover:underline cursor-pointer"
+            >
+              <span className="font-semibold">{followerCount}</span>{" "}
+              {followerCount === 1 ? "follower" : "followers"}
+            </button>
+            <button
+              onClick={() => {
+                setModalInitialTab("following");
+                setShowFollowersModal(true);
+              }}
+              className="hover:underline cursor-pointer"
+            >
+              <span className="font-semibold">{followingCount}</span> following
+            </button>
+          </div>
+
+          {authenticated &&
+          user?.wallet?.address?.toLowerCase() === address.toLowerCase() ? (
+            <Button
+              onClick={() => router.push(`/profile/${address}/edit`)}
+              variant="outline"
+            >
+              Edit Profile
+            </Button>
+          ) : authenticated &&
+            user?.wallet?.address?.toLowerCase() !== address.toLowerCase() ? (
+            <Button
+              onClick={isFollowing ? handleUnfollow : handleFollow}
+              variant={isFollowing ? "outline" : "default"}
+            >
+              {isFollowing ? "Unfollow" : "Follow"}
+            </Button>
+          ) : null}
+
+          {profile.bio && (
+            <p className="text-muted-foreground mt-4 max-w-2xl">
+              {profile.bio}
+            </p>
+          )}
+          {profile.email && (
+            <p className="text-muted-foreground mt-2 text-sm">
+              <span className="font-medium">Email:</span> {profile.email}
+            </p>
+          )}
+        </div>
 
         <Tabs
           defaultValue="streams"

@@ -135,12 +135,25 @@ export function Navbar() {
       refreshAvatar()
     }
 
+    // Listen for profile update events
+    const handleProfileUpdate = (event: CustomEvent) => {
+      const { avatarUrl, walletAddress } = event.detail || {}
+      // Only update if it's for the current user
+      if (walletAddress && user?.wallet?.address?.toLowerCase() === walletAddress.toLowerCase()) {
+        // Add cache-busting parameter to ensure fresh image is loaded
+        const updatedUrl = avatarUrl ? `${avatarUrl}?t=${Date.now()}` : null
+        setUserAvatarUrl(updatedUrl)
+      }
+    }
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleFocus)
+    window.addEventListener('profileUpdated', handleProfileUpdate as EventListener)
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('profileUpdated', handleProfileUpdate as EventListener)
     }
   }, [authenticated, user?.wallet?.address])
 

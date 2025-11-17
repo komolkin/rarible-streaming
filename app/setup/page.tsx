@@ -168,6 +168,11 @@ export default function SetupProfilePage() {
         throw new Error(errorMessage)
       }
 
+      // Dispatch custom event to notify navbar of avatar update
+      window.dispatchEvent(new CustomEvent('profileUpdated', { 
+        detail: { avatarUrl: avatarUrl || null, walletAddress: walletAddress.toLowerCase() } 
+      }))
+
       router.push(`/profile/${walletAddress}`)
     } catch (error: any) {
       console.error("Error setting up profile:", error)

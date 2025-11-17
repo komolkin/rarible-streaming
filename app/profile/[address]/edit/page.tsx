@@ -202,6 +202,11 @@ export default function EditProfilePage() {
         description: "Profile updated successfully",
       })
 
+      // Dispatch custom event to notify navbar of avatar update
+      window.dispatchEvent(new CustomEvent('profileUpdated', { 
+        detail: { avatarUrl, walletAddress: normalizedWalletAddress } 
+      }))
+
       // Refresh the router cache and navigate to profile
       router.refresh()
       router.push(`/profile/${walletAddress}`)
