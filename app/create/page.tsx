@@ -256,40 +256,42 @@ export default function CreateStreamPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="categoryId">Category (optional)</Label>
-                <Select
-                  value={formData.categoryId || undefined}
-                  onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
-                  disabled={categoriesLoading}
-                >
-                  <SelectTrigger id="categoryId">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.length === 0 && !categoriesLoading ? (
-                      <SelectItem value="no-categories" disabled>
-                        No categories available
-                      </SelectItem>
-                    ) : (
-                      categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-4">
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="categoryId">Category (optional)</Label>
+                  <Select
+                    value={formData.categoryId || undefined}
+                    onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
+                    disabled={categoriesLoading}
+                  >
+                    <SelectTrigger id="categoryId">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.length === 0 && !categoriesLoading ? (
+                        <SelectItem value="no-categories" disabled>
+                          No categories available
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                      ) : (
+                        categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="scheduledAt">Scheduled At (optional)</Label>
-                <Input
-                  id="scheduledAt"
-                  type="datetime-local"
-                  value={formData.scheduledAt}
-                  onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
-                />
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="scheduledAt">Scheduled At (optional)</Label>
+                  <Input
+                    id="scheduledAt"
+                    type="datetime-local"
+                    value={formData.scheduledAt}
+                    onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center space-x-2">
