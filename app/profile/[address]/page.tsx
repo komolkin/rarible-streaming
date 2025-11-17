@@ -591,6 +591,8 @@ export default function ProfilePage() {
         displayName={profile.displayName}
         isOpen={showFollowersModal}
         initialTab={modalInitialTab}
+        followerCount={followerCount}
+        followingCount={followingCount}
         onClose={() => setShowFollowersModal(false)}
       />
     </main>

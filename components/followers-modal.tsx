@@ -35,6 +35,8 @@ interface FollowersModalProps {
   displayName: string | null
   isOpen: boolean
   initialTab?: "followers" | "following"
+  followerCount?: number
+  followingCount?: number
   onClose: () => void
 }
 
@@ -43,6 +45,8 @@ export function FollowersModal({
   displayName,
   isOpen, 
   initialTab = "followers",
+  followerCount = 0,
+  followingCount = 0,
   onClose 
 }: FollowersModalProps) {
   const [followers, setFollowers] = useState<Follower[]>([])
@@ -153,8 +157,12 @@ export function FollowersModal({
         <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
           <div className="px-6 pt-4">
             <TabsList className="w-full">
-              <TabsTrigger value="followers" className="flex-1">Followers</TabsTrigger>
-              <TabsTrigger value="following" className="flex-1">Following</TabsTrigger>
+              <TabsTrigger value="followers" className="flex-1">
+                Followers {followerCount > 0 && `(${followerCount})`}
+              </TabsTrigger>
+              <TabsTrigger value="following" className="flex-1">
+                Following {followingCount > 0 && `(${followingCount})`}
+              </TabsTrigger>
             </TabsList>
           </div>
           
