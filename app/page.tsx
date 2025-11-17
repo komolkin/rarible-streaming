@@ -74,7 +74,7 @@ export default function Home() {
               rel="noopener noreferrer"
               className="text-white hover:text-gray-200"
             >
-              Join waitlist
+              Follow for updates
             </a>
           </p>
         </div>
