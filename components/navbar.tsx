@@ -4,6 +4,8 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { usePrivy } from "@privy-io/react-auth"
+import { useBalance } from "wagmi"
+import { formatUnits } from "viem"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -21,7 +23,48 @@ export function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
+  const [ethPrice, setEthPrice] = useState<number | null>(null)
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Fetch ETH balance
+  const { data: balance } = useBalance({
+    address: user?.wallet?.address as `0x${string}` | undefined,
+    query: {
+      enabled: !!user?.wallet?.address,
+      refetchInterval: 10000, // Refetch every 10 seconds
+    },
+  })
+  
+  // Fetch ETH price in USD
+  useEffect(() => {
+    const fetchEthPrice = async () => {
+      try {
+        const response = await fetch(
+          "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+        )
+        if (response.ok) {
+          const data = await response.json()
+          setEthPrice(data.ethereum?.usd || null)
+        }
+      } catch (error) {
+        console.error("Error fetching ETH price:", error)
+      }
+    }
+    
+    if (authenticated) {
+      fetchEthPrice()
+      // Refresh price every 60 seconds
+      const interval = setInterval(fetchEthPrice, 60000)
+      return () => clearInterval(interval)
+    }
+  }, [authenticated])
+  
+  // Format balance as USD
+  const formattedBalance = balance && ethPrice
+    ? `$${(parseFloat(formatUnits(balance.value, balance.decimals)) * ethPrice).toFixed(2)}`
+    : balance
+    ? `${parseFloat(formatUnits(balance.value, balance.decimals)).toFixed(4)} ETH`
+    : "$0.00"
   
   const handleMouseEnter = useCallback(() => {
     // Clear any pending close timeout
@@ -202,7 +245,7 @@ export function Navbar() {
                       >
                         <DropdownMenuTrigger asChild>
                           <button 
-                            className="outline-none flex items-center" 
+                            className="outline-none flex items-center gap-2 bg-gray-800/80 hover:bg-gray-800 rounded-lg px-3 py-1.5 transition-colors" 
                             onMouseEnter={handleMouseEnter}
                             onClick={(e) => {
                               // Navigate to profile on click
@@ -211,7 +254,10 @@ export function Navbar() {
                               }
                             }}
                           >
-                            <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-10 w-10">
+                            <span className="text-white text-sm font-medium whitespace-nowrap">
+                              {formattedBalance}
+                            </span>
+                            <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 flex-shrink-0">
                               {user?.wallet?.address && (
                                 <>
                                   {userAvatarUrl && (

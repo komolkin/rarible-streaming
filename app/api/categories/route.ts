@@ -51,11 +51,11 @@ export async function POST(request: NextRequest) {
       if (orderError?.message?.includes('order') || orderError?.code === '42703') {
         console.warn("Order column not found, creating category without order field.")
         const [created] = await db.insert(categories).values({
-          name,
-          slug,
-          description,
-          imageUrl,
-        }).returning()
+      name,
+      slug,
+      description,
+      imageUrl,
+    }).returning()
         category = [created]
       } else {
         throw orderError
