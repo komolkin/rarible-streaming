@@ -227,16 +227,16 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
   }, [isInViewport, stream.livepeerPlaybackId])
 
   return (
-    <div ref={containerRef} className="w-full h-[60vh] mb-6 flex gap-4">
+    <div ref={containerRef} className="w-full mb-6 flex flex-col lg:flex-row gap-4">
       {/* Player Section */}
       <Card className="flex-1 flex flex-col min-h-0 p-0 overflow-hidden">
-        <CardContent className="p-0 flex-1 flex items-center justify-center bg-black relative">
+        <CardContent className="p-0 flex-1 flex items-center justify-center bg-black relative aspect-video lg:h-auto">
           {stream.livepeerPlaybackId ? (
             <div className="w-full h-full flex items-center justify-center relative">
               <div className="w-full h-full max-w-full max-h-full">
                 <Player
                   playbackId={stream.livepeerPlaybackId}
-                  playRecording
+                  playRecording={!!stream.endedAt}
                   autoPlay={false}
                   muted
                   showTitle={false}
@@ -249,15 +249,15 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
 
               {/* Live badge */}
               {stream.isLive && !stream.endedAt && (
-                <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-semibold flex items-center gap-2 z-10">
-                  <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                <div className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-red-500 text-white px-2 py-1 sm:px-3 rounded-full text-xs sm:text-sm font-semibold flex items-center gap-1.5 sm:gap-2 z-10">
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full animate-pulse"></span>
                   LIVE
                 </div>
               )}
 
               {/* Ended badge */}
               {stream.endedAt && (
-                <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-semibold z-10">
+                <div className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-black/70 text-white px-2 py-1 sm:px-3 rounded-full text-xs sm:text-sm font-semibold z-10">
                   Ended
                 </div>
               )}
@@ -271,17 +271,17 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
       </Card>
 
       {/* Right Sidebar */}
-      <div className="w-80 flex-shrink-0 flex flex-col gap-4">
+      <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
         {/* Stream Info Section */}
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3 sm:gap-4">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-start gap-2 sm:gap-3 lg:gap-4">
               <Link
                 href={`/profile/${stream.creatorAddress}`}
                 onClick={(e) => e.stopPropagation()}
                 className="flex-shrink-0"
               >
-                <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
+                <Avatar className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12">
                   <AvatarImage src={stream.creator?.avatarUrl || ""} />
                   <AvatarFallback
                     seed={(stream.creatorAddress || "").toLowerCase()}
@@ -299,11 +299,11 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
                   </Link>
                 )}
                 <Link href={`/stream/${stream.id}`}>
-                  <h3 className="text-base sm:text-lg font-bold mb-1 line-clamp-2 hover:underline">
+                  <h3 className="text-sm sm:text-base lg:text-lg font-bold mb-1 line-clamp-2 hover:underline">
                     {stream.title}
                   </h3>
                 </Link>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 lg:gap-3 text-xs sm:text-sm text-muted-foreground">
                   <Link
                     href={`/profile/${stream.creatorAddress}`}
                     onClick={(e) => e.stopPropagation()}
@@ -313,7 +313,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
                   </Link>
                   {stream.isLive && (
                     <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 rounded-full animate-pulse"></span>
                       {stream.viewerCount ?? 0} live
                     </span>
                   )}
@@ -336,22 +336,22 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
         </Card>
 
         {/* Chat Section */}
-        <Card className="flex-1 flex flex-col min-h-0">
-          <CardContent className="p-4 flex flex-col flex-1 min-h-0">
-            <h3 className="font-semibold mb-4 flex-shrink-0 text-sm sm:text-base">
+        <Card className="flex-1 flex flex-col min-h-0 hidden lg:flex">
+          <CardContent className="p-3 sm:p-4 flex flex-col flex-1 min-h-0">
+            <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
               Chat
             </h3>
             <div
               id={`chat-messages-${stream.id}`}
-              className="space-y-2 mb-4 flex-1 overflow-y-auto min-h-0"
+              className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0"
             >
               {chatMessages.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   No messages.
                 </p>
               ) : (
                 chatMessages.map((msg) => (
-                  <div key={msg.id} className="text-sm">
+                  <div key={msg.id} className="text-xs sm:text-sm">
                     <span className="font-semibold">
                       {msg.senderAddress
                         ? `${msg.senderAddress.slice(0, 6)}...`
@@ -371,13 +371,13 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
                     onKeyPress={(e) => e.key === "Enter" && sendMessage()}
                     placeholder="Say something..."
                     disabled={!authenticated}
-                    className="text-sm"
+                    className="text-xs sm:text-sm"
                   />
                   <Button
                     onClick={sendMessage}
                     disabled={!authenticated || !message.trim()}
                     size="sm"
-                    className="px-4"
+                    className="px-3 sm:px-4 text-xs sm:text-sm"
                   >
                     Send
                   </Button>
