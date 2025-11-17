@@ -292,7 +292,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
                 {stream.category && (
                   <Link 
                     href={`/browse/${stream.category.slug}`}
-                    className="text-xs sm:text-sm text-blue-400 mb-1 inline-block"
+                    className="text-xs sm:text-sm text-[#FAFF00] mb-1 inline-block"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {stream.category.name}

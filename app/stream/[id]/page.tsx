@@ -954,7 +954,7 @@ export default function StreamPage() {
                     {stream.category && (
                       <Link
                         href={`/browse/${stream.category.slug}`}
-                        className="text-xs sm:text-sm text-blue-400 mb-2 inline-block"
+                        className="text-xs sm:text-sm text-[#FAFF00] mb-2 inline-block"
                       >
                         {stream.category.name}
                       </Link>
