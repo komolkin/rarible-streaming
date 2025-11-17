@@ -42,6 +42,7 @@ export default function StreamPage() {
   const [isInViewport, setIsInViewport] = useState<boolean>(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [totalViews, setTotalViews] = useState<number | null>(null);
+  const [isMetadataLoading, setIsMetadataLoading] = useState<boolean>(true);
 
   const fetchChatMessages = useCallback(async () => {
     const response = await fetch(`/api/chat/${params.id}`);
@@ -52,7 +53,7 @@ export default function StreamPage() {
   }, [params.id]);
 
 
-  const fetchStream = useCallback(async () => {
+  const fetchStream = useCallback(async (isInitialLoad: boolean = false) => {
     try {
       // Add timeout to prevent hanging (15 seconds max)
       const controller = new AbortController();
@@ -87,17 +88,34 @@ export default function StreamPage() {
       setStream(data);
       setPageError(null); // Clear any previous errors
 
+      // Fetch all metadata in parallel for initial load
+      const metadataPromises: Promise<void>[] = [];
+
       // Fetch creator profile if we have creator address
       if (data.creatorAddress) {
-        try {
-          const creatorResponse = await fetch(
-            `/api/profiles?wallet=${data.creatorAddress}`
-          );
-          if (creatorResponse.ok) {
-            const creatorData = await creatorResponse.json();
-            setCreator(creatorData);
-          } else {
-            // If no profile exists, create a default one
+        const creatorPromise = (async () => {
+          try {
+            const creatorResponse = await fetch(
+              `/api/profiles?wallet=${data.creatorAddress}`
+            );
+            if (creatorResponse.ok) {
+              const creatorData = await creatorResponse.json();
+              setCreator(creatorData);
+            } else {
+              // If no profile exists, create a default one
+              setCreator({
+                walletAddress: data.creatorAddress,
+                displayName: `${data.creatorAddress.slice(
+                  0,
+                  6
+                )}...${data.creatorAddress.slice(-4)}`,
+                username: null,
+                avatarUrl: null,
+              });
+            }
+          } catch (error) {
+            console.error("Error fetching creator profile:", error);
+            // Set default creator info
             setCreator({
               walletAddress: data.creatorAddress,
               displayName: `${data.creatorAddress.slice(
@@ -108,34 +126,26 @@ export default function StreamPage() {
               avatarUrl: null,
             });
           }
-        } catch (error) {
-          console.error("Error fetching creator profile:", error);
-          // Set default creator info
-          setCreator({
-            walletAddress: data.creatorAddress,
-            displayName: `${data.creatorAddress.slice(
-              0,
-              6
-            )}...${data.creatorAddress.slice(-4)}`,
-            username: null,
-            avatarUrl: null,
-          });
-        }
+        })();
+        metadataPromises.push(creatorPromise);
 
         // Fetch follower count for creator
-        try {
-          const followerResponse = await fetch(
-            `/api/follows?address=${encodeURIComponent(
-              data.creatorAddress.toLowerCase()
-            )}&type=followers`
-          );
-          if (followerResponse.ok) {
-            const followerData = await followerResponse.json();
-            setFollowerCount(followerData.count || 0);
+        const followerPromise = (async () => {
+          try {
+            const followerResponse = await fetch(
+              `/api/follows?address=${encodeURIComponent(
+                data.creatorAddress.toLowerCase()
+              )}&type=followers`
+            );
+            if (followerResponse.ok) {
+              const followerData = await followerResponse.json();
+              setFollowerCount(followerData.count || 0);
+            }
+          } catch (error) {
+            console.error("Error fetching follower count:", error);
           }
-        } catch (error) {
-          console.error("Error fetching follower count:", error);
-        }
+        })();
+        metadataPromises.push(followerPromise);
 
         // Check if current user is following the creator (only if authenticated and not own stream)
         if (
@@ -144,43 +154,54 @@ export default function StreamPage() {
           data.creatorAddress.toLowerCase() !==
             user.wallet.address.toLowerCase()
         ) {
-          try {
-            const followStatusResponse = await fetch(
-              `/api/follows?follower=${encodeURIComponent(
-                user.wallet.address.toLowerCase()
-              )}&following=${encodeURIComponent(
-                data.creatorAddress.toLowerCase()
-              )}`
-            );
-            if (followStatusResponse.ok) {
-              const followStatusData = await followStatusResponse.json();
-              setIsFollowing(followStatusData.isFollowing || false);
+          const followStatusPromise = (async () => {
+            try {
+              const followStatusResponse = await fetch(
+                `/api/follows?follower=${encodeURIComponent(
+                  user.wallet.address.toLowerCase()
+                )}&following=${encodeURIComponent(
+                  data.creatorAddress.toLowerCase()
+                )}`
+              );
+              if (followStatusResponse.ok) {
+                const followStatusData = await followStatusResponse.json();
+                setIsFollowing(followStatusData.isFollowing || false);
+              }
+            } catch (error) {
+              console.error("Error checking follow status:", error);
             }
-          } catch (error) {
-            console.error("Error checking follow status:", error);
-          }
+          })();
+          metadataPromises.push(followStatusPromise);
         }
       }
 
       // Fetch like count and check if user has liked
-      try {
-        const userAddress = user?.wallet?.address || null;
-        const likesUrl = `/api/streams/${params.id}/likes${
-          userAddress ? `?userAddress=${userAddress}` : ""
-        }`;
-        const likesResponse = await fetch(likesUrl);
-        if (likesResponse.ok) {
-          const likesData = await likesResponse.json();
-          setLikeCount(likesData.likeCount || 0);
-          setIsLiked(likesData.isLiked || false);
+      const likesPromise = (async () => {
+        try {
+          const userAddress = user?.wallet?.address || null;
+          const likesUrl = `/api/streams/${params.id}/likes${
+            userAddress ? `?userAddress=${userAddress}` : ""
+          }`;
+          const likesResponse = await fetch(likesUrl);
+          if (likesResponse.ok) {
+            const likesData = await likesResponse.json();
+            setLikeCount(likesData.likeCount || 0);
+            setIsLiked(likesData.isLiked || false);
+          }
+        } catch (error) {
+          console.error("Error fetching stream likes:", error);
         }
-      } catch (error) {
-        console.error("Error fetching stream likes:", error);
-      }
+      })();
+      metadataPromises.push(likesPromise);
 
       // Set total views from stream data
       if (typeof data.totalViews === "number") {
         setTotalViews(data.totalViews);
+      }
+
+      // Wait for all metadata to load on initial load
+      if (isInitialLoad) {
+        await Promise.all(metadataPromises);
       }
 
     } catch (error: any) {
@@ -377,7 +398,7 @@ export default function StreamPage() {
   }, []);
 
   // Function to fetch views
-  const fetchViews = useCallback(async () => {
+  const fetchViews = useCallback(async (isInitialLoad: boolean = false) => {
     try {
       const response = await fetch(
         `/api/streams/${params.id}/views?_=${Date.now()}`,
@@ -391,80 +412,117 @@ export default function StreamPage() {
       );
 
       if (!response.ok) {
-        if (response.status === 404) return;
+        if (response.status === 404) {
+          if (isInitialLoad) {
+            setTotalViews(0);
+          }
+          return;
+        }
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data = await response.json();
       if (typeof data.totalViews === "number") {
         setTotalViews(data.totalViews);
+      } else if (isInitialLoad) {
+        setTotalViews(0);
       }
     } catch (error: any) {
       console.error(`[Views] Error fetching views:`, error?.message || error);
+      if (isInitialLoad) {
+        setTotalViews(0);
+      }
     }
   }, [params.id]);
 
   useEffect(() => {
-    try {
-      fetchStream();
-      fetchChatMessages();
-      // Fetch views immediately on mount
-      fetchViews();
-    } catch (error: any) {
-      console.error("Error during initial fetch:", error);
-      setPageError(error?.message || "Failed to load stream");
-    }
+    let isMounted = true;
+    let chatCleanup: (() => void) | null = null;
+    let streamStatusCleanup: (() => void) | null = null;
+    let interval: NodeJS.Timeout | null = null;
+    let viewsInterval: NodeJS.Timeout | null = null;
+    let viewerCountInterval: NodeJS.Timeout | null = null;
 
-    // Set up real-time subscriptions
-    const chatCleanup = subscribeToChat();
-    const streamStatusCleanup = subscribeToStreamStatus();
+    const loadInitialData = async () => {
+      try {
+        setIsMetadataLoading(true);
+        
+        // Fetch stream and views in parallel for initial load
+        await Promise.all([
+          fetchStream(true),
+          fetchViews(true),
+          fetchChatMessages(),
+        ]);
 
-    // Fetch viewer count for live streams
-    fetchViewerCount();
+        if (!isMounted) return;
 
-    // Poll for stream status updates every 30 seconds (reduced frequency since we have WebSocket)
-    // This serves as a fallback and updates other stream metadata including views
-    const interval = setInterval(() => {
-      fetchStream().catch((error) => {
-        console.error("Error during poll:", error);
-      });
-    }, 30000);
+        // All metadata has loaded, hide loading state
+        setIsMetadataLoading(false);
 
-    // Poll for views every 15 seconds to ensure we get latest data quickly
-    // Livepeer updates views every 5 minutes, but we check frequently to catch updates quickly
-    // Note: This uses the backend API which correctly identifies asset playbackId for ended streams
-    const viewsInterval = setInterval(() => {
-      fetchViews();
-    }, 15000); // Check every 15 seconds for faster updates
+        // Set up real-time subscriptions
+        chatCleanup = subscribeToChat();
+        streamStatusCleanup = subscribeToStreamStatus();
 
-    // Poll for viewer count every 10 seconds for live streams
-    const viewerCountInterval =
-      stream?.livepeerPlaybackId && !stream?.endedAt
-        ? setInterval(() => {
-            fetchViewerCount();
-          }, 10000)
-        : null;
+        // Fetch viewer count for live streams (non-blocking)
+        fetchViewerCount();
+
+        // Poll for stream status updates every 30 seconds (reduced frequency since we have WebSocket)
+        // This serves as a fallback and updates other stream metadata including views
+        interval = setInterval(() => {
+          fetchStream(false).catch((error) => {
+            console.error("Error during poll:", error);
+          });
+        }, 30000);
+
+        // Poll for views every 15 seconds to ensure we get latest data quickly
+        // Livepeer updates views every 5 minutes, but we check frequently to catch updates quickly
+        // Note: This uses the backend API which correctly identifies asset playbackId for ended streams
+        viewsInterval = setInterval(() => {
+          fetchViews(false);
+        }, 15000); // Check every 15 seconds for faster updates
+      } catch (error: any) {
+        console.error("Error during initial fetch:", error);
+        if (isMounted) {
+          setPageError(error?.message || "Failed to load stream");
+          setIsMetadataLoading(false);
+        }
+      }
+    };
+
+    loadInitialData();
+
+    // Set up viewer count polling after stream is loaded (in a separate effect)
+    // This will be handled by the existing effect that depends on stream
 
     return () => {
-      chatCleanup();
-      streamStatusCleanup();
-      clearInterval(interval);
-      clearInterval(viewsInterval);
-      if (viewerCountInterval) {
-        clearInterval(viewerCountInterval);
-      }
+      isMounted = false;
+      if (chatCleanup) chatCleanup();
+      if (streamStatusCleanup) streamStatusCleanup();
+      if (interval) clearInterval(interval);
+      if (viewsInterval) clearInterval(viewsInterval);
+      if (viewerCountInterval) clearInterval(viewerCountInterval);
     };
   }, [
     params.id,
     fetchStream,
     fetchChatMessages,
     fetchViews,
-    fetchViewerCount,
     subscribeToChat,
     subscribeToStreamStatus,
-    stream?.livepeerPlaybackId,
-    stream?.endedAt,
   ]);
+
+  // Separate effect for viewer count polling that depends on stream state
+  useEffect(() => {
+    if (!stream?.livepeerPlaybackId || stream?.endedAt) return;
+
+    const viewerCountInterval = setInterval(() => {
+      fetchViewerCount();
+    }, 10000);
+
+    return () => {
+      clearInterval(viewerCountInterval);
+    };
+  }, [stream?.livepeerPlaybackId, stream?.endedAt, fetchViewerCount]);
 
 
 
@@ -825,7 +883,7 @@ export default function StreamPage() {
     );
   }
 
-  if (!stream) {
+  if (!stream || isMetadataLoading) {
     return (
       <div className="min-h-screen pt-16 flex items-center justify-center">
         <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
