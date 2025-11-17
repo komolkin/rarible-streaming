@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { X, Upload, Camera } from "lucide-react"
+import { Camera } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function EditProfilePage() {
@@ -254,16 +254,6 @@ export default function EditProfilePage() {
                         <Camera className="h-6 w-6 text-white" />
                       </div>
                     </div>
-                    {(avatarPreview || currentAvatarUrl) && (
-                      <button
-                        type="button"
-                        onClick={removeAvatar}
-                        className="absolute -top-2 -right-2 p-1.5 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90 transition-colors shadow-lg"
-                        aria-label="Remove avatar"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
                   </div>
                   <div className="flex-1 flex flex-col justify-center gap-3">
                     <div className="space-y-1">
@@ -281,15 +271,14 @@ export default function EditProfilePage() {
                         onClick={() => avatarInputRef.current?.click()}
                         className="w-fit"
                       >
-                        <Upload className="h-4 w-4 mr-2" />
                         {avatarPreview || currentAvatarUrl ? "Change Photo" : "Upload Photo"}
                       </Button>
                       {(avatarPreview || currentAvatarUrl) && (
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           onClick={removeAvatar}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          className="w-fit"
                         >
                           Remove
                         </Button>
