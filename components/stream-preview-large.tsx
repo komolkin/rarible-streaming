@@ -292,7 +292,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
               
               {/* Title */}
               <Link href={`/stream/${stream.id}`}>
-                <h3 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-white mb-1 line-clamp-2 hover:opacity-80 transition-opacity">
+                <h3 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-medium text-white mb-1 line-clamp-2 hover:opacity-80 transition-opacity">
                   {stream.title}
                 </h3>
               </Link>
@@ -328,7 +328,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
 
             {/* Chat Section - Hidden on mobile */}
             <div className="hidden lg:block flex-1 flex flex-col min-h-0">
-            <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
+            <h3 className="font-medium mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
               Chat
             </h3>
             <div

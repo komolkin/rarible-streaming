@@ -65,7 +65,7 @@ export default function Home() {
     <main className="min-h-screen pt-24 pb-8 px-2 md:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 [text-wrap:pretty]">The best way to have fun onchain</h1>
+          <h1 className="text-4xl font-medium mb-4 [text-wrap:pretty]">The best way to have fun onchain</h1>
           <p className="text-muted-foreground mb-12 [text-wrap:pretty]">
             We&apos;re currently in Private Access.{" "}
             <a 

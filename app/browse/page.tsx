@@ -38,7 +38,7 @@ export default function BrowsePage() {
   return (
     <main className="min-h-screen pt-24 pb-8 px-2 md:px-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-16 text-center">Browse Categories</h1>
+        <h1 className="text-4xl font-medium mb-16 text-center">Browse Categories</h1>
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
@@ -70,7 +70,7 @@ export default function BrowsePage() {
                     </div>
                   )}
                   <CardContent className="p-4">
-                    <h3 className="font-semibold text-lg mb-1">{category.name}</h3>
+                    <h3 className="font-medium text-lg mb-1">{category.name}</h3>
                     {category.description && (
                       <p className="text-sm text-muted-foreground line-clamp-2">
                         {category.description}

@@ -335,7 +335,7 @@ export default function ProfilePage() {
 
           {profile.displayName ? (
             <>
-              <h1 className="text-3xl font-bold mb-2">{profile.displayName}</h1>
+              <h1 className="text-3xl font-medium mb-2">{profile.displayName}</h1>
               {profile.username && (
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <p className="text-muted-foreground text-sm">
@@ -384,7 +384,7 @@ export default function ProfilePage() {
             </>
           ) : profile.username ? (
             <>
-              <h1 className="text-3xl font-bold mb-2">@{profile.username}</h1>
+              <h1 className="text-3xl font-medium mb-2">@{profile.username}</h1>
               <div className="flex items-center justify-center gap-2 mb-2">
                 <button
                   onClick={handleCopyAddress}
@@ -406,7 +406,7 @@ export default function ProfilePage() {
               </div>
             </>
           ) : (
-            <h1 className="text-3xl font-bold mb-2">
+            <h1 className="text-3xl font-medium mb-2">
               {ensName || formatAddress(address)}
             </h1>
           )}

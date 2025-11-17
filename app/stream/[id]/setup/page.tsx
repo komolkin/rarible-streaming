@@ -113,7 +113,7 @@ export default function StreamSetupPage() {
             </div>
 
             <div className="space-y-4">
-              <h3 className="font-semibold">Steps to configure OBS:</h3>
+              <h3 className="font-medium">Steps to configure OBS:</h3>
               <ol className="list-decimal list-inside space-y-2 text-sm">
                 <li>Open OBS Studio</li>
                 <li>Go to Settings → Stream</li>

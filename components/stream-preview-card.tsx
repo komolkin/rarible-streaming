@@ -173,7 +173,7 @@ export function StreamPreviewCard({
               {stream.category.name}
             </Link>
           )}
-          <CardTitle className="line-clamp-2 text-base sm:text-lg font-semibold">
+          <CardTitle className="line-clamp-2 text-base sm:text-lg font-medium">
             {stream.title}
           </CardTitle>
         </CardHeader>

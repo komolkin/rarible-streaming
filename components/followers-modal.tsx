@@ -148,7 +148,7 @@ export function FollowersModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold">{modalTitle}</h2>
+          <h2 className="text-xl font-medium">{modalTitle}</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>

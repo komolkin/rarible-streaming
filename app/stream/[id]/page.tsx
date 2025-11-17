@@ -879,7 +879,7 @@ export default function StreamPage() {
     return (
       <div className="min-h-screen pt-16 flex items-center justify-center">
         <div className="text-center max-w-md">
-          <h2 className="text-xl font-semibold text-red-500 mb-2">
+          <h2 className="text-xl font-medium text-red-500 mb-2">
             Error Loading Stream
           </h2>
           <p className="text-muted-foreground mb-4">{pageError}</p>
@@ -971,7 +971,7 @@ export default function StreamPage() {
                       <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
                         ⏳
                       </div>
-                      <h3 className="text-lg sm:text-xl font-semibold mb-2 px-2">
+                      <h3 className="text-lg sm:text-xl font-medium mb-2 px-2">
                         Recording Processing
                       </h3>
                       <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
@@ -1024,7 +1024,7 @@ export default function StreamPage() {
           {stream.hasMinting && stream.mintContractAddress && (
             <Card className="flex-shrink-0">
               <CardContent className="p-4">
-                <h3 className="font-semibold mb-4">Mint NFT</h3>
+                <h3 className="font-medium mb-4">Mint NFT</h3>
                 <div className="space-y-3">
                   {stream.mintMaxSupply && (
                     <div className="text-sm text-muted-foreground">
@@ -1072,7 +1072,7 @@ export default function StreamPage() {
                 )}
                 
                 {/* Title */}
-                <h1 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold break-words">
+                <h1 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-medium break-words">
                   {stream.title}
                 </h1>
                 
@@ -1257,7 +1257,7 @@ export default function StreamPage() {
 
               {/* Chat Section */}
               <div className="flex-1 flex flex-col min-h-0">
-                <h3 className="font-semibold mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
+                <h3 className="font-medium mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
                   Chat
                 </h3>
                 <div

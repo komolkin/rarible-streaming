@@ -53,7 +53,7 @@ export function ShareModal({ streamId, streamTitle, isOpen, onClose }: ShareModa
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Share Stream</h2>
+          <h2 className="text-xl font-medium">Share Stream</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
