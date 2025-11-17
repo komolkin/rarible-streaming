@@ -292,7 +292,7 @@ export default function ProfilePage() {
                     ) : profile.username ? (
                       <h1 className="text-3xl font-bold">@{profile.username}</h1>
                     ) : (
-                      <h1 className="text-3xl font-bold">User</h1>
+                      <h1 className="text-3xl font-bold">{ensName || formatAddress(address)}</h1>
                     )}
                   </div>
                   {authenticated && user?.wallet?.address?.toLowerCase() === address.toLowerCase() ? (
