@@ -43,6 +43,9 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [modalInitialTab, setModalInitialTab] = useState<
+    "followers" | "following"
+  >("followers");
 
   // Resolve ENS name to address if needed
   useEffect(() => {
@@ -450,16 +453,25 @@ export default function ProfilePage() {
                 )}
                 <div className="flex gap-6 text-sm">
                   <button
-                    onClick={() => setShowFollowersModal(true)}
+                    onClick={() => {
+                      setModalInitialTab("followers");
+                      setShowFollowersModal(true);
+                    }}
                     className="hover:underline cursor-pointer"
                   >
                     <span className="font-semibold">{followerCount}</span>{" "}
                     {followerCount === 1 ? "follower" : "followers"}
                   </button>
-                  <div>
+                  <button
+                    onClick={() => {
+                      setModalInitialTab("following");
+                      setShowFollowersModal(true);
+                    }}
+                    className="hover:underline cursor-pointer"
+                  >
                     <span className="font-semibold">{followingCount}</span>{" "}
                     following
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -576,7 +588,9 @@ export default function ProfilePage() {
       </div>
       <FollowersModal
         address={address}
+        displayName={profile.displayName}
         isOpen={showFollowersModal}
+        initialTab={modalInitialTab}
         onClose={() => setShowFollowersModal(false)}
       />
     </main>
