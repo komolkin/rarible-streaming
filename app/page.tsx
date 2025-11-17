@@ -72,7 +72,7 @@ export default function Home() {
               href="https://x.com/Rarible" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-white hover:text-gray-200"
+              className="text-[#FAFF00] hover:opacity-80 transition-opacity"
             >
               Follow for updates
             </a>

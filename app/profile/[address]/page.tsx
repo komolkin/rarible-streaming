@@ -475,18 +475,20 @@ export default function ProfilePage() {
             }
           }}
         >
-          <TabsList>
-            <TabsTrigger value="streams">Streams</TabsTrigger>
-            {authenticated &&
-              user?.wallet?.address?.toLowerCase() ===
-                address.toLowerCase() && (
-                <TabsTrigger value="liked">Liked</TabsTrigger>
-              )}
-            <TabsTrigger value="reviews">Reviews</TabsTrigger>
-          </TabsList>
+          <div className="flex justify-center">
+            <TabsList>
+              <TabsTrigger value="streams">Streams</TabsTrigger>
+              {authenticated &&
+                user?.wallet?.address?.toLowerCase() ===
+                  address.toLowerCase() && (
+                  <TabsTrigger value="liked">Liked</TabsTrigger>
+                )}
+              <TabsTrigger value="reviews">Reviews</TabsTrigger>
+            </TabsList>
+          </div>
           <TabsContent value="streams" className="mt-6">
             {streams.length === 0 ? (
-              <p className="text-muted-foreground">No streams yet</p>
+              <p className="text-muted-foreground text-center">No streams yet</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {streams.map((stream) => (
@@ -503,7 +505,7 @@ export default function ProfilePage() {
                     <div className="inline-block w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
                   </div>
                 ) : likedStreams.length === 0 ? (
-                  <p className="text-muted-foreground">No liked streams yet</p>
+                  <p className="text-muted-foreground text-center">No liked streams yet</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {likedStreams.map((stream) => (
@@ -516,7 +518,7 @@ export default function ProfilePage() {
           <TabsContent value="reviews" className="mt-6">
             <div className="space-y-4">
               {reviews.length === 0 ? (
-                <p className="text-muted-foreground">No reviews yet</p>
+                <p className="text-muted-foreground text-center">No reviews yet</p>
               ) : (
                 reviews.map((review: any) => (
                   <Card key={review.id}>
