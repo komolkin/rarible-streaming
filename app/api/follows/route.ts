@@ -81,12 +81,12 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ followers: followersList })
         } else {
           // Get count only
-          const [result] = await db
-            .select({ count: count() })
-            .from(follows)
-            .where(eq(follows.followingAddress, address))
+        const [result] = await db
+          .select({ count: count() })
+          .from(follows)
+          .where(eq(follows.followingAddress, address))
 
-          return NextResponse.json({ count: result?.count || 0 })
+        return NextResponse.json({ count: result?.count || 0 })
         }
       } else if (type === "following") {
         if (list) {
@@ -138,12 +138,12 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ following: followingList })
         } else {
           // Get count only
-          const [result] = await db
-            .select({ count: count() })
-            .from(follows)
-            .where(eq(follows.followerAddress, address))
+        const [result] = await db
+          .select({ count: count() })
+          .from(follows)
+          .where(eq(follows.followerAddress, address))
 
-          return NextResponse.json({ count: result?.count || 0 })
+        return NextResponse.json({ count: result?.count || 0 })
         }
       }
     }

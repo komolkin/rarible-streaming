@@ -346,17 +346,17 @@ export default function ProfilePage() {
                             </p>
                             <button
                               onClick={handleCopyAddress}
-                              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-xs"
+                              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-sm"
                               title="Copy wallet address"
                             >
                               {copied ? (
                                 <>
-                                  <Check className="h-3 w-3" />
+                                  <Check className="h-3.5 w-3.5" />
                                   <span>Copied!</span>
                                 </>
                               ) : (
                                 <>
-                                  <Copy className="h-3 w-3" />
+                                  <Copy className="h-3.5 w-3.5" />
                                   <span>
                                     {ensName || formatAddress(address)}
                                   </span>
