@@ -154,11 +154,12 @@ export default function StreamPage() {
           data.creatorAddress.toLowerCase() !==
             user.wallet.address.toLowerCase()
         ) {
+          const walletAddress = user.wallet.address;
           const followStatusPromise = (async () => {
             try {
               const followStatusResponse = await fetch(
                 `/api/follows?follower=${encodeURIComponent(
-                  user.wallet.address.toLowerCase()
+                  walletAddress.toLowerCase()
                 )}&following=${encodeURIComponent(
                   data.creatorAddress.toLowerCase()
                 )}`
@@ -530,12 +531,13 @@ export default function StreamPage() {
     if (!authenticated || !user?.wallet?.address || !stream?.creatorAddress)
       return;
 
+    const walletAddress = user.wallet.address;
     try {
       const response = await fetch("/api/follows", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          followerAddress: user.wallet.address.toLowerCase(),
+          followerAddress: walletAddress.toLowerCase(),
           followingAddress: stream.creatorAddress.toLowerCase(),
         }),
       });
@@ -553,10 +555,11 @@ export default function StreamPage() {
     if (!authenticated || !user?.wallet?.address || !stream?.creatorAddress)
       return;
 
+    const walletAddress = user.wallet.address;
     try {
       const response = await fetch(
         `/api/follows?follower=${encodeURIComponent(
-          user.wallet.address.toLowerCase()
+          walletAddress.toLowerCase()
         )}&following=${encodeURIComponent(
           stream.creatorAddress.toLowerCase()
         )}`,
@@ -578,12 +581,13 @@ export default function StreamPage() {
       return;
     }
 
+    const walletAddress = user.wallet.address;
     try {
       if (isLiked) {
         // Unlike
         const response = await fetch(
           `/api/streams/${params.id}/likes?userAddress=${encodeURIComponent(
-            user.wallet.address
+            walletAddress
           )}`,
           {
             method: "DELETE",
@@ -604,7 +608,7 @@ export default function StreamPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userAddress: user.wallet.address,
+            userAddress: walletAddress,
           }),
         });
         if (response.ok) {
@@ -692,8 +696,9 @@ export default function StreamPage() {
       return;
     }
 
+    const walletAddress = user.wallet.address;
     if (
-      user.wallet.address.toLowerCase() !==
+      walletAddress.toLowerCase() !==
       stream?.creatorAddress?.toLowerCase()
     ) {
       alert("Only the stream creator can end the stream");
@@ -732,8 +737,9 @@ export default function StreamPage() {
       return;
     }
 
+    const walletAddress = user.wallet.address;
     if (
-      user.wallet.address.toLowerCase() !==
+      walletAddress.toLowerCase() !==
       stream?.creatorAddress?.toLowerCase()
     ) {
       alert("Only the stream creator can delete the stream");
