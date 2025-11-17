@@ -347,7 +347,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
             >
               {chatMessages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No messages yet. Be the first to chat!
+                  No messages.
                 </p>
               ) : (
                 chatMessages.map((msg) => (
