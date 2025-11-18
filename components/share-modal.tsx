@@ -47,9 +47,12 @@ export function ShareModal({ streamId, streamTitle, isOpen, onClose }: ShareModa
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in-0 duration-200"
+      onClick={onClose}
+    >
       <div 
-        className="bg-background rounded-lg shadow-lg p-6 w-full max-w-md mx-4"
+        className="bg-background rounded-lg shadow-lg p-6 w-full max-w-md mx-4 animate-in fade-in-0 zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

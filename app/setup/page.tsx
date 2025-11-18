@@ -44,7 +44,7 @@ export default function SetupProfilePage() {
                   <Label className="text-base font-medium">Profile Picture</Label>
                   <div className="flex items-start gap-6">
                     <div className="relative group">
-                      <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-border bg-muted opacity-50">
+                      <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-border opacity-50">
                         <Avatar className="h-full w-full">
                           <AvatarFallback seed={(user?.wallet?.address || "").toLowerCase()} />
                         </Avatar>
@@ -200,11 +200,12 @@ export default function SetupProfilePage() {
                 <Label className="text-base font-medium">Profile Picture</Label>
                 <div className="flex items-start gap-6">
                   <div className="relative group">
-                    <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-border bg-muted">
+                    <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-border">
                       <Avatar className="h-full w-full">
                         <AvatarImage src={avatarPreview || ""} />
                         <AvatarFallback 
-                          seed={user?.wallet?.address || ""} 
+                          seed={avatarPreview ? user?.wallet?.address : undefined}
+                          className={!avatarPreview ? "!bg-transparent" : ""}
                         />
                       </Avatar>
                       {/* Hover Overlay */}

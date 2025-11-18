@@ -138,14 +138,17 @@ export function FollowersModal({
     }
   }
 
-  if (!isOpen) return null
-
   const modalTitle = displayName || formatAddress(address)
 
+  if (!isOpen) return null
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in-0 duration-200"
+      onClick={onClose}
+    >
       <div 
-        className="bg-background rounded-lg shadow-lg w-full max-w-md mx-4 max-h-[80vh] flex flex-col"
+        className="bg-background rounded-lg shadow-lg w-full max-w-md mx-4 h-[500px] flex flex-col animate-in fade-in-0 zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-6 border-b">
@@ -186,7 +189,7 @@ export function FollowersModal({
                   <p className="text-muted-foreground">No followers yet</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div>
                   {followers.map((follower) => {
                     const followerAddress = follower.followerAddress
                     const profile = follower.profile
@@ -239,7 +242,7 @@ export function FollowersModal({
                   <p className="text-muted-foreground">Not following anyone yet</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div>
                   {following.map((follow) => {
                     const followingAddress = follow.followingAddress
                     const profile = follow.profile
