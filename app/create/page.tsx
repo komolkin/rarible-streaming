@@ -138,6 +138,13 @@ export default function CreateStreamPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate form data
+    if (!formData.title.trim()) {
+      alert("Please enter a stream title")
+      return
+    }
+    
     setLoading(true)
 
     try {
@@ -241,6 +248,7 @@ export default function CreateStreamPage() {
                 <Label htmlFor="title">Title</Label>
                 <Input
                   id="title"
+                  name="title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
