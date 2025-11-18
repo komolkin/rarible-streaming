@@ -366,6 +366,14 @@ export default function StreamPage() {
     }
   }, [params.id, stream?.livepeerPlaybackId, stream?.endedAt]);
 
+  // Determine the correct playbackId to use for effects
+  const currentPlaybackId = useMemo(() => {
+    if (stream?.endedAt && (stream as any).assetPlaybackId) {
+      return (stream as any).assetPlaybackId;
+    }
+    return stream?.livepeerPlaybackId || null;
+  }, [stream?.livepeerPlaybackId, stream?.endedAt, (stream as any)?.assetPlaybackId]);
+
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
     if (playerOfflineTimeoutRef.current) {
@@ -381,7 +389,7 @@ export default function StreamPage() {
         playerOfflineTimeoutRef.current = null;
       }
     };
-  }, [stream?.livepeerPlaybackId]);
+  }, [currentPlaybackId]);
 
   const handleStreamStatusChange = useCallback((isLive: boolean) => {
     if (playerOfflineTimeoutRef.current) {
@@ -801,7 +809,7 @@ export default function StreamPage() {
 
   // Control playback based on viewport visibility
   useEffect(() => {
-    if (!playerContainerRef.current || !stream?.livepeerPlaybackId) return;
+    if (!playerContainerRef.current || !currentPlaybackId) return;
 
     // Find the video element inside the Player component
     const findVideoElement = (): HTMLVideoElement | null => {
@@ -863,18 +871,23 @@ export default function StreamPage() {
       clearInterval(checkInterval);
       observer.disconnect();
     };
-  }, [isInViewport, stream?.livepeerPlaybackId]);
+  }, [isInViewport, currentPlaybackId]);
 
   // Show live player if we have a playbackId and stream hasn't ended
   // Use useMemo to prevent unnecessary recalculations (must be before early returns)
   const showLivePlayer = useMemo(
-    () => !!stream?.livepeerPlaybackId && !stream?.endedAt,
-    [stream?.livepeerPlaybackId, stream?.endedAt]
+    () => !!currentPlaybackId && !stream?.endedAt,
+    [currentPlaybackId, stream?.endedAt]
   );
   const showOfflineOverlay = useMemo(
     () => showLivePlayer && !stream?.isLive && !playerIsStreaming,
     [showLivePlayer, stream?.isLive, playerIsStreaming]
   );
+
+  // Check if asset is processing (ended stream without ready asset playbackId)
+  const isAssetProcessing = useMemo(() => {
+    return !!stream?.endedAt && !currentPlaybackId && !!stream?.livepeerStreamId;
+  }, [stream?.endedAt, currentPlaybackId, stream?.livepeerStreamId]);
 
   if (pageError) {
     return (
@@ -906,11 +919,29 @@ export default function StreamPage() {
           <Card className="flex flex-col min-h-0 p-0 overflow-hidden">
             <CardContent className="p-0 flex-1 flex items-center justify-center bg-black relative aspect-video">
               <div ref={playerContainerRef} className="w-full h-full flex items-center justify-center relative">
-                {stream.livepeerPlaybackId ? (
+                {isAssetProcessing ? (
+                  // Asset is still processing - show processing message
+                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                    <div className="text-center max-w-md px-4">
+                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                        ⏳
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-medium mb-2 px-2">
+                        Recording Processing
+                      </h3>
+                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
+                        Your recording is being processed. Please check back in a few minutes.
+                      </p>
+                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
+                        The recording will appear here once ready.
+                      </p>
+                    </div>
+                  </div>
+                ) : currentPlaybackId ? (
                   <>
                     <div className="w-full h-full max-w-full max-h-full">
                       <Player
-                        playbackId={stream.livepeerPlaybackId}
+                        playbackId={currentPlaybackId}
                         playRecording={!!stream.endedAt}
                         autoPlay
                         muted={!stream.endedAt}
@@ -966,7 +997,7 @@ export default function StreamPage() {
                     )}
                   </>
                 ) : stream.endedAt ? (
-                  // No playbackId available - show processing message
+                  // Fallback: Stream ended but no playbackId (should be caught by isAssetProcessing, but keep as safety)
                   <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
                     <div className="text-center max-w-md px-4">
                       <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
@@ -976,12 +1007,7 @@ export default function StreamPage() {
                         Recording Processing
                       </h3>
                       <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                        Your recording will be available shortly. Please
-                        check back in a few minutes.
-                      </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
-                        The recording is being processed and will appear
-                        here once ready.
+                        Your recording is being processed. Please check back in a few minutes.
                       </p>
                     </div>
                   </div>
