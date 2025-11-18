@@ -3,6 +3,9 @@ import { db } from "@/lib/db"
 import { categories } from "@/lib/db/schema"
 import { asc, eq } from "drizzle-orm"
 
+// Cache categories for 1 hour (they rarely change)
+export const revalidate = 3600
+
 export async function GET(request: NextRequest) {
   try {
     // Try to order by order field first, fallback to name if order column doesn't exist
@@ -24,7 +27,11 @@ export async function GET(request: NextRequest) {
         throw orderError
       }
     }
-    return NextResponse.json(allCategories)
+    return NextResponse.json(allCategories, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=7200',
+      },
+    })
   } catch (error) {
     console.error("Error fetching categories:", error)
     return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 })

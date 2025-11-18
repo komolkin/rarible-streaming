@@ -4,6 +4,9 @@ import { streams, categories, users } from "@/lib/db/schema"
 import { createStream, getStream } from "@/lib/livepeer"
 import { eq, and, isNotNull, desc, sql, inArray, or } from "drizzle-orm"
 
+// Cache streams list for 30 seconds (ISR)
+export const revalidate = 30
+
 type StreamRecord = typeof streams.$inferSelect
 
 async function resolveViewsPlaybackId(stream: StreamRecord) {
@@ -347,22 +350,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch categories and total views for all streams, and attach creator data
+    // Batch fetch all categories once (optimization: prevents N+1 queries)
+    const allCategories = await db.select().from(categories)
+    const categoriesMap = new Map(allCategories.map(cat => [cat.id, cat]))
+
+    // Fetch total views for all streams, and attach creator data and categories
     const streamsWithCategories = await Promise.all(
       streamsWithViewerCounts.map(async (stream) => {
-        // Fetch category
-        let category = null
-        if (stream.categoryId) {
-          try {
-            const [categoryData] = await db
-              .select()
-              .from(categories)
-              .where(eq(categories.id, stream.categoryId))
-            category = categoryData || null
-          } catch (error) {
-            console.warn(`[Streams API] Could not fetch category for stream ${stream.id}:`, error)
-          }
-        }
+        // Get category from map (already fetched in batch)
+        const category = stream.categoryId ? categoriesMap.get(stream.categoryId) || null : null
         
         // Get creator profile from map (already fetched in batch)
         const creator = creatorProfilesMap.get(stream.creatorAddress.toLowerCase()) || null
@@ -400,7 +396,16 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    return NextResponse.json(streamsWithCategories)
+    // Determine cache time based on query type
+    // Live streams: shorter cache (10s), ended streams: longer cache (60s)
+    const hasLiveStreams = streamsWithCategories.some(s => s.isLive && !s.endedAt)
+    const cacheTime = hasLiveStreams ? 10 : 60
+
+    return NextResponse.json(streamsWithCategories, {
+      headers: {
+        'Cache-Control': `public, s-maxage=${cacheTime}, stale-while-revalidate=${cacheTime * 2}`,
+      },
+    })
   } catch (error) {
     console.error("Error fetching streams:", error)
     return NextResponse.json({ error: "Failed to fetch streams" }, { status: 500 })

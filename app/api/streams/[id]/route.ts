@@ -115,9 +115,9 @@ async function getTotalViews(streamId: string, playbackId?: string | null): Prom
   return null
 }
 
-// Disable caching for this route to ensure fresh view counts
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+// Cache stream details: 10 seconds for live streams, 60 seconds for ended streams
+// This will be handled dynamically based on stream status
+export const revalidate = 10
 
 export async function GET(
   request: NextRequest,
@@ -879,13 +879,15 @@ export async function GET(
       viewerCount: viewerCount, // Fetched from Livepeer API, not stored in DB
     }
     
+    // Determine cache time based on stream status
+    // Live streams: 10 seconds, Ended streams: 60 seconds
+    const cacheTime = responseData.endedAt ? 60 : 10
+
     return NextResponse.json(
       responseData,
       {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
+          'Cache-Control': `public, s-maxage=${cacheTime}, stale-while-revalidate=${cacheTime * 2}`,
         },
       }
     )
