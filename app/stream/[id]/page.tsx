@@ -1180,7 +1180,7 @@ export default function StreamPage() {
                     </span>
                   ) : stream.endedAt ? (
                     <span className="inline-block px-2 py-1 bg-muted text-muted-foreground rounded text-xs sm:text-sm">
-                      Ended {formatRelativeTime(stream.endedAt)}
+                      Streamed {formatRelativeTime(stream.endedAt)}
                     </span>
                   ) : null}
                 </div>
