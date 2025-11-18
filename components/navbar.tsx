@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Bell, Plus, User, Settings, LogOut, Menu, X } from "lucide-react"
+import NumberFlow from "@number-flow/react"
 
 export function Navbar() {
   const { authenticated, ready, user, login, logout } = usePrivy()
@@ -60,12 +61,14 @@ export function Navbar() {
     }
   }, [authenticated])
   
-  // Format balance as USD
-  const formattedBalance = balance && ethPrice
-    ? `$${(parseFloat(formatUnits(balance.value, balance.decimals)) * ethPrice).toFixed(2)}`
-    : balance
-    ? `${parseFloat(formatUnits(balance.value, balance.decimals)).toFixed(4)} ETH`
-    : "$0.00"
+  // Calculate balance values for NumberFlow
+  const balanceValue = balance
+    ? parseFloat(formatUnits(balance.value, balance.decimals))
+    : 0
+  const balanceUsd = balance && ethPrice
+    ? balanceValue * ethPrice
+    : null
+  const balanceEth = balanceValue
   
   const handleMouseEnter = useCallback(() => {
     // Clear any pending close timeout
@@ -212,7 +215,15 @@ export function Navbar() {
                   <Link href={`/profile/${user.wallet.address}`}>
                     <button className="outline-none flex items-center gap-2 bg-gray-800/80 hover:bg-gray-800 rounded-lg px-3 py-1.5 transition-colors">
                       <span className="text-white text-sm font-medium whitespace-nowrap">
-                        {formattedBalance}
+                        {balanceUsd !== null ? (
+                          <>
+                            $<NumberFlow value={balanceUsd} format={{ maximumFractionDigits: 2, minimumFractionDigits: 2 }} />
+                          </>
+                        ) : (
+                          <>
+                            <NumberFlow value={balanceEth} format={{ maximumFractionDigits: 4, minimumFractionDigits: 4 }} /> ETH
+                          </>
+                        )}
                       </span>
                       <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 flex-shrink-0">
                       {userAvatarUrl && (
@@ -288,7 +299,15 @@ export function Navbar() {
                             }}
                           >
                             <span className="text-white text-sm font-medium whitespace-nowrap">
-                              {formattedBalance}
+                              {balanceUsd !== null ? (
+                                <>
+                                  $<NumberFlow value={balanceUsd} format={{ maximumFractionDigits: 2, minimumFractionDigits: 2 }} />
+                                </>
+                              ) : (
+                                <>
+                                  <NumberFlow value={balanceEth} format={{ maximumFractionDigits: 4, minimumFractionDigits: 4 }} /> ETH
+                                </>
+                              )}
                             </span>
                             <Avatar className="cursor-pointer hover:opacity-80 transition-opacity h-8 w-8 flex-shrink-0">
                               {user?.wallet?.address && (

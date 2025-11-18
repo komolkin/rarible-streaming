@@ -21,6 +21,7 @@ import { formatRelativeTime, formatAddress } from "@/lib/utils";
 import { normalizeToAddress, isEnsName } from "@/lib/ens";
 import { useEnsName } from "@/lib/hooks/use-ens";
 import { Copy, Check } from "lucide-react";
+import NumberFlow from "@number-flow/react";
 
 export default function ProfilePage() {
   const params = useParams();
@@ -419,7 +420,9 @@ export default function ProfilePage() {
               }}
               className="hover:underline cursor-pointer"
             >
-              <span className="font-semibold">{followerCount}</span>{" "}
+              <span className="font-semibold">
+                <NumberFlow value={followerCount} />
+              </span>{" "}
               {followerCount === 1 ? "follower" : "followers"}
             </button>
             <button
@@ -429,7 +432,9 @@ export default function ProfilePage() {
               }}
               className="hover:underline cursor-pointer"
             >
-              <span className="font-semibold">{followingCount}</span> following
+              <span className="font-semibold">
+                <NumberFlow value={followingCount} />
+              </span> following
             </button>
           </div>
 

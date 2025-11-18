@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { X } from "lucide-react"
 import Link from "next/link"
 import { formatAddress } from "@/lib/utils"
+import NumberFlow from "@number-flow/react"
 
 interface Follower {
   followerAddress: string
@@ -158,10 +159,14 @@ export function FollowersModal({
           <div className="px-6 pt-4">
             <TabsList className="w-full">
               <TabsTrigger value="followers" className="flex-1">
-                Followers {followerCount > 0 && `(${followerCount})`}
+                Followers {followerCount > 0 && (
+                  <>(<NumberFlow value={followerCount} />)</>
+                )}
               </TabsTrigger>
               <TabsTrigger value="following" className="flex-1">
-                Following {followingCount > 0 && `(${followingCount})`}
+                Following {followingCount > 0 && (
+                  <>(<NumberFlow value={followingCount} />)</>
+                )}
               </TabsTrigger>
             </TabsList>
           </div>

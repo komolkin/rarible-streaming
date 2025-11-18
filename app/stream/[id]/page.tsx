@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Heart, Share2, MoreVertical, Trash2, Eye } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
+import NumberFlow from "@number-flow/react";
 
 export default function StreamPage() {
   const params = useParams();
@@ -1130,7 +1131,7 @@ export default function StreamPage() {
                             )}
                         </div>
                         <div className="text-[10px] sm:text-xs text-muted-foreground">
-                          {followerCount}{" "}
+                          <NumberFlow value={followerCount} />{" "}
                           {followerCount === 1 ? "follower" : "followers"}
                         </div>
                       </div>
@@ -1173,7 +1174,7 @@ export default function StreamPage() {
                   >
                     <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     <span className="text-xs sm:text-sm">
-                      {totalViews ?? 0}
+                      <NumberFlow value={totalViews ?? 0} />
                     </span>
                   </Button>
                   <Button
@@ -1191,7 +1192,9 @@ export default function StreamPage() {
                         isLiked ? "fill-current" : ""
                       }`}
                     />
-                    <span className="text-xs sm:text-sm">{likeCount}</span>
+                    <span className="text-xs sm:text-sm">
+                      <NumberFlow value={likeCount} />
+                    </span>
                   </Button>
                   <Button
                     variant="outline"

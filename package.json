@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@livepeer/react": "^2.0.0",
+    "@number-flow/react": "^0.5.10",
     "@privy-io/react-auth": "^3.0.0",
     "@privy-io/wagmi": "^2.0.2",
     "@radix-ui/react-avatar": "^1.0.3",
