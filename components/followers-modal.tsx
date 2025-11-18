@@ -62,6 +62,28 @@ export function FollowersModal({
     setActiveTab(initialTab)
   }, [initialTab])
 
+  // Block body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY
+      // Apply styles to prevent scrolling
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      document.body.style.overflow = 'hidden'
+
+      return () => {
+        // Restore scroll position and styles when modal closes
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        document.body.style.overflow = ''
+        window.scrollTo(0, scrollY)
+      }
+    }
+  }, [isOpen])
+
   useEffect(() => {
     if (isOpen && address) {
       if (activeTab === "followers") {

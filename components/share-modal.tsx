@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Copy, Check, X } from "lucide-react"
@@ -14,6 +14,28 @@ interface ShareModalProps {
 
 export function ShareModal({ streamId, streamTitle, isOpen, onClose }: ShareModalProps) {
   const [copied, setCopied] = useState(false)
+
+  // Block body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY
+      // Apply styles to prevent scrolling
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      document.body.style.overflow = 'hidden'
+
+      return () => {
+        // Restore scroll position and styles when modal closes
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        document.body.style.overflow = ''
+        window.scrollTo(0, scrollY)
+      }
+    }
+  }, [isOpen])
   const streamUrl = typeof window !== "undefined" 
     ? `${window.location.origin}/stream/${streamId}`
     : ""
