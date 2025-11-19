@@ -27,6 +27,7 @@ interface RaribleItem {
         };
     };
   };
+  collection?: string; // ID of the collection
 }
 
 interface RaribleCollection {
