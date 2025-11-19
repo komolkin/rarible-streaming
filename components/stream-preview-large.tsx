@@ -1,17 +1,12 @@
-"use client"
-
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Player } from "@livepeer/react"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { usePrivy } from "@privy-io/react-auth"
-import { supabase } from "@/lib/supabase/client"
 import { formatRelativeTime, formatAddress } from "@/lib/utils"
 import { useEnsName } from "@/lib/hooks/use-ens"
 import { BadgeCheck } from "lucide-react"
+import { RaribleProductCard } from "@/components/rarible-product-card"
 
 interface StreamPreviewLargeProps {
   stream: {
@@ -35,115 +30,14 @@ interface StreamPreviewLargeProps {
       name: string
       slug: string
     } | null
+    products?: string[] | null
   }
 }
 
 export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isInViewport, setIsInViewport] = useState<boolean>(false)
-  const { authenticated, user } = usePrivy()
-  const [chatMessages, setChatMessages] = useState<any[]>([])
-  const [message, setMessage] = useState("")
   const creatorEnsName = useEnsName(stream.creatorAddress)
-
-  const fetchChatMessages = useCallback(async () => {
-    const response = await fetch(`/api/chat/${stream.id}`)
-    if (response.ok) {
-      const data = await response.json()
-      setChatMessages(data)
-    }
-  }, [stream.id])
-
-  const subscribeToChat = useCallback(() => {
-    if (!stream.id) return () => {}
-
-    const channel = supabase
-      .channel(`chat:${stream.id}`, {
-        config: {
-          broadcast: { self: true },
-        },
-      })
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_messages",
-          filter: `stream_id=eq.${stream.id}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            const newMessage = {
-              id: payload.new.id,
-              streamId: payload.new.stream_id,
-              senderAddress: payload.new.sender_address,
-              message: payload.new.message,
-              createdAt: payload.new.created_at,
-            }
-            setChatMessages((prev) => {
-              const exists = prev.some((msg) => msg.id === newMessage.id)
-              if (exists) {
-                return prev
-              }
-              const updated = [...prev, newMessage]
-              setTimeout(() => {
-                const chatContainer = document.getElementById(`chat-messages-${stream.id}`)
-                if (chatContainer) {
-                  chatContainer.scrollTop = chatContainer.scrollHeight
-                }
-              }, 100)
-              return updated
-            })
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log(`Successfully subscribed to chat for stream ${stream.id}`)
-        }
-      })
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [stream.id])
-
-  useEffect(() => {
-    fetchChatMessages()
-    const unsubscribe = subscribeToChat()
-    return () => {
-      if (unsubscribe) unsubscribe()
-    }
-  }, [fetchChatMessages, subscribeToChat])
-
-  const sendMessage = async () => {
-    if (!message.trim() || !authenticated) return
-
-    if (stream.endedAt) {
-      return
-    }
-
-    const walletAddress = user?.wallet?.address
-    if (!walletAddress) return
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          streamId: stream.id,
-          senderAddress: walletAddress,
-          message: message.trim(),
-        }),
-      })
-
-      if (response.ok) {
-        setMessage("")
-      }
-    } catch (error) {
-      console.error("Error sending message:", error)
-    }
-  }
 
   // Intersection Observer for viewport-based playback control
   useEffect(() => {
@@ -276,7 +170,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
 
       {/* Right Sidebar */}
       <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
-        {/* Combined Title/Metadata and Chat Section */}
+        {/* Combined Title/Metadata and Products Section */}
         <Card className="flex-1 flex flex-col min-h-0">
           <CardContent className="p-3 sm:p-4 flex flex-col flex-1 min-h-0">
             {/* Title and Metadata Section */}
@@ -329,55 +223,19 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
               </div>
             </div>
 
-            {/* Chat Section - Hidden on mobile */}
-            <div className="hidden lg:block flex-1 flex flex-col min-h-0">
-            <h3 className="font-medium mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
-              Chat
-            </h3>
-            <div
-              id={`chat-messages-${stream.id}`}
-              className="space-y-2 mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0"
-            >
-              {chatMessages.length === 0 ? (
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  No messages.
-                </p>
-              ) : (
-                chatMessages.map((msg) => (
-                  <div key={msg.id} className="text-xs sm:text-sm">
-                    <span className="font-semibold">
-                      {msg.senderAddress
-                        ? `${msg.senderAddress.slice(0, 6)}...`
-                        : "Unknown"}
-                    </span>
-                    <span className="ml-2">{msg.message}</span>
-                  </div>
-                ))
-              )}
-            </div>
-            {!stream.endedAt && (
-              <div className="flex-shrink-0">
-                <div className="flex gap-2">
-                  <Input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                    placeholder="Say something..."
-                    disabled={!authenticated}
-                    className="text-xs sm:text-sm"
-                  />
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!authenticated || !message.trim()}
-                    size="sm"
-                    className="px-3 sm:px-4 text-xs sm:text-sm"
-                  >
-                    Send
-                  </Button>
+            {/* Products Section - Hidden on mobile, replaces Chat */}
+            {stream.products && stream.products.length > 0 && (
+              <div className="hidden lg:block flex-1 flex flex-col min-h-0">
+                <h3 className="font-medium mb-3 sm:mb-4 flex-shrink-0 text-sm sm:text-base">
+                  Products
+                </h3>
+                <div className="space-y-3 overflow-y-auto min-h-0 scrollbar-hide">
+                  {stream.products.map((url, index) => (
+                    <RaribleProductCard key={index} url={url} />
+                  ))}
                 </div>
               </div>
             )}
-            </div>
           </CardContent>
         </Card>
       </div>
