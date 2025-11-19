@@ -160,7 +160,7 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block group">
-      <Card className="overflow-hidden hover:shadow-md transition-all border-border group-hover:border-primary/50">
+      <Card className="overflow-hidden hover:shadow-md transition-all border border-border group-hover:border-primary/20">
         <div className="flex items-center gap-4 p-3">
             {/* Image / Thumbnail */}
             <div className="h-16 w-16 flex-shrink-0 rounded-md overflow-hidden bg-muted">
