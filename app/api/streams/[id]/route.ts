@@ -980,6 +980,9 @@ export async function DELETE(
     const streamId = params.id
     const livepeerStreamId = updated.livepeerStreamId
 
+    // Add variable to track asset playbackId for response
+    let assetPlaybackId: string | null = null
+
     if (livepeerStreamId && updated.livepeerPlaybackId) {
       try {
         const { 
@@ -1026,6 +1029,7 @@ export async function DELETE(
               // Don't set vodUrl if asset is not ready - this prevents format errors
               // The GET endpoint will check again and set vodUrl when asset is ready
             } else if (asset.playbackId) {
+              assetPlaybackId = asset.playbackId
               // Asset is ready - use the asset's playbackId to construct HLS URL for VOD
               // This is the correct playbackId for VOD assets
               vodUrl = `https://playback.livepeer.com/hls/${asset.playbackId}/index.m3u8`
@@ -1148,6 +1152,7 @@ export async function DELETE(
           ...finalUpdated,
           category: category,
           totalViews: totalViews,
+          assetPlaybackId: assetPlaybackId,
         })
       } catch (error: any) {
         console.error(`[DELETE Stream ${streamId}] Error preparing recording and preview:`, error?.message || error)

@@ -374,9 +374,11 @@ export default function StreamPage() {
 
   // Determine the correct playbackId to use for effects
   const currentPlaybackId = useMemo(() => {
+    // If stream has ended, prefer assetPlaybackId if available (for VOD).
     if (stream?.endedAt && (stream as any).assetPlaybackId) {
       return (stream as any).assetPlaybackId;
     }
+    // Fallback to livepeerPlaybackId (some recordings work with the original stream playbackId)
     return stream?.livepeerPlaybackId || null;
   }, [
     stream?.livepeerPlaybackId,
