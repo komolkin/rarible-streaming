@@ -65,6 +65,13 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
         const apiKey = process.env.NEXT_PUBLIC_RARIBLE_API_KEY;
         const headers = apiKey ? { 'X-API-KEY': apiKey } : {};
 
+        if (!apiKey) {
+            console.warn('Rarible API key is missing. Using fallback link.');
+            setError(true);
+            setLoading(false);
+            return;
+        }
+
         // Fetch Item
         const itemResponse = await axios.get<RaribleItem>(
           `https://api.rarible.org/v0.1/items/${itemId}`,
