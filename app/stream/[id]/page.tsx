@@ -55,57 +55,70 @@ export default function StreamPage() {
     }
   }, [params.id]);
 
+  const fetchStream = useCallback(
+    async (isInitialLoad: boolean = false) => {
+      try {
+        // Add timeout to prevent hanging (15 seconds max)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  const fetchStream = useCallback(async (isInitialLoad: boolean = false) => {
-    try {
-      // Add timeout to prevent hanging (15 seconds max)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const response = await fetch(
+          `/api/streams/${params.id}?t=${Date.now()}`,
+          {
+            signal: controller.signal,
+            cache: "no-store", // Prevent caching to get fresh view counts
+            headers: {
+              "Cache-Control": "no-cache",
+            },
+          }
+        ).finally(() => {
+          clearTimeout(timeoutId);
+        });
 
-      const response = await fetch(
-        `/api/streams/${params.id}?t=${Date.now()}`,
-        {
-          signal: controller.signal,
-          cache: "no-store", // Prevent caching to get fresh view counts
-          headers: {
-            "Cache-Control": "no-cache",
-          },
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Failed to fetch stream:", response.status, errorData);
+          setPageError(
+            errorData.error || `Failed to load stream (${response.status})`
+          );
+          return;
         }
-      ).finally(() => {
-        clearTimeout(timeoutId);
-      });
+        const data = await response.json();
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Failed to fetch stream:", response.status, errorData);
-        setPageError(
-          errorData.error || `Failed to load stream (${response.status})`
-        );
-        return;
-      }
-      const data = await response.json();
+        // Update stream live status ref for player offline detection
+        streamLiveStatusRef.current = !!data.isLive;
 
-      // Update stream live status ref for player offline detection
-      streamLiveStatusRef.current = !!data.isLive;
+        setStream(data);
+        setPageError(null); // Clear any previous errors
 
-      setStream(data);
-      setPageError(null); // Clear any previous errors
+        // Fetch all metadata in parallel for initial load
+        const metadataPromises: Promise<void>[] = [];
 
-      // Fetch all metadata in parallel for initial load
-      const metadataPromises: Promise<void>[] = [];
-
-      // Fetch creator profile if we have creator address
-      if (data.creatorAddress) {
-        const creatorPromise = (async () => {
-          try {
-            const creatorResponse = await fetch(
-              `/api/profiles?wallet=${data.creatorAddress}`
-            );
-            if (creatorResponse.ok) {
-              const creatorData = await creatorResponse.json();
-              setCreator(creatorData);
-            } else {
-              // If no profile exists, create a default one
+        // Fetch creator profile if we have creator address
+        if (data.creatorAddress) {
+          const creatorPromise = (async () => {
+            try {
+              const creatorResponse = await fetch(
+                `/api/profiles?wallet=${data.creatorAddress}`
+              );
+              if (creatorResponse.ok) {
+                const creatorData = await creatorResponse.json();
+                setCreator(creatorData);
+              } else {
+                // If no profile exists, create a default one
+                setCreator({
+                  walletAddress: data.creatorAddress,
+                  displayName: `${data.creatorAddress.slice(
+                    0,
+                    6
+                  )}...${data.creatorAddress.slice(-4)}`,
+                  username: null,
+                  avatarUrl: null,
+                });
+              }
+            } catch (error) {
+              console.error("Error fetching creator profile:", error);
+              // Set default creator info
               setCreator({
                 walletAddress: data.creatorAddress,
                 displayName: `${data.creatorAddress.slice(
@@ -116,116 +129,107 @@ export default function StreamPage() {
                 avatarUrl: null,
               });
             }
-          } catch (error) {
-            console.error("Error fetching creator profile:", error);
-            // Set default creator info
-            setCreator({
-              walletAddress: data.creatorAddress,
-              displayName: `${data.creatorAddress.slice(
-                0,
-                6
-              )}...${data.creatorAddress.slice(-4)}`,
-              username: null,
-              avatarUrl: null,
-            });
-          }
-        })();
-        metadataPromises.push(creatorPromise);
+          })();
+          metadataPromises.push(creatorPromise);
 
-        // Fetch follower count for creator
-        const followerPromise = (async () => {
-          try {
-            const followerResponse = await fetch(
-              `/api/follows?address=${encodeURIComponent(
-                data.creatorAddress.toLowerCase()
-              )}&type=followers`
-            );
-            if (followerResponse.ok) {
-              const followerData = await followerResponse.json();
-              setFollowerCount(followerData.count || 0);
-            }
-          } catch (error) {
-            console.error("Error fetching follower count:", error);
-          }
-        })();
-        metadataPromises.push(followerPromise);
-
-        // Check if current user is following the creator (only if authenticated and not own stream)
-        if (
-          authenticated &&
-          user?.wallet?.address &&
-          data.creatorAddress.toLowerCase() !==
-            user.wallet.address.toLowerCase()
-        ) {
-          const walletAddress = user.wallet.address;
-          const followStatusPromise = (async () => {
+          // Fetch follower count for creator
+          const followerPromise = (async () => {
             try {
-              const followStatusResponse = await fetch(
-                `/api/follows?follower=${encodeURIComponent(
-                  walletAddress.toLowerCase()
-                )}&following=${encodeURIComponent(
+              const followerResponse = await fetch(
+                `/api/follows?address=${encodeURIComponent(
                   data.creatorAddress.toLowerCase()
-                )}`
+                )}&type=followers`
               );
-              if (followStatusResponse.ok) {
-                const followStatusData = await followStatusResponse.json();
-                setIsFollowing(followStatusData.isFollowing || false);
+              if (followerResponse.ok) {
+                const followerData = await followerResponse.json();
+                setFollowerCount(followerData.count || 0);
               }
             } catch (error) {
-              console.error("Error checking follow status:", error);
+              console.error("Error fetching follower count:", error);
             }
           })();
-          metadataPromises.push(followStatusPromise);
-        }
-      }
+          metadataPromises.push(followerPromise);
 
-      // Fetch like count and check if user has liked
-      const likesPromise = (async () => {
-        try {
-          const userAddress = user?.wallet?.address || null;
-          const likesUrl = `/api/streams/${params.id}/likes${
-            userAddress ? `?userAddress=${userAddress}` : ""
-          }`;
-          const likesResponse = await fetch(likesUrl);
-          if (likesResponse.ok) {
-            const likesData = await likesResponse.json();
-            setLikeCount(likesData.likeCount || 0);
-            setIsLiked(likesData.isLiked || false);
+          // Check if current user is following the creator (only if authenticated and not own stream)
+          if (
+            authenticated &&
+            user?.wallet?.address &&
+            data.creatorAddress.toLowerCase() !==
+              user.wallet.address.toLowerCase()
+          ) {
+            const walletAddress = user.wallet.address;
+            const followStatusPromise = (async () => {
+              try {
+                const followStatusResponse = await fetch(
+                  `/api/follows?follower=${encodeURIComponent(
+                    walletAddress.toLowerCase()
+                  )}&following=${encodeURIComponent(
+                    data.creatorAddress.toLowerCase()
+                  )}`
+                );
+                if (followStatusResponse.ok) {
+                  const followStatusData = await followStatusResponse.json();
+                  setIsFollowing(followStatusData.isFollowing || false);
+                }
+              } catch (error) {
+                console.error("Error checking follow status:", error);
+              }
+            })();
+            metadataPromises.push(followStatusPromise);
           }
-        } catch (error) {
-          console.error("Error fetching stream likes:", error);
         }
-      })();
-      metadataPromises.push(likesPromise);
 
-      // Set total views from stream data
-      if (typeof data.totalViews === "number") {
-        setTotalViews(data.totalViews);
-      }
+        // Fetch like count and check if user has liked
+        const likesPromise = (async () => {
+          try {
+            const userAddress = user?.wallet?.address || null;
+            const likesUrl = `/api/streams/${params.id}/likes${
+              userAddress ? `?userAddress=${userAddress}` : ""
+            }`;
+            const likesResponse = await fetch(likesUrl);
+            if (likesResponse.ok) {
+              const likesData = await likesResponse.json();
+              setLikeCount(likesData.likeCount || 0);
+              setIsLiked(likesData.isLiked || false);
+            }
+          } catch (error) {
+            console.error("Error fetching stream likes:", error);
+          }
+        })();
+        metadataPromises.push(likesPromise);
 
-      // Wait for all metadata to load on initial load
-      if (isInitialLoad) {
-        await Promise.all(metadataPromises);
-      }
+        // Set total views from stream data
+        if (typeof data.totalViews === "number") {
+          setTotalViews(data.totalViews);
+        }
 
-    } catch (error: any) {
-      console.error("Error fetching stream:", error);
-      // Handle timeout/abort errors gracefully
-      if (error?.name === "AbortError" || error?.message?.includes("aborted")) {
-        console.warn(
-          "Stream fetch timeout - this may be due to slow API response"
-        );
-        setPageError(
-          "Request timed out. The stream may be loading slowly. Please try refreshing."
-        );
-      } else {
-        // Set page error so user sees what went wrong
-        const errorMessage = error?.message || "Failed to fetch stream";
-        setPageError(errorMessage);
+        // Wait for all metadata to load on initial load
+        if (isInitialLoad) {
+          await Promise.all(metadataPromises);
+        }
+      } catch (error: any) {
+        console.error("Error fetching stream:", error);
+        // Handle timeout/abort errors gracefully
+        if (
+          error?.name === "AbortError" ||
+          error?.message?.includes("aborted")
+        ) {
+          console.warn(
+            "Stream fetch timeout - this may be due to slow API response"
+          );
+          setPageError(
+            "Request timed out. The stream may be loading slowly. Please try refreshing."
+          );
+        } else {
+          // Set page error so user sees what went wrong
+          const errorMessage = error?.message || "Failed to fetch stream";
+          setPageError(errorMessage);
+        }
+        // Don't throw - allow component to render error state
       }
-      // Don't throw - allow component to render error state
-    }
-  }, [params.id, authenticated, user?.wallet?.address]);
+    },
+    [params.id, authenticated, user?.wallet?.address]
+  );
 
   const subscribeToChat = useCallback(() => {
     if (!params.id) return () => {};
@@ -265,7 +269,8 @@ export default function StreamPage() {
               // Auto-scroll to bottom when new message arrives
               setTimeout(() => {
                 if (chatMessagesRef.current) {
-                  chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+                  chatMessagesRef.current.scrollTop =
+                    chatMessagesRef.current.scrollHeight;
                 }
               }, 100);
               return updated;
@@ -373,7 +378,11 @@ export default function StreamPage() {
       return (stream as any).assetPlaybackId;
     }
     return stream?.livepeerPlaybackId || null;
-  }, [stream?.livepeerPlaybackId, stream?.endedAt, (stream as any)?.assetPlaybackId]);
+  }, [
+    stream?.livepeerPlaybackId,
+    stream?.endedAt,
+    (stream as any)?.assetPlaybackId,
+  ]);
 
   useEffect(() => {
     // Reset player streaming override whenever playbackId changes
@@ -409,42 +418,45 @@ export default function StreamPage() {
   }, []);
 
   // Function to fetch views
-  const fetchViews = useCallback(async (isInitialLoad: boolean = false) => {
-    try {
-      const response = await fetch(
-        `/api/streams/${params.id}/views?_=${Date.now()}`,
-        {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          if (isInitialLoad) {
-            setTotalViews(0);
+  const fetchViews = useCallback(
+    async (isInitialLoad: boolean = false) => {
+      try {
+        const response = await fetch(
+          `/api/streams/${params.id}/views?_=${Date.now()}`,
+          {
+            cache: "no-store",
+            headers: {
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+            },
           }
-          return;
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
+        );
 
-      const data = await response.json();
-      if (typeof data.totalViews === "number") {
-        setTotalViews(data.totalViews);
-      } else if (isInitialLoad) {
-        setTotalViews(0);
+        if (!response.ok) {
+          if (response.status === 404) {
+            if (isInitialLoad) {
+              setTotalViews(0);
+            }
+            return;
+          }
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (typeof data.totalViews === "number") {
+          setTotalViews(data.totalViews);
+        } else if (isInitialLoad) {
+          setTotalViews(0);
+        }
+      } catch (error: any) {
+        console.error(`[Views] Error fetching views:`, error?.message || error);
+        if (isInitialLoad) {
+          setTotalViews(0);
+        }
       }
-    } catch (error: any) {
-      console.error(`[Views] Error fetching views:`, error?.message || error);
-      if (isInitialLoad) {
-        setTotalViews(0);
-      }
-    }
-  }, [params.id]);
+    },
+    [params.id]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -457,7 +469,7 @@ export default function StreamPage() {
     const loadInitialData = async () => {
       try {
         setIsMetadataLoading(true);
-        
+
         // Fetch stream and views in parallel for initial load
         await Promise.all([
           fetchStream(true),
@@ -712,10 +724,7 @@ export default function StreamPage() {
     }
 
     const walletAddress = user.wallet.address;
-    if (
-      walletAddress.toLowerCase() !==
-      stream?.creatorAddress?.toLowerCase()
-    ) {
+    if (walletAddress.toLowerCase() !== stream?.creatorAddress?.toLowerCase()) {
       alert("Only the stream creator can end the stream");
       return;
     }
@@ -753,10 +762,7 @@ export default function StreamPage() {
     }
 
     const walletAddress = user.wallet.address;
-    if (
-      walletAddress.toLowerCase() !==
-      stream?.creatorAddress?.toLowerCase()
-    ) {
+    if (walletAddress.toLowerCase() !== stream?.creatorAddress?.toLowerCase()) {
       alert("Only the stream creator can delete the stream");
       return;
     }
@@ -892,7 +898,9 @@ export default function StreamPage() {
 
   // Check if asset is processing (ended stream without ready asset playbackId)
   const isAssetProcessing = useMemo(() => {
-    return !!stream?.endedAt && !currentPlaybackId && !!stream?.livepeerStreamId;
+    return (
+      !!stream?.endedAt && !currentPlaybackId && !!stream?.livepeerStreamId
+    );
   }, [stream?.endedAt, currentPlaybackId, stream?.livepeerStreamId]);
 
   if (pageError) {
@@ -935,12 +943,12 @@ export default function StreamPage() {
                     {stream.category.name}
                   </Link>
                 )}
-                
+
                 {/* Title */}
                 <h1 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-medium break-words">
                   {stream.title}
                 </h1>
-                
+
                 {/* Streamed date and views */}
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                   {stream.isLive ? (
@@ -962,7 +970,7 @@ export default function StreamPage() {
                     </>
                   ) : null}
                 </div>
-                
+
                 {/* Creator Info */}
                 {creator && (
                   <div className="flex items-center gap-2 sm:gap-3 mt-1">
@@ -999,9 +1007,7 @@ export default function StreamPage() {
                             user?.wallet?.address?.toLowerCase() !==
                               stream.creatorAddress?.toLowerCase() && (
                               <Button
-                                variant={
-                                  isFollowing ? "outline" : "default"
-                                }
+                                variant={isFollowing ? "outline" : "default"}
                                 size="sm"
                                 onClick={(e) => {
                                   e.preventDefault();
@@ -1024,14 +1030,14 @@ export default function StreamPage() {
                     </Link>
                   </div>
                 )}
-                
+
                 {/* Description */}
                 {stream.description && (
                   <p className="text-sm sm:text-base text-muted-foreground break-words mt-1">
                     {stream.description}
                   </p>
                 )}
-                
+
                 {/* Controls */}
                 <div className="flex flex-row flex-wrap gap-2 pt-3">
                   <Button
@@ -1116,18 +1122,31 @@ export default function StreamPage() {
               </div>
 
               {/* Tabs Section */}
-              <Tabs defaultValue="products" className="flex-1 flex flex-col min-h-0 overflow-hidden mt-6">
+              <Tabs
+                defaultValue="products"
+                className="flex-1 flex flex-col min-h-0 overflow-hidden mt-6"
+              >
                 <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="products" className="w-full">Products</TabsTrigger>
-                  <TabsTrigger value="activity" className="w-full">Activity</TabsTrigger>
+                  <TabsTrigger value="products" className="w-full">
+                    Products
+                  </TabsTrigger>
+                  <TabsTrigger value="activity" className="w-full">
+                    Activity
+                  </TabsTrigger>
                 </TabsList>
-                
-                <TabsContent value="products" className="flex-1 flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0">
+
+                <TabsContent
+                  value="products"
+                  className="flex-1 flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
+                >
                   <p className="text-sm text-muted-foreground text-center m-0">
                     Products content coming soon...
                   </p>
                 </TabsContent>
-                <TabsContent value="activity" className="flex-1 flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0">
+                <TabsContent
+                  value="activity"
+                  className="flex-1 flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
+                >
                   <p className="text-sm text-muted-foreground text-center m-0">
                     Activity content coming soon...
                   </p>
@@ -1142,131 +1161,131 @@ export default function StreamPage() {
           <div className="ambient-glow rounded-lg">
             <Card className="flex flex-col min-h-0 p-0 overflow-hidden w-full">
               <CardContent className="p-0 flex items-center justify-center bg-black relative aspect-video">
-              <div ref={playerContainerRef} className="w-full h-full flex items-center justify-center relative">
-                {isAssetProcessing ? (
-                  // Asset is still processing - show processing message
-                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                    <div className="text-center max-w-md px-4">
-                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
-                        ⏳
-                      </div>
-                      <h3 className="text-lg sm:text-xl font-medium mb-2 px-2">
-                        Recording Processing
-                      </h3>
-                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                        Your recording is being processed. Please check back in a few minutes.
-                      </p>
-                      <p className="text-xs sm:text-sm text-muted-foreground px-2">
-                        The recording will appear here once ready.
-                      </p>
-                    </div>
-                  </div>
-                ) : currentPlaybackId ? (
-                  <>
-                    <div className="w-full h-full max-w-full max-h-full">
-                      <Player
-                        playbackId={currentPlaybackId}
-                        playRecording={!!stream.endedAt}
-                        autoPlay
-                        muted={!stream.endedAt}
-                        showTitle={false}
-                        showPipButton={stream.endedAt}
-                        objectFit="contain"
-                        priority={!stream.endedAt}
-                        showUploadingIndicator={true}
-                        onStreamStatusChange={!stream.endedAt ? handleStreamStatusChange : undefined}
-                      />
-                    </div>
-                    {!stream.endedAt && showOfflineOverlay && (
-                      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
-                        <div className="font-bold mb-1 text-[10px] sm:text-sm">
-                          ⚠️ Stream Offline
+                <div
+                  ref={playerContainerRef}
+                  className="w-full h-full flex items-center justify-center relative"
+                >
+                  {isAssetProcessing ? (
+                    // Asset is still processing - show processing message
+                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                      <div className="text-center max-w-md px-4">
+                        <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                          ⏳
                         </div>
+                        <h3 className="text-lg sm:text-xl font-medium mb-2 px-2">
+                          Recording Processing
+                        </h3>
+                        <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
+                          Your recording is being processed. Please check back
+                          in a few minutes.
+                        </p>
+                      </div>
+                    </div>
+                  ) : currentPlaybackId ? (
+                    <>
+                      <div className="w-full h-full max-w-full max-h-full">
+                        <Player
+                          playbackId={currentPlaybackId}
+                          playRecording={!!stream.endedAt}
+                          autoPlay
+                          muted={!stream.endedAt}
+                          showTitle={false}
+                          showPipButton={stream.endedAt}
+                          objectFit="contain"
+                          priority={!stream.endedAt}
+                          showUploadingIndicator={true}
+                          onStreamStatusChange={
+                            !stream.endedAt
+                              ? handleStreamStatusChange
+                              : undefined
+                          }
+                        />
+                      </div>
+                      {!stream.endedAt && showOfflineOverlay && (
+                        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-500 text-black px-2 py-1 sm:px-3 rounded text-xs sm:text-sm font-semibold z-10 max-w-[calc(100%-1rem)] sm:max-w-xs">
+                          <div className="font-bold mb-1 text-[10px] sm:text-sm">
+                            ⚠️ Stream Offline
+                          </div>
+                          {stream.livepeerStreamKey ? (
+                            <>
+                              <div className="text-[10px] sm:text-xs mt-1">
+                                <div className="font-semibold hidden sm:block">
+                                  OBS Settings:
+                                </div>
+                                <div className="bg-black/20 p-1 rounded mt-1 font-mono text-[9px] sm:text-[10px] break-all">
+                                  <div className="hidden sm:block">
+                                    Server: rtmp://ingest.livepeer.studio/live
+                                  </div>
+                                  <div>
+                                    Key: {stream.livepeerStreamKey.slice(0, 20)}
+                                    ...
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-[10px] sm:text-xs mt-2 opacity-90 hidden sm:block">
+                                <div>1. Go to OBS → Settings → Stream</div>
+                                <div>2. Set Service to &quot;Custom&quot;</div>
+                                <div>3. Paste Server and Stream Key above</div>
+                                <div>4. Click &quot;Start Streaming&quot;</div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-[10px] sm:text-xs mt-1">
+                              Stream ID: {stream.livepeerStreamId?.slice(0, 20)}
+                              ...
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : stream.endedAt ? (
+                    // Fallback: Stream ended but no playbackId (should be caught by isAssetProcessing, but keep as safety)
+                    <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
+                      <div className="text-center max-w-md px-4">
+                        <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
+                          ⏳
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-medium mb-2 px-2">
+                          Recording Processing
+                        </h3>
+                        <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
+                          Your recording is being processed. Please check back
+                          in a few minutes.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-white">
+                      <div className="text-center px-4">
+                        <p className="text-base sm:text-lg mb-2">
+                          Stream offline
+                        </p>
                         {stream.livepeerStreamKey ? (
                           <>
-                            <div className="text-[10px] sm:text-xs mt-1">
-                              <div className="font-semibold hidden sm:block">
-                                OBS Settings:
+                            <p className="text-xs sm:text-sm text-muted-foreground mb-3">
+                              Make sure OBS is connected with the settings
+                              below:
+                            </p>
+                            <div className="text-[10px] sm:text-xs text-left space-y-2 font-mono bg-black/40 p-2 sm:p-3 rounded max-w-full overflow-hidden">
+                              <div className="break-all">
+                                Server: rtmp://ingest.livepeer.studio/live
                               </div>
-                              <div className="bg-black/20 p-1 rounded mt-1 font-mono text-[9px] sm:text-[10px] break-all">
-                                <div className="hidden sm:block">
-                                  Server: rtmp://ingest.livepeer.studio/live
-                                </div>
-                                <div>
-                                  Key:{" "}
-                                  {stream.livepeerStreamKey.slice(0, 20)}...
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-[10px] sm:text-xs mt-2 opacity-90 hidden sm:block">
-                              <div>1. Go to OBS → Settings → Stream</div>
-                              <div>
-                                2. Set Service to &quot;Custom&quot;
-                              </div>
-                              <div>
-                                3. Paste Server and Stream Key above
-                              </div>
-                              <div>
-                                4. Click &quot;Start Streaming&quot;
+                              <div className="break-all">
+                                Stream Key: {stream.livepeerStreamKey}
                               </div>
                             </div>
                           </>
                         ) : (
-                          <div className="text-[10px] sm:text-xs mt-1">
-                            Stream ID:{" "}
-                            {stream.livepeerStreamId?.slice(0, 20)}...
-                          </div>
+                          <p className="text-xs sm:text-sm text-muted-foreground">
+                            Waiting for the creator to start streaming...
+                          </p>
                         )}
                       </div>
-                    )}
-                  </>
-                ) : stream.endedAt ? (
-                  // Fallback: Stream ended but no playbackId (should be caught by isAssetProcessing, but keep as safety)
-                  <div className="absolute inset-0 flex items-center justify-center text-white bg-black">
-                    <div className="text-center max-w-md px-4">
-                      <div className="text-xl sm:text-2xl mb-3 sm:mb-4">
-                        ⏳
-                      </div>
-                      <h3 className="text-lg sm:text-xl font-medium mb-2 px-2">
-                        Recording Processing
-                      </h3>
-                      <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-                        Your recording is being processed. Please check back in a few minutes.
-                      </p>
                     </div>
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-white">
-                    <div className="text-center px-4">
-                      <p className="text-base sm:text-lg mb-2">
-                        Stream offline
-                      </p>
-                      {stream.livepeerStreamKey ? (
-                        <>
-                          <p className="text-xs sm:text-sm text-muted-foreground mb-3">
-                            Make sure OBS is connected with the settings
-                            below:
-                          </p>
-                          <div className="text-[10px] sm:text-xs text-left space-y-2 font-mono bg-black/40 p-2 sm:p-3 rounded max-w-full overflow-hidden">
-                            <div className="break-all">
-                              Server: rtmp://ingest.livepeer.studio/live
-                            </div>
-                            <div className="break-all">
-                              Stream Key: {stream.livepeerStreamKey}
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-xs sm:text-sm text-muted-foreground">
-                          Waiting for the creator to start streaming...
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
@@ -1319,8 +1338,8 @@ export default function StreamPage() {
                   ref={chatMessagesRef}
                   id="chat-messages"
                   className={`mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0 max-h-[300px] sm:max-h-[400px] lg:max-h-none ${
-                    chatMessages.length === 0 
-                      ? "flex items-center justify-center" 
+                    chatMessages.length === 0
+                      ? "flex items-center justify-center"
                       : "space-y-2"
                   }`}
                 >
@@ -1347,13 +1366,17 @@ export default function StreamPage() {
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                      placeholder={stream.endedAt ? "Stream has ended" : "Say something..."}
+                      placeholder={
+                        stream.endedAt ? "Stream has ended" : "Say something..."
+                      }
                       disabled={!authenticated || !!stream.endedAt}
                       className="text-sm"
                     />
                     <Button
                       onClick={sendMessage}
-                      disabled={!authenticated || !message.trim() || !!stream.endedAt}
+                      disabled={
+                        !authenticated || !message.trim() || !!stream.endedAt
+                      }
                       size="sm"
                       className="px-3 sm:px-4"
                     >
