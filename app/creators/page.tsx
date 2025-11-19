@@ -51,7 +51,7 @@ export default function CreatorsPage() {
   return (
     <main className="min-h-screen pt-24 pb-8 px-4 md:px-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-medium mb-8">Creators</h1>
+        <h1 className="text-4xl font-medium mb-8 text-center">Creators</h1>
         
         <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
