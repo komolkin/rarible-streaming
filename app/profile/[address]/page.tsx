@@ -22,6 +22,7 @@ import { normalizeToAddress, isEnsName } from "@/lib/ens";
 import { useEnsName } from "@/lib/hooks/use-ens";
 import { Copy, Check } from "lucide-react";
 import NumberFlow from "@number-flow/react";
+import { Linkify } from "@/components/linkify";
 
 export default function ProfilePage() {
   const params = useParams();
@@ -457,8 +458,8 @@ export default function ProfilePage() {
           ) : null}
 
           {profile.bio && (
-            <p className="text-muted-foreground mt-4 max-w-2xl">
-              {profile.bio}
+            <p className="text-muted-foreground mt-4 max-w-2xl whitespace-pre-wrap">
+              <Linkify text={profile.bio} />
             </p>
           )}
           {profile.email && (
