@@ -72,6 +72,9 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
             return;
         }
 
+        // Log current environment for debugging Vercel issue
+        console.log('[RaribleProductCard] Fetching for:', itemId);
+
         // Fetch Item
         const itemResponse = await axios.get<RaribleItem>(
           `https://api.rarible.org/v0.1/items/${itemId}`,
@@ -95,6 +98,15 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
 
       } catch (err) {
         console.error('Error fetching Rarible item:', err);
+        // Log full error details for debugging
+        if (axios.isAxiosError(err)) {
+            console.error('Axios error details:', {
+                message: err.message,
+                code: err.code,
+                response: err.response?.data,
+                status: err.response?.status
+            });
+        }
         setError(true);
       } finally {
         setLoading(false);
