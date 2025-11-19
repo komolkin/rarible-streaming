@@ -1157,10 +1157,10 @@ export default function StreamPage() {
         </div>
 
         {/* Middle Column - Video Player */}
-        <div className="w-full flex flex-col lg:flex lg:items-center lg:justify-center order-1 lg:order-2">
-          <div className="ambient-glow rounded-lg">
+        <div className="w-full flex flex-col lg:flex lg:items-center lg:justify-center order-1 lg:order-2 min-w-0">
+          <div className="ambient-glow rounded-lg w-full min-w-0">
             <Card className="flex flex-col min-h-0 p-0 overflow-hidden w-full">
-              <CardContent className="p-0 flex items-center justify-center bg-black relative aspect-video">
+              <CardContent className="p-0 flex items-center justify-center bg-black relative aspect-video w-full min-h-[200px] sm:min-h-[300px] lg:min-h-0">
                 <div
                   ref={playerContainerRef}
                   className="w-full h-full flex items-center justify-center relative"
