@@ -1,5 +1,12 @@
 const webpack = require('webpack')
 
+// Increase max listeners to suppress warnings in development
+// This happens because Next.js Fast Refresh reloads modules without cleaning up
+// signal listeners from dependencies (livepeer, postgres, drizzle-kit, etc.)
+if (process.env.NODE_ENV === 'development') {
+  process.setMaxListeners(20)
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
