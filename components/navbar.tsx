@@ -89,6 +89,41 @@ export function Navbar() {
     }, 150) // 150ms delay
   }, [])
 
+  // Create user profile if it doesn't exist
+  useEffect(() => {
+    if (authenticated && user?.wallet?.address) {
+      const createUserIfNeeded = async () => {
+        try {
+          const walletAddress = user.wallet?.address;
+          if (!walletAddress) return;
+
+          const response = await fetch(`/api/profiles?wallet=${walletAddress}`);
+          
+          if (response.status === 404) {
+            // User doesn't exist, create profile
+            console.log("Creating new user profile for:", walletAddress);
+            await fetch("/api/profiles", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                walletAddress,
+                username: null,
+                displayName: null,
+                bio: null,
+                email: null,
+                avatarUrl: null,
+              }),
+            });
+          }
+        } catch (error) {
+          console.error("Error creating user profile:", error);
+        }
+      };
+      
+      createUserIfNeeded();
+    }
+  }, [authenticated, user?.wallet?.address]);
+
   // Fetch user profile to get avatar URL
   useEffect(() => {
     if (authenticated && user?.wallet?.address) {
