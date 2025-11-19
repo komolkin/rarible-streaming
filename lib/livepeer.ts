@@ -1275,11 +1275,10 @@ export async function getStreamAsset(streamId: string) {
           const streamData = await getStream(streamId)
           const streamPlaybackId = streamData?.playbackId
           if (streamPlaybackId && asset.playbackId === streamPlaybackId) {
-            console.error(`[getStreamAsset] ⚠️ CRITICAL: Asset playbackId matches stream playbackId! This is incorrect.`)
-            console.error(`[getStreamAsset] Asset ID: ${asset.id}, PlaybackId: ${asset.playbackId}`)
-            console.error(`[getStreamAsset] Stream PlaybackId: ${streamPlaybackId}`)
-            console.error(`[getStreamAsset] This asset may not be a proper recording asset. Returning null.`)
-            return null
+            console.warn(`[getStreamAsset] ⚠️ Warning: Asset playbackId matches stream playbackId. This is usually incorrect but we will use it as fallback.`)
+            console.warn(`[getStreamAsset] Asset ID: ${asset.id}, PlaybackId: ${asset.playbackId}`)
+            // We used to return null here, but we'll allow it now as a fallback
+            // return null
           }
         } catch (streamError) {
           console.warn(`[getStreamAsset] Could not verify playbackId difference:`, streamError)
@@ -1432,9 +1431,9 @@ export async function getStreamAsset(streamId: string) {
       const verifyAssetPlaybackId = (asset: any): boolean => {
         if (!asset.playbackId) return false
         if (streamPlaybackId && asset.playbackId === streamPlaybackId) {
-          console.error(`[getStreamAsset] ⚠️ CRITICAL: Asset ${asset.id} playbackId matches stream playbackId! Asset: ${asset.playbackId}, Stream: ${streamPlaybackId}`)
-          console.error(`[getStreamAsset] This asset may not be a proper recording asset. Skipping.`)
-          return false
+          console.warn(`[getStreamAsset] ⚠️ Warning: Asset ${asset.id} playbackId matches stream playbackId! Asset: ${asset.playbackId}, Stream: ${streamPlaybackId}`)
+          console.warn(`[getStreamAsset] We will allow this as a fallback.`)
+          return true
         }
         return true
       }

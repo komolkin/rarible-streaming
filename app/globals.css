@@ -55,10 +55,10 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-color: #090A0B;
+    background-color: #090a0b;
   }
   html {
-    background-color: #090A0B;
+    background-color: #090a0b;
   }
 }
 
@@ -73,19 +73,14 @@
 }
 
 @keyframes ambient-glow {
-  0%, 100% {
-    box-shadow: 
-      0 0 40px rgba(58, 60, 73, 0.12),
-      0 0 80px rgba(58, 60, 73, 0.1),
-      0 0 120px rgba(58, 60, 73, 0.08),
-      0 0 160px rgba(58, 60, 73, 0.05);
+  0%,
+  100% {
+    box-shadow: 0 0 40px rgba(58, 60, 73, 0.25), 0 0 80px rgba(58, 60, 73, 0.2),
+      0 0 120px rgba(58, 60, 73, 0.15), 0 0 160px rgba(58, 60, 73, 0.1);
   }
   50% {
-    box-shadow: 
-      0 0 60px rgba(58, 60, 73, 0.18),
-      0 0 120px rgba(58, 60, 73, 0.15),
-      0 0 180px rgba(58, 60, 73, 0.12),
-      0 0 240px rgba(58, 60, 73, 0.08);
+    box-shadow: 0 0 60px rgba(58, 60, 73, 0.35), 0 0 120px rgba(58, 60, 73, 0.3),
+      0 0 180px rgba(58, 60, 73, 0.25), 0 0 240px rgba(58, 60, 73, 0.2);
   }
 }
 
@@ -106,4 +101,3 @@
   margin: 0 !important;
   padding: 0 !important;
 }
-
