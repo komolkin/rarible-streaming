@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { base } from "wagmi/chains"
+import { base, mainnet } from "wagmi/chains"
 import { createConfig as createWagmiConfig, http } from "wagmi"
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi"
 
 const config = createWagmiConfig({
-  chains: [base],
+  chains: [mainnet, base],
   transports: {
+    [mainnet.id]: http(),
     [base.id]: http(),
   },
   ssr: true,

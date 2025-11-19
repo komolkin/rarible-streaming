@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { usePrivy } from "@privy-io/react-auth"
 import { useBalance } from "wagmi"
+import { mainnet } from "wagmi/chains"
 import { formatUnits } from "viem"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -31,6 +32,7 @@ export function Navbar() {
   // Fetch ETH balance
   const { data: balance } = useBalance({
     address: user?.wallet?.address as `0x${string}` | undefined,
+    chainId: mainnet.id,
     query: {
       enabled: !!user?.wallet?.address,
       refetchInterval: 10000, // Refetch every 10 seconds
