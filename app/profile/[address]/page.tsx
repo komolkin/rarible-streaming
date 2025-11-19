@@ -125,6 +125,7 @@ export default function ProfilePage() {
               displayName: profileData.displayName,
               username: profileData.username,
               avatarUrl: profileData.avatarUrl,
+              verified: profileData.verified,
             },
           }));
           setStreams(streamsWithCreator);
