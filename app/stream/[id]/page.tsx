@@ -19,10 +19,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Heart, Share2, MoreVertical, Trash2, BadgeCheck } from "lucide-react";
+import { Heart, Share2, MoreVertical, Trash2, BadgeCheck, ExternalLink } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import NumberFlow from "@number-flow/react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+import { RaribleProductCard } from "@/components/rarible-product-card";
 
 export default function StreamPage() {
   const params = useParams();
@@ -909,8 +911,8 @@ export default function StreamPage() {
     return (
       <div className="min-h-screen pt-16 flex items-center justify-center">
         <div className="text-center max-w-md">
-          <h2 className="text-xl font-medium text-red-500 mb-2">
-            Error Loading Stream
+          <h2 className="text-xl font-medium text-white mb-2">
+            Oops!…I Did It Again
           </h2>
           <p className="text-muted-foreground mb-4">{pageError}</p>
           <Button onClick={() => window.location.reload()}>Reload Page</Button>
@@ -1156,11 +1158,35 @@ export default function StreamPage() {
 
                 <TabsContent
                   value="products"
-                  className="flex-1 hidden data-[state=active]:flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
+                  className="flex-1 hidden data-[state=active]:flex flex-col min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
                 >
-                  <p className="text-sm text-muted-foreground text-center m-0">
-                    Products content coming soon...
-                  </p>
+                  {stream?.products && Array.isArray(stream.products) && stream.products.length > 0 ? (
+                    <div className="space-y-3 w-full pt-4">
+                      {stream.products.map((product: string, index: number) => (
+                        <div key={index}>
+                          {product.includes('rarible.com') ? (
+                            <RaribleProductCard url={product} />
+                          ) : (
+                            <a
+                              href={product}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 p-4 border border-border rounded-lg hover:bg-accent transition-colors group"
+                            >
+                              <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors flex-shrink-0" />
+                              <span className="text-sm text-foreground break-all group-hover:underline">
+                                {product}
+                              </span>
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center m-0">
+                      No products available for this stream.
+                    </p>
+                  )}
                 </TabsContent>
                 <TabsContent
                   value="activity"
