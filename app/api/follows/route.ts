@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
                 username: users.username,
                 displayName: users.displayName,
                 avatarUrl: users.avatarUrl,
+                verified: users.verified,
               })
               .from(users)
               .where(sql`LOWER(${users.walletAddress}) = ANY(ARRAY[${sql.join(
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
                 username: profile.username,
                 displayName: profile.displayName,
                 avatarUrl: profile.avatarUrl,
+                verified: profile.verified,
               })
             })
           }
@@ -111,6 +113,7 @@ export async function GET(request: NextRequest) {
                 username: users.username,
                 displayName: users.displayName,
                 avatarUrl: users.avatarUrl,
+                verified: users.verified,
               })
               .from(users)
               .where(sql`LOWER(${users.walletAddress}) = ANY(ARRAY[${sql.join(
@@ -124,6 +127,7 @@ export async function GET(request: NextRequest) {
                 username: profile.username,
                 displayName: profile.displayName,
                 avatarUrl: profile.avatarUrl,
+                verified: profile.verified,
               })
             })
           }

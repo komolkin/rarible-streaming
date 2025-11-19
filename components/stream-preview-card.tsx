@@ -7,6 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { StreamCoverPlaceholder } from "@/components/stream-cover-placeholder"
 import { formatRelativeTime, formatAddress } from "@/lib/utils"
 import { useEnsName } from "@/lib/hooks/use-ens"
+import { BadgeCheck } from "lucide-react"
 
 interface StreamPreviewCardProps {
   stream: {
@@ -21,6 +22,7 @@ interface StreamPreviewCardProps {
       displayName?: string | null
       username?: string | null
       avatarUrl?: string | null
+      verified?: boolean
     } | null
     isLive?: boolean
     endedAt?: string | Date | null
@@ -191,8 +193,9 @@ export function StreamPreviewCard({
                     seed={(stream.creatorAddress || "").toLowerCase()}
                   />
                 </Avatar>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
                   {stream.creator?.displayName || stream.creator?.username || creatorEnsName || formatAddress(stream.creatorAddress)}
+                  {stream.creator?.verified && <BadgeCheck className="h-3 w-3 text-black fill-[#FAFF00]" />}
                 </span>
               </Link>
               {showDate && (stream.createdAt || stream.endedAt) && (

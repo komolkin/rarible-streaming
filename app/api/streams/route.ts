@@ -330,6 +330,7 @@ export async function GET(request: NextRequest) {
             displayName: users.displayName,
             username: users.username,
             avatarUrl: users.avatarUrl,
+            verified: users.verified,
           })
           .from(users)
           .where(sql`LOWER(${users.walletAddress}) = ANY(ARRAY[${sql.join(
@@ -343,6 +344,7 @@ export async function GET(request: NextRequest) {
             displayName: profile.displayName,
             username: profile.username,
             avatarUrl: profile.avatarUrl,
+            verified: profile.verified,
           })
         })
       } catch (error) {

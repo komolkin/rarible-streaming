@@ -11,6 +11,7 @@ import { usePrivy } from "@privy-io/react-auth"
 import { supabase } from "@/lib/supabase/client"
 import { formatRelativeTime, formatAddress } from "@/lib/utils"
 import { useEnsName } from "@/lib/hooks/use-ens"
+import { BadgeCheck } from "lucide-react"
 
 interface StreamPreviewLargeProps {
   stream: {
@@ -23,6 +24,7 @@ interface StreamPreviewLargeProps {
       displayName?: string | null
       username?: string | null
       avatarUrl?: string | null
+      verified?: boolean
     } | null
     isLive?: boolean
     endedAt?: string | Date | null
@@ -310,8 +312,9 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
                       seed={(stream.creatorAddress || "").toLowerCase()}
                     />
                   </Avatar>
-                  <span className="text-xs sm:text-sm text-white font-medium">
+                  <span className="text-xs sm:text-sm text-white font-medium flex items-center gap-1">
                     {stream.creator?.displayName || stream.creator?.username || creatorEnsName || formatAddress(stream.creatorAddress)}
+                    {stream.creator?.verified && <BadgeCheck className="h-3.5 w-3.5 text-black fill-[#FAFF00]" />}
                   </span>
                 </Link>
                 {(stream.createdAt || stream.endedAt) && (

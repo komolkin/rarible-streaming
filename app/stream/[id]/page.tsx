@@ -19,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Heart, Share2, MoreVertical, Trash2 } from "lucide-react";
+import { Heart, Share2, MoreVertical, Trash2, BadgeCheck } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import NumberFlow from "@number-flow/react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -995,13 +995,16 @@ export default function StreamPage() {
                       </Avatar>
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                          <span className="truncate">
+                          <span className="truncate flex items-center gap-1">
                             {creator.displayName ||
                               creator.username ||
                               `${creator.walletAddress.slice(
                                 0,
                                 6
                               )}...${creator.walletAddress.slice(-4)}`}
+                            {creator.verified && (
+                              <BadgeCheck className="h-3.5 w-3.5 text-black fill-[#FAFF00]" />
+                            )}
                           </span>
                           {authenticated &&
                             user?.wallet?.address?.toLowerCase() !==

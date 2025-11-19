@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { X } from "lucide-react"
+import { X, BadgeCheck } from "lucide-react"
 import Link from "next/link"
 import { formatAddress } from "@/lib/utils"
 import NumberFlow from "@number-flow/react"
@@ -17,6 +17,7 @@ interface Follower {
     username: string | null
     displayName: string | null
     avatarUrl: string | null
+    verified?: boolean
   } | null
 }
 
@@ -28,6 +29,7 @@ interface Following {
     username: string | null
     displayName: string | null
     avatarUrl: string | null
+    verified?: boolean
   } | null
 }
 
@@ -233,7 +235,10 @@ export function FollowersModal({
                           <AvatarFallback seed={followerAddress.toLowerCase()} />
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold truncate">{displayName}</div>
+                          <div className="font-semibold truncate flex items-center gap-1">
+                            {displayName}
+                            {profile?.verified && <BadgeCheck className="h-4 w-4 text-black fill-[#FAFF00]" />}
+                          </div>
                           {username && (
                             <div className="text-sm text-muted-foreground truncate">@{username}</div>
                           )}
@@ -286,7 +291,10 @@ export function FollowersModal({
                           <AvatarFallback seed={followingAddress.toLowerCase()} />
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold truncate">{displayName}</div>
+                          <div className="font-semibold truncate flex items-center gap-1">
+                            {displayName}
+                            {profile?.verified && <BadgeCheck className="h-4 w-4 text-black fill-[#FAFF00]" />}
+                          </div>
                           {username && (
                             <div className="text-sm text-muted-foreground truncate">@{username}</div>
                           )}
