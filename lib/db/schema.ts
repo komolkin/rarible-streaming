@@ -56,6 +56,7 @@ export const streams = pgTable("streams", {
   endedAt: timestamp("ended_at"),
   vodUrl: text("vod_url"),
   previewImageUrl: text("preview_image_url"),
+  products: jsonb("products"),
   hasMinting: boolean("has_minting").default(false).notNull(),
   mintContractAddress: text("mint_contract_address"),
   mintTokenId: text("mint_token_id"),

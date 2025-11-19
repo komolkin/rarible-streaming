@@ -417,7 +417,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { creatorAddress, title, description, categoryId, scheduledAt, hasMinting, previewImageUrl } = body
+    const { creatorAddress, title, description, categoryId, scheduledAt, hasMinting, previewImageUrl, products } = body
 
     if (!process.env.LIVEPEER_API_KEY) {
       console.error("LIVEPEER_API_KEY is not set")
@@ -478,6 +478,7 @@ export async function POST(request: NextRequest) {
       livepeerStreamKey: streamKey,
       hasMinting: hasMinting || false,
       previewImageUrl: previewImageUrl || null,
+      products: products || null,
     }).returning()
 
     // Generate thumbnail for streams without uploaded cover image

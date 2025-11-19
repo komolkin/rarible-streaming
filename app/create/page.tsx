@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Upload, X } from "lucide-react"
+import { Upload, X, Plus, Trash2 } from "lucide-react"
 
 interface Category {
   id: string
@@ -42,6 +42,22 @@ export default function CreateStreamPage() {
     scheduledAt: "",
     hasMinting: false,
   })
+  const [products, setProducts] = useState<string[]>([""])
+
+  const handleProductChange = (index: number, value: string) => {
+    const newProducts = [...products]
+    newProducts[index] = value
+    setProducts(newProducts)
+  }
+
+  const addProduct = () => {
+    setProducts([...products, ""])
+  }
+
+  const removeProduct = (index: number) => {
+    const newProducts = products.filter((_, i) => i !== index)
+    setProducts(newProducts)
+  }
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -171,6 +187,7 @@ export default function CreateStreamPage() {
           ...formData,
           creatorAddress: walletAddress,
           previewImageUrl: previewImageUrl || null,
+          products: products.filter(p => p.trim() !== ""),
         }),
       })
 
@@ -299,6 +316,34 @@ export default function CreateStreamPage() {
                     value={formData.scheduledAt}
                     onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
                   />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Products (optional)</Label>
+                <div className="space-y-2">
+                  {products.map((product, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={product}
+                        onChange={(e) => handleProductChange(index, e.target.value)}
+                        placeholder="https://..."
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeProduct(index)}
+                        disabled={products.length === 1 && !products[0]}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" onClick={addProduct} className="w-full">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Product
+                  </Button>
                 </div>
               </div>
 
