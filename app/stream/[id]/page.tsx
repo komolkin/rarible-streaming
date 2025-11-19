@@ -1137,7 +1137,7 @@ export default function StreamPage() {
 
                 <TabsContent
                   value="products"
-                  className="flex-1 flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
+                  className="flex-1 hidden data-[state=active]:flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
                 >
                   <p className="text-sm text-muted-foreground text-center m-0">
                     Products content coming soon...
@@ -1145,7 +1145,7 @@ export default function StreamPage() {
                 </TabsContent>
                 <TabsContent
                   value="activity"
-                  className="flex-1 flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
+                  className="flex-1 hidden data-[state=active]:flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
                 >
                   <p className="text-sm text-muted-foreground text-center m-0">
                     Activity content coming soon...
