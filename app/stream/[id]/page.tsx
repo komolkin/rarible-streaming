@@ -1075,9 +1075,7 @@ export default function StreamPage() {
                     <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     <span className="hidden sm:inline">Share</span>
                   </Button>
-                  {authenticated &&
-                    user?.wallet?.address?.toLowerCase() ===
-                      stream.creatorAddress?.toLowerCase() && (
+                  {authenticated && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -1093,31 +1091,47 @@ export default function StreamPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {stream.isLive && !stream.endedAt && (
+                          {user?.wallet?.address?.toLowerCase() ===
+                          stream.creatorAddress?.toLowerCase() ? (
                             <>
+                              {stream.isLive && !stream.endedAt && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleEndStream();
+                                    }}
+                                    className="text-white"
+                                  >
+                                    End Stream
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  handleEndStream();
+                                  handleDeleteStream();
                                 }}
                                 className="text-white"
                               >
-                                End Stream
+                                Delete Stream
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator />
                             </>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                // TODO: Add report logic
+                              }}
+                              className="text-white"
+                            >
+                              Report
+                            </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteStream();
-                            }}
-                            className="text-white"
-                          >
-                            Delete Stream
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
