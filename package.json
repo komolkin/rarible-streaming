@@ -16,6 +16,7 @@
     "db:migrate:run": "tsx scripts/run-migrations.ts"
   },
   "dependencies": {
+    "@fontsource/stack-sans-text": "^5.2.1",
     "@livepeer/react": "^2.0.0",
     "@number-flow/react": "^0.5.10",
     "@privy-io/react-auth": "^3.0.0",
