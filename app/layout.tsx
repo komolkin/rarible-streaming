@@ -10,6 +10,7 @@ import { LivepeerProvider } from "@/components/providers/livepeer-provider";
 import { Navbar } from "@/components/navbar";
 import { SuppressExtensionErrors } from "@/components/suppress-extension-errors";
 import { Toaster } from "@/components/ui/toaster";
+import { SetupProfileModal } from "@/components/setup-profile-modal";
 
 export const metadata: Metadata = {
   title: "Rarible Streaming",
@@ -30,6 +31,7 @@ export default function RootLayout({
             <LivepeerProvider>
               <Navbar />
               {children}
+              <SetupProfileModal />
               <Toaster />
             </LivepeerProvider>
           </WagmiProvider>
