@@ -171,6 +171,7 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
                     <NumberFlow 
                       value={priceUsd} 
                       format={{ style: 'currency', currency: 'USD', currencyDisplay: 'symbol' }}
+                      locales="en-US"
                     />
                   </div>
                 )}
