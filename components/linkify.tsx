@@ -3,9 +3,10 @@ import React from "react";
 interface LinkifyProps {
   text: string;
   className?: string;
+  linkClassName?: string;
 }
 
-export const Linkify: React.FC<LinkifyProps> = ({ text, className }) => {
+export const Linkify: React.FC<LinkifyProps> = ({ text, className, linkClassName }) => {
   if (!text) return null;
 
   // URL regex that matches http/https protocols
@@ -24,7 +25,7 @@ export const Linkify: React.FC<LinkifyProps> = ({ text, className }) => {
               href={part}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary hover:underline break-words"
+              className={`hover:underline break-words ${linkClassName || "text-primary"}`}
               onClick={(e) => e.stopPropagation()}
             >
               {part}

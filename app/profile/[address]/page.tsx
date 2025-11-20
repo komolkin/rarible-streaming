@@ -473,7 +473,7 @@ export default function ProfilePage() {
 
           {profile.bio && (
             <p className="text-muted-foreground mt-4 max-w-2xl whitespace-pre-wrap">
-              <Linkify text={profile.bio} />
+              <Linkify text={profile.bio} linkClassName="text-[#FAFF00]" />
             </p>
           )}
           {profile.email && (
