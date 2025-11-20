@@ -53,9 +53,22 @@ export default function BrowsePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {categories.map((category) => (
               <Link key={category.id} href={`/browse/${category.slug}`}>
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow h-full flex flex-col">
-                  <CardContent className="p-4 flex-1">
-                    <h3 className="font-medium text-lg mb-1">
+                <Card className="cursor-pointer h-full relative overflow-hidden aspect-square bg-muted/30">
+                  {category.imageUrl ? (
+                    <div className="absolute inset-0 w-full h-full flex items-center justify-center mb-8">
+                      <img
+                        src={category.imageUrl}
+                        alt={category.name}
+                        className="w-2/3 h-2/3 object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 w-full h-full flex items-center justify-center mb-8">
+                      <div className="w-2/3 h-2/3 bg-muted rounded-full" />
+                    </div>
+                  )}
+                  <div className="relative h-full flex flex-col justify-end p-6 z-10">
+                    <h3 className="font-medium text-xl mb-1">
                       {category.name}
                     </h3>
                     {category.description && (
@@ -63,22 +76,7 @@ export default function BrowsePage() {
                         {category.description}
                       </p>
                     )}
-                  </CardContent>
-                  {category.imageUrl ? (
-                    <div className="aspect-video w-full overflow-hidden rounded-b-lg bg-black">
-                      <img
-                        src={category.imageUrl}
-                        alt={category.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="aspect-video w-full overflow-hidden rounded-b-lg flex items-center justify-center">
-                      <span className="text-4xl font-bold opacity-50">
-                        {category.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
+                  </div>
                 </Card>
               </Link>
             ))}

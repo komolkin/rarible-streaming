@@ -127,8 +127,9 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
   return (
     <div ref={containerRef} className="w-full mb-6 flex flex-col lg:flex-row gap-4">
       {/* Player Section */}
-      <Card className="flex-1 flex flex-col min-h-0 p-0 overflow-hidden">
-        <CardContent className="p-0 flex-1 bg-black relative aspect-video lg:h-auto min-h-[200px]">
+      <div className="flex-1 min-h-0 ambient-glow rounded-lg">
+        <Card className="flex flex-col min-h-0 p-0 overflow-hidden w-full h-full">
+          <CardContent className="p-0 flex-1 bg-black relative aspect-video lg:h-auto min-h-[200px]">
           {stream.livepeerPlaybackId ? (
             <>
               <div className="absolute inset-0 w-full h-full">
@@ -167,6 +168,7 @@ export function StreamPreviewLarge({ stream }: StreamPreviewLargeProps) {
           )}
         </CardContent>
       </Card>
+      </div>
 
       {/* Right Sidebar */}
       <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
