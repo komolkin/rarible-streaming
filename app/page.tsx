@@ -10,6 +10,7 @@ interface Category {
   id: string;
   name: string;
   slug: string;
+  imageUrl?: string;
 }
 
 export default function Home() {
@@ -109,7 +110,7 @@ export default function Home() {
               <div className="flex items-center gap-2 pb-2">
                 <button
                   onClick={() => setSelectedCategory("all")}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  className={`px-5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                     selectedCategory === "all"
                       ? "bg-gray-200 text-black"
                       : "bg-gray-800 text-white hover:bg-gray-700"
@@ -121,13 +122,22 @@ export default function Home() {
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    className={`flex items-center gap-2 pl-3 pr-5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                       selectedCategory === category.id
                         ? "bg-gray-200 text-black"
                         : "bg-gray-800 text-white hover:bg-gray-700"
                     }`}
                   >
-                    {category.name}
+                    <div className={`w-6 h-6 rounded-full overflow-hidden flex-shrink-0 ${!category.imageUrl ? 'bg-gray-600' : ''}`}>
+                      {category.imageUrl && (
+                        <img 
+                          src={category.imageUrl} 
+                          alt={category.name} 
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <span>{category.name}</span>
                   </button>
                 ))}
               </div>
