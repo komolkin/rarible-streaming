@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink, Loader2 } from 'lucide-react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { Card } from './ui/card';
 import NumberFlow from "@number-flow/react";
 
@@ -32,6 +32,37 @@ interface RaribleItem {
 
 interface RaribleCollection {
   name: string;
+}
+
+// Helper function to retry failed requests
+async function fetchWithRetry<T>(
+  url: string, 
+  headers: any, 
+  retries = 3, 
+  delay = 1000
+): Promise<T> {
+  try {
+    const response = await axios.get<T>(url, { headers });
+    return response.data;
+  } catch (err) {
+    const axiosError = err as AxiosError;
+    
+    // Retry on rate limits (429) or server errors (5xx) or network errors
+    const shouldRetry = 
+      retries > 0 && 
+      (!axiosError.response || // Network error
+       axiosError.response.status === 429 || // Rate limit
+       axiosError.response.status >= 500); // Server error
+
+    if (shouldRetry) {
+      // Wait for the delay time
+      await new Promise(resolve => setTimeout(resolve, delay));
+      // Retry with double the delay (exponential backoff)
+      return fetchWithRetry<T>(url, headers, retries - 1, delay * 2);
+    }
+    
+    throw err;
+  }
 }
 
 export function RaribleProductCard({ url }: RaribleProductCardProps) {
@@ -76,22 +107,21 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
         // Log current environment for debugging Vercel issue
         console.log('[RaribleProductCard] Fetching for:', itemId);
 
-        // Fetch Item
-        const itemResponse = await axios.get<RaribleItem>(
+        // Fetch Item with retry logic
+        const itemData = await fetchWithRetry<RaribleItem>(
           `https://api.rarible.org/v0.1/items/${itemId}`,
-          { headers }
+          headers
         );
-        const itemData = itemResponse.data;
         setItem(itemData);
 
         // Fetch Collection Name if available
         if (itemData.collection) {
             try {
-                const collectionResponse = await axios.get<RaribleCollection>(
+                const collectionData = await fetchWithRetry<RaribleCollection>(
                     `https://api.rarible.org/v0.1/collections/${itemData.collection}`,
-                    { headers }
+                    headers
                 );
-                setCollectionName(collectionResponse.data.name);
+                setCollectionName(collectionData.name);
             } catch (err) {
                 console.warn('Failed to fetch collection name', err);
             }
@@ -202,4 +232,3 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
     </a>
   );
 }
-
