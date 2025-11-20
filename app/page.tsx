@@ -14,6 +14,7 @@ interface Category {
 export default function Home() {
   const [recentStreams, setRecentStreams] = useState<any[]>([]);
   const [allStreams, setAllStreams] = useState<any[]>([]);
+  const [spotlightStream, setSpotlightStream] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
@@ -24,29 +25,39 @@ export default function Home() {
 
   useEffect(() => {
     if (selectedCategory === "all") {
-      setRecentStreams(allStreams);
+      // If we have a spotlight stream, filter it out from the main list to avoid duplication
+      if (spotlightStream) {
+        setRecentStreams(allStreams.filter(s => s.id !== spotlightStream.id));
+      } else {
+        setRecentStreams(allStreams);
+      }
     } else {
       const filtered = allStreams.filter(
-        (stream) => stream.categoryId === selectedCategory
+        (stream) => stream.categoryId === selectedCategory && (!spotlightStream || stream.id !== spotlightStream.id)
       );
       setRecentStreams(filtered);
     }
-  }, [selectedCategory, allStreams]);
+  }, [selectedCategory, allStreams, spotlightStream]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fetch streams and categories in parallel
-      const [streamsResponse, categoriesResponse] = await Promise.all([
+      // Fetch streams, categories, and spotlight in parallel
+      const [streamsResponse, categoriesResponse, spotlightResponse] = await Promise.all([
         fetch("/api/streams?limit=12"),
         fetch("/api/categories"),
+        fetch("/api/spotlight"),
       ]);
+
+      if (spotlightResponse.ok) {
+        const spotlight = await spotlightResponse.json();
+        setSpotlightStream(spotlight);
+      }
 
       if (streamsResponse.ok) {
         const streams = await streamsResponse.json();
         // Creator profiles are now included in the API response
         setAllStreams(streams);
-        setRecentStreams(streams);
       }
 
       if (categoriesResponse.ok) {
@@ -85,6 +96,16 @@ export default function Home() {
           </div>
         ) : (
           <>
+            {/* Spotlight Section */}
+            {spotlightStream && (
+              <div className="mb-12">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-semibold tracking-tight">Spotlight</h2>
+                </div>
+                <StreamPreviewLarge stream={spotlightStream} />
+              </div>
+            )}
+
             {/* Category Filter */}
             <div className="mb-8 overflow-x-auto scrollbar-hide">
               <div className="flex items-center gap-2 pb-2">

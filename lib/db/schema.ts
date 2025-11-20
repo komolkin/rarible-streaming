@@ -90,3 +90,9 @@ export const streamViews = pgTable("stream_views", {
   viewedAt: timestamp("viewed_at").defaultNow().notNull(),
 })
 
+export const spotlights = pgTable("spotlights", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  streamId: uuid("stream_id").references(() => streams.id).notNull(),
+  spotlighted: boolean("spotlighted").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+})
