@@ -347,17 +347,6 @@ export default function CreateStreamPage() {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="hasMinting"
-                  checked={formData.hasMinting}
-                  onChange={(e) => setFormData({ ...formData, hasMinting: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="hasMinting">Enable NFT Minting</Label>
-              </div>
-
               <Button type="submit" disabled={loading}>
                 {loading ? "Launching..." : "Launch Stream"}
               </Button>

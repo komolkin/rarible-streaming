@@ -183,7 +183,13 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
                   <div className="text-sm font-semibold text-[#FAFF00] flex items-center gap-1">
                     <NumberFlow 
                       value={priceUsd} 
-                      format={{ style: 'currency', currency: 'USD', currencyDisplay: 'symbol' }}
+                      format={{ 
+                        style: 'currency', 
+                        currency: 'USD', 
+                        currencyDisplay: 'symbol',
+                        maximumFractionDigits: 0,
+                        minimumFractionDigits: 0
+                      }}
                       locales="en-US"
                     />
                   </div>
