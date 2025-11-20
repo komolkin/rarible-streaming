@@ -435,6 +435,17 @@ export function Navbar() {
             >
               Browse
             </Link>
+            <Link 
+              href="/creators" 
+              className={`block px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                pathname?.startsWith("/creators") 
+                  ? "bg-gray-800 text-white" 
+                  : "text-gray-400 hover:bg-muted hover:text-white"
+              }`}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Creators
+            </Link>
             {ready && authenticated && (
               <>
                 <Link 
