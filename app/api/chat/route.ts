@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 
     const [chatMessage] = await db.insert(chatMessages).values({
       streamId,
-      senderAddress,
+      senderAddress: senderAddress?.toLowerCase(),
       message,
     }).returning()
 
@@ -19,4 +19,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 })
   }
 }
-

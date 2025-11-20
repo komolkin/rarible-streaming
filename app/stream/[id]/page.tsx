@@ -267,7 +267,36 @@ export default function StreamPage() {
               senderAddress: payload.new.sender_address,
               message: payload.new.message,
               createdAt: payload.new.created_at,
+              user: null,
             };
+
+            // Fetch user profile for the new message
+            if (newMessage.senderAddress) {
+              fetch(`/api/profiles?wallet=${newMessage.senderAddress}`)
+                .then((res) => (res.ok ? res.json() : null))
+                .then((userData) => {
+                  if (userData) {
+                    setChatMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === newMessage.id
+                          ? {
+                              ...m,
+                              user: {
+                                username: userData.username,
+                                displayName: userData.displayName,
+                                walletAddress: userData.walletAddress,
+                                avatarUrl: userData.avatarUrl,
+                              },
+                            }
+                          : m
+                      )
+                    );
+                  }
+                })
+                .catch((err) =>
+                  console.error("Error fetching profile for chat:", err)
+                );
+            }
             setChatMessages((prev) => {
               // Check if message already exists to avoid duplicates
               const exists = prev.some((msg) => msg.id === newMessage.id);
@@ -1190,7 +1219,7 @@ export default function StreamPage() {
                   ) : (
                     <div className="flex-1 flex items-center justify-center min-h-full">
                       <p className="text-sm text-muted-foreground text-center m-0">
-                        No products added for this stream.
+                        No products added.
                       </p>
                     </div>
                   )}
@@ -1396,10 +1425,10 @@ export default function StreamPage() {
                 <div
                   ref={chatMessagesRef}
                   id="chat-messages"
-                  className={`mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0 max-h-[300px] sm:max-h-[400px] lg:max-h-none ${
+                  className={`mb-3 sm:mb-4 flex-1 overflow-y-auto min-h-0 max-h-[300px] sm:max-h-[400px] lg:max-h-none flex flex-col ${
                     chatMessages.length === 0
-                      ? "flex items-center justify-center"
-                      : "space-y-2"
+                      ? "items-center justify-center"
+                      : "space-y-3"
                   }`}
                 >
                   {chatMessages.length === 0 ? (
@@ -1407,14 +1436,41 @@ export default function StreamPage() {
                       No messages.
                     </p>
                   ) : (
-                    chatMessages.map((msg) => (
-                      <div key={msg.id} className="text-sm">
-                        <span className="font-semibold">
-                          {msg.senderAddress
-                            ? `${msg.senderAddress.slice(0, 6)}...`
-                            : "Unknown"}
-                        </span>
-                        <span className="ml-2">{msg.message}</span>
+                    chatMessages.map((msg, index) => (
+                      <div
+                        key={msg.id}
+                        className={`flex items-start gap-2 text-sm break-words ${
+                          index === 0 ? "mt-auto" : ""
+                        }`}
+                      >
+                        <Link
+                          href={`/profile/${msg.senderAddress}`}
+                          className="flex-shrink-0 mt-0.5 hover:opacity-80 transition-opacity"
+                        >
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage src={msg.user?.avatarUrl} />
+                            <AvatarFallback
+                              seed={msg.senderAddress}
+                              className="text-[10px]"
+                            />
+                          </Avatar>
+                        </Link>
+                        <div className="min-w-0">
+                          <span className="font-semibold text-xs sm:text-sm leading-none mr-2">
+                            <Link
+                              href={`/profile/${msg.senderAddress}`}
+                              className="hover:underline text-white"
+                            >
+                              {msg.user?.username ||
+                                (msg.senderAddress
+                                  ? `${msg.senderAddress.slice(0, 6)}...`
+                                  : "Unknown")}
+                            </Link>
+                          </span>
+                          <span className="text-muted-foreground/90 leading-tight">
+                            {msg.message}
+                          </span>
+                        </div>
                       </div>
                     ))
                   )}
