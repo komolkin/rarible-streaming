@@ -1188,9 +1188,11 @@ export default function StreamPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground text-center m-0">
-                      No products added for this stream.
-                    </p>
+                    <div className="flex-1 flex items-center justify-center min-h-full">
+                      <p className="text-sm text-muted-foreground text-center m-0">
+                        No products added for this stream.
+                      </p>
+                    </div>
                   )}
                 </TabsContent>
                 <TabsContent
