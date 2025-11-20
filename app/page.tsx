@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StreamPreviewLarge } from "@/components/stream-preview-large";
+import { StreamPreviewCard } from "@/components/stream-preview-card";
 
 interface Category {
   id: string;
@@ -99,9 +100,6 @@ export default function Home() {
             {/* Spotlight Section */}
             {spotlightStream && (
               <div className="mb-12">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold tracking-tight">Spotlight</h2>
-                </div>
                 <StreamPreviewLarge stream={spotlightStream} />
               </div>
             )}
@@ -146,9 +144,9 @@ export default function Home() {
                   </Link>
                 </div>
               ) : (
-                <div className="flex flex-col gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {recentStreams.map((stream) => (
-                    <StreamPreviewLarge key={stream.id} stream={stream} />
+                    <StreamPreviewCard key={stream.id} stream={stream} />
                   ))}
                 </div>
               )}
