@@ -67,7 +67,8 @@ export async function GET(request: NextRequest) {
       if (playbackId) {
         totalViewsPlaybackId = playbackId
         const { getTotalViews } = await import("@/lib/livepeer")
-        totalViews = await getTotalViews(playbackId)
+        const views = await getTotalViews(playbackId)
+        totalViews = views ?? 0
       }
     } catch (error) {
       console.warn(`[Spotlight API] Could not fetch total views:`, error)
