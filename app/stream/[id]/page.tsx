@@ -19,7 +19,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Heart, Share2, MoreVertical, Trash2, BadgeCheck, ExternalLink } from "lucide-react";
+import {
+  Heart,
+  Share2,
+  MoreVertical,
+  Trash2,
+  BadgeCheck,
+  ExternalLink,
+} from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import NumberFlow from "@number-flow/react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -1076,65 +1083,65 @@ export default function StreamPage() {
                     <span className="hidden sm:inline">Share</span>
                   </Button>
                   {authenticated && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }}
-                            className="flex items-center gap-2 h-8 sm:h-9 px-2 sm:px-3"
-                          >
-                            <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {user?.wallet?.address?.toLowerCase() ===
-                          stream.creatorAddress?.toLowerCase() ? (
-                            <>
-                              {stream.isLive && !stream.endedAt && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleEndStream();
-                                    }}
-                                    className="text-white"
-                                  >
-                                    End Stream
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                </>
-                              )}
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDeleteStream();
-                                }}
-                                className="text-white"
-                              >
-                                Delete Stream
-                              </DropdownMenuItem>
-                            </>
-                          ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          className="flex items-center gap-2 h-8 sm:h-9 px-2 sm:px-3"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {user?.wallet?.address?.toLowerCase() ===
+                        stream.creatorAddress?.toLowerCase() ? (
+                          <>
+                            {stream.isLive && !stream.endedAt && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleEndStream();
+                                  }}
+                                  className="text-white"
+                                >
+                                  End Stream
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                // TODO: Add report logic
+                                handleDeleteStream();
                               }}
                               className="text-white"
                             >
-                              Report
+                              Delete Stream
                             </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                          </>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              // TODO: Add report logic
+                            }}
+                            className="text-white"
+                          >
+                            Report
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
 
@@ -1156,11 +1163,13 @@ export default function StreamPage() {
                   value="products"
                   className="flex-1 hidden data-[state=active]:flex flex-col min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
                 >
-                  {stream?.products && Array.isArray(stream.products) && stream.products.length > 0 ? (
+                  {stream?.products &&
+                  Array.isArray(stream.products) &&
+                  stream.products.length > 0 ? (
                     <div className="space-y-3 w-full pt-4">
                       {stream.products.map((product: string, index: number) => (
                         <div key={index}>
-                          {product.includes('rarible.com') ? (
+                          {product.includes("rarible.com") ? (
                             <RaribleProductCard url={product} />
                           ) : (
                             <a
@@ -1180,7 +1189,7 @@ export default function StreamPage() {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground text-center m-0">
-                      No products available for this stream.
+                      No products added for this stream.
                     </p>
                   )}
                 </TabsContent>
@@ -1189,7 +1198,7 @@ export default function StreamPage() {
                   className="flex-1 hidden data-[state=active]:flex items-center justify-center min-h-0 m-0 p-0 overflow-y-auto ring-offset-0"
                 >
                   <p className="text-sm text-muted-foreground text-center m-0">
-                    Activity content coming soon...
+                    Activity coming soon...
                   </p>
                 </TabsContent>
               </Tabs>
