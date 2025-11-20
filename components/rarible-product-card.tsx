@@ -165,7 +165,7 @@ export function RaribleProductCard({ url }: RaribleProductCardProps) {
             {/* Image / Thumbnail */}
             <div className="h-16 w-16 flex-shrink-0 rounded-md overflow-hidden bg-muted">
                 {imageUrl ? (
-                    <img src={imageUrl} alt={itemName} className="h-full w-full object-cover" />
+                    <img src={imageUrl} alt={itemName} className="h-full w-full object-contain bg-black/20" />
                 ) : (
                     <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">No Img</div>
                 )}

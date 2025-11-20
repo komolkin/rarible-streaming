@@ -955,11 +955,7 @@ export default function StreamPage() {
 
                 {/* Streamed date and views */}
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                  {stream.isLive ? (
-                    <span className="inline-block px-2 py-1 bg-red-500 text-white rounded text-xs sm:text-sm">
-                      Live
-                    </span>
-                  ) : stream.endedAt ? (
+                  {stream.endedAt ? (
                     <>
                       {totalViews !== null && (
                         <>
